@@ -1,4 +1,4 @@
-# Claude Workspace Manager
+# HEXAGON IDE MULTI-IA
 
 Aplicação desktop para gerenciar múltiplos ambientes Claude Code em VPS separadas.
 
