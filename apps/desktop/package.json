@@ -1,0 +1,58 @@
+{
+  "name": "@cwm/desktop",
+  "version": "1.0.5",
+  "description": "Claude Workspace Manager — gerenciador de VPS e contas Claude Code",
+  "author": "HEXAGON TECNOLOGIA",
+  "private": true,
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "package": "electron-vite build && electron-builder"
+  },
+  "dependencies": {
+    "@cwm/config": "workspace:*",
+    "@cwm/core": "workspace:*",
+    "@cwm/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@electron-toolkit/utils": "^4.0.0",
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.1.0",
+    "electron": "^33.3.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^5.0.0",
+    "playwright-core": "^1.60.0",
+    "typescript": "^5.7.3"
+  },
+  "build": {
+    "appId": "com.cwm.app",
+    "productName": "Claude Workspace Manager",
+    "directories": {
+      "output": "dist-app"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "files": [
+      { "from": ".", "to": ".", "filter": ["out/**", "package.json", "node_modules/**", "!node_modules/@cwm/**"] },
+      { "from": "../../packages/config", "to": "node_modules/@cwm/config", "filter": ["dist/**", "package.json"] },
+      { "from": "../../packages/db",     "to": "node_modules/@cwm/db",     "filter": ["dist/**", "generated/**", "package.json"] },
+      { "from": "../../packages/core",   "to": "node_modules/@cwm/core",   "filter": ["dist/**", "package.json"] }
+    ],
+    "extraResources": [
+      { "from": "../web/dist", "to": "renderer" }
+    ],
+    "asar": false,
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**",
+      "node_modules/ssh2/**",
+      "node_modules/cpu-features/**",
+      "node_modules/@prisma/**",
+      "node_modules/prisma/**"
+    ]
+  }
+}

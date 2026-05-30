@@ -1,0 +1,6 @@
+const Module = require('module')
+// Check if _resolveFilename was patched by Electron (different from default Node source)
+const src = Module._resolveFilename.toString()
+console.log('_resolveFilename patched by Electron?', src.includes('electron') || src.includes('builtinModules') ? 'YES' : 'NO')
+console.log('source snippet:', src.slice(0, 200))
+process.exit(0)

@@ -1,0 +1,23 @@
+{
+  "name": "claude-workspace-manager",
+  "version": "1.0.5",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n WEB,DESKTOP -c cyan,yellow \"pnpm --filter web dev\" \"wait-on http://localhost:5173 && pnpm --filter desktop dev\"",
+    "build": "pnpm --filter web build && pnpm --filter desktop build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @cwm/db generate",
+    "db:push": "pnpm --filter @cwm/db db:push",
+    "db:studio": "pnpm --filter @cwm/db studio"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.7.3",
+    "wait-on": "^8.0.1"
+  },
+  "pnpm": {
+    "approvedBuiltDependencies": ["cpu-features", "ssh2"]
+  }
+}

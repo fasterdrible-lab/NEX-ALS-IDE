@@ -1,0 +1,5 @@
+const Module = require('module')
+const src = Module._load.toString()
+console.log('_load patched by Electron?', src.includes('electron') || src.includes('builtinModules') ? 'YES' : 'NO')
+console.log('source (first 300 chars):', src.slice(0,300))
+process.exit(0)

@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model VpsServer {
+  id            String    @id @default(cuid())
+  name          String
+  host          String
+  port          Int       @default(22)
+  username      String
+  defaultPath   String    @default("/root")
+  sshPassword   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  projects       Project[]
+  claudeAccounts ClaudeAccount[]
+
+  @@map("vps_servers")
+}
+
+model Project {
+  id              String         @id @default(cuid())
+  name            String
+  description     String         @default("")
+  remotePath      String
+  gitRepo         String         @default("")
+  vpsServerId     String
+  claudeAccountId String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  vpsServer     VpsServer      @relation(fields: [vpsServerId], references: [id], onDelete: Cascade)
+  claudeAccount ClaudeAccount? @relation(fields: [claudeAccountId], references: [id], onDelete: SetNull)
+  launchHistory LaunchHistory[]
+
+  @@map("projects")
+}
+
+model ClaudeAccount {
+  id          String    @id @default(cuid())
+  name        String
+  email       String    @default("")
+  vpsServerId String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  vpsServer VpsServer? @relation(fields: [vpsServerId], references: [id], onDelete: SetNull)
+  projects  Project[]
+
+  @@map("claude_accounts")
+}
+
+model Settings {
+  id                 String   @id @default("default")
+  vscodePath         String   @default("code")
+  vscodeInsidersPath String   @default("code-insiders")
+  sshKeyPath         String   @default("")
+  updatedAt          DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model LaunchHistory {
+  id         String   @id @default(cuid())
+  projectId  String
+  launchedAt DateTime @default(now())
+  success    Boolean
+  errorMsg   String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("launch_history")
+}
