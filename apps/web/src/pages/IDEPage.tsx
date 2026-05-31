@@ -11,7 +11,7 @@ import {
   AlertCircle, Save, X, Circle, TerminalSquare, HardDrive, ShieldAlert,
   GitBranch, Plus, Minus, Upload, Download, GitCommit as GitCommitIcon,
   Command, Search, PanelBottom, Copy, Files, Check, FolderOpen as FolderOpenIcon,
-  MessageSquare, Send, Bot,
+  MessageSquare, Send, Bot, Columns2, PanelRightClose, Network, Globe,
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
 
@@ -131,10 +131,58 @@ export default function IDEPage() {
   const [termH,    startResizeTerm] = useResize(200, 100, 600, 'y')
   const [chatW,    startResizeChat] = useResize(320, 200, 600, 'x')
   const [showTerm,    setShowTerm]    = useState(false)
-  const [leftPanel,   setLeftPanel]   = useState<'files'|'search'|'git'>('files')
+  const [leftPanel,   setLeftPanel]   = useState<'files'|'search'|'git'|'ports'>('files')
   const [bottomPanel, setBottomPanel] = useState<'terminal'|'problems'>('terminal')
   const [problems,    setProblems]    = useState<Problem[]>([])
   const markerDisposableRef = useRef<{ dispose(): void } | null>(null)
+
+  // IDE-16: LSP
+  const [lspActive, setLspActive] = useState(false)
+  const [lspLoading, setLspLoading] = useState(false)
+  const monacoRef = useRef<Monaco|null>(null)
+
+  const toggleLSP = async () => {
+    if (lspLoading) return
+    setLspLoading(true)
+    try {
+      const { connectLSP, disconnectLSP, isLSPConnected } = await import('../lib/lsp')
+      if (isLSPConnected()) {
+        disconnectLSP(); setLspActive(false); showToast(true, 'LSP desconectado')
+      } else {
+        await connectLSP(monacoRef.current!, 'ws://localhost:6009')
+        setLspActive(true); showToast(true, 'TypeScript LSP conectado')
+      }
+    } catch (err) {
+      showToast(false, `LSP: ${err instanceof Error ? err.message : String(err)}`)
+    } finally { setLspLoading(false) }
+  }
+
+  // IDE-17: Port forwarding
+  const [tunnels, setTunnels] = useState<{id:string;localPort:number;remotePort:number;remoteHost:string;status:string}[]>([])
+  const [tunnelLocal,  setTunnelLocal]  = useState('3000')
+  const [tunnelRemote, setTunnelRemote] = useState('3000')
+  const [tunnelHost,   setTunnelHost]   = useState('127.0.0.1')
+  const [tunnelLoading, setTunnelLoading] = useState(false)
+
+  const refreshTunnels = useCallback(async () => {
+    const r = await ipc.tunnel.list()
+    if (r?.tunnels) setTunnels(r.tunnels.filter(t => t.vpsId === vpsId))
+  }, [vpsId])
+
+  const openTunnel = async () => {
+    if (!vpsId || tunnelLoading) return
+    setTunnelLoading(true)
+    const r = await ipc.tunnel.open(vpsId, Number(tunnelLocal), Number(tunnelRemote), tunnelHost)
+    setTunnelLoading(false)
+    if (r.success) { showToast(true, `Túnel localhost:${tunnelLocal} → VPS:${tunnelRemote} ativo`); refreshTunnels() }
+    else showToast(false, r.error ?? 'Erro ao abrir túnel')
+  }
+
+  const closeTunnel = async (id: string) => {
+    await ipc.tunnel.close(id)
+    refreshTunnels()
+    showToast(true, 'Túnel encerrado')
+  }
 
   // IDE-21: Chat Claude via SSH (disponível em ambos os modos)
   const [showChat,    setShowChat]    = useState(false)
@@ -170,8 +218,12 @@ export default function IDEPage() {
 
   // editor
   const editorRef   = useRef<MonacoEditor.IStandaloneCodeEditor|null>(null)
+  const editorRef2  = useRef<MonacoEditor.IStandaloneCodeEditor|null>(null)
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([])
-  const [activeTab, setActiveTab] = useState<string|null>(null)
+  const [activeTab,  setActiveTab]  = useState<string|null>(null)
+  const [activeTab2, setActiveTab2] = useState<string|null>(null)
+  const [focusedPane, setFocusedPane] = useState<1|2>(1)
+  const [splitMode,  setSplitMode]  = useState(false)
   const [cursorPos, setCursorPos] = useState({ line:1, col:1 })
   const [gitDiff,   setGitDiff]   = useState<GitDiff|null>(null)
   const pendingRevealLine = useRef<number|null>(null)
@@ -527,7 +579,7 @@ export default function IDEPage() {
   useEffect(() => {
     const h = (e:KeyboardEvent) => {
       const ctrl = e.ctrlKey || e.metaKey
-      if (ctrl && e.key==='s') { e.preventDefault(); if (activeTab) handleSave(activeTab) }
+      if (ctrl && e.key==='s') { e.preventDefault(); const t = focusedPane===2 ? activeTab2 : activeTab; if(t) handleSave(t) }
       if (ctrl && e.key==='`') { e.preventDefault(); setShowTerm(v=>!v) }
       if (ctrl && e.shiftKey && e.key==='P') {
         e.preventDefault()
@@ -563,12 +615,18 @@ export default function IDEPage() {
     if (entry.isDirectory) { handleToggleFolder(entry); return }
     const ext = entry.name.split('.').pop()?.toLowerCase()??''
 
+    // IDE-15: helper para setar tab no painel correto
+    const setPane = (path: string) => {
+      if (splitMode && focusedPane === 2) setActiveTab2(path)
+      else { setActiveTab(path); setGitDiff(null) }
+    }
+
     // IDE-11: preview de imagem via base64
     if (IMG_PREVIEW.has(ext)) {
       const existing = openFiles.find(f=>f.path===entry.path)
-      if (existing) { setActiveTab(entry.path); setGitDiff(null); return }
+      if (existing) { setPane(entry.path); return }
       const nf:OpenFile = { path:entry.path, name:entry.name, content:'', savedContent:'', language:'plaintext', loading:true }
-      setOpenFiles(f=>[...f,nf]); setActiveTab(entry.path); setGitDiff(null)
+      setOpenFiles(f=>[...f,nf]); setPane(entry.path)
       const r = await fsReadFileBase64(entry.path)
       const mime = ext==='svg' ? 'image/svg+xml' : `image/${ext==='jpg'?'jpeg':ext}`
       const dataUrl = r.success ? `data:${mime};base64,${r.data}` : ''
@@ -579,12 +637,12 @@ export default function IDEPage() {
     if (BIN_EXT.has(ext)) { showToast(false, `Arquivos .${ext} não suportados`); return }
     const existing = openFiles.find(f=>f.path===entry.path)
     if (existing) {
-      setActiveTab(entry.path); setGitDiff(null)
+      setPane(entry.path)
       if (revealLine) pendingRevealLine.current = revealLine
       return
     }
     const nf:OpenFile = { path:entry.path, name:entry.name, content:'', savedContent:'', language:detectLang(entry.name), loading:true }
-    setOpenFiles(f=>[...f,nf]); setActiveTab(entry.path); setGitDiff(null)
+    setOpenFiles(f=>[...f,nf]); setPane(entry.path)
     if (revealLine) pendingRevealLine.current = revealLine
     const r = await fsReadFile(entry.path)
     setOpenFiles(f=>f.map(fl=>fl.path===entry.path ? {...fl, content:r.success?r.content:`// Erro: ${r.error}`, savedContent:r.success?r.content:'', loading:false} : fl))
@@ -785,6 +843,7 @@ export default function IDEPage() {
 
   const handleEditorMount: OnMount = (ed, mon: Monaco) => {
     editorRef.current = ed
+    monacoRef.current = mon
     ed.focus()
     ed.onDidChangeCursorPosition(e => {
       setCursorPos({ line:e.position.lineNumber, col:e.position.column })
@@ -1028,6 +1087,12 @@ export default function IDEPage() {
               <TerminalSquare size={14}/>
             </button>
           )}
+          {/* IDE-15: split editor */}
+          <button onClick={()=>{ setSplitMode(v=>!v); if(splitMode) setActiveTab2(null) }}
+            title={splitMode ? 'Fechar split (editor único)' : 'Split — dois arquivos lado a lado'}
+            className={`p-1.5 rounded transition-colors ${splitMode?'bg-brand-600/30 text-brand-300':'text-slate-500 hover:text-slate-300 hover:bg-slate-700'}`}>
+            {splitMode ? <PanelRightClose size={14}/> : <Columns2 size={14}/>}
+          </button>
           {/* IDE-21: botão chat Claude — disponível em ambos os modos */}
           <button onClick={()=>setShowChat(v=>!v)} title="Chat com Claude (executa claude -p na VPS)"
             className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${showChat?'bg-purple-600/40 text-purple-200 border border-purple-500/40':'text-purple-400 hover:text-purple-200 hover:bg-purple-900/40 border border-transparent'}`}>
@@ -1050,9 +1115,10 @@ export default function IDEPage() {
               { id:'files', icon:<Folder size={11}/>, label:'Arquivos' },
               { id:'search', icon:<Search size={11}/>, label:'Busca' },
               ...(!isLocal ? [{ id:'git', icon:<GitBranch size={11}/>, label:'Git', badge: totalGitChanges }] : []),
+              ...(!isLocal ? [{ id:'ports', icon:<Network size={11}/>, label:'Portas', badge: tunnels.length }] : []),
             ] as const).map(p => (
               <button key={p.id}
-                onClick={()=>{ setLeftPanel(p.id as 'files'|'search'|'git'); if(p.id==='git'&&!gitStatus&&!gitLoading) loadGitStatus() }}
+                onClick={()=>{ setLeftPanel(p.id as 'files'|'search'|'git'|'ports'); if(p.id==='git'&&!gitStatus&&!gitLoading) loadGitStatus(); if(p.id==='ports') refreshTunnels() }}
                 className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium transition-colors relative ${leftPanel===p.id?'text-slate-200 border-b-2 border-brand-500':'text-slate-500 hover:text-slate-300'}`}>
                 {p.icon} {p.label}
                 {'badge' in p && p.badge > 0 && (
@@ -1297,6 +1363,47 @@ export default function IDEPage() {
               )}
             </div>
           )}
+
+          {/* IDE-17: Painel de Port Forwarding */}
+          {leftPanel==='ports' && (
+            <div className="flex flex-col flex-1 overflow-hidden">
+              <div className="px-3 py-2 border-b border-slate-800 shrink-0">
+                <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 mb-2"><Network size={11} className="text-brand-400"/> Port Forwarding</p>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex gap-1">
+                    <input value={tunnelLocal} onChange={e=>setTunnelLocal(e.target.value)} placeholder="Porta local" className="input text-xs py-0.5 w-1/2" type="number"/>
+                    <input value={tunnelRemote} onChange={e=>setTunnelRemote(e.target.value)} placeholder="Porta VPS" className="input text-xs py-0.5 w-1/2" type="number"/>
+                  </div>
+                  <input value={tunnelHost} onChange={e=>setTunnelHost(e.target.value)} placeholder="Host remoto (127.0.0.1)" className="input text-xs py-0.5"/>
+                  <button onClick={openTunnel} disabled={tunnelLoading} className="btn-primary text-xs py-1 flex items-center justify-center gap-1">
+                    {tunnelLoading ? <Loader2 size={10} className="animate-spin"/> : <Plus size={10}/>}
+                    {tunnelLoading ? 'Abrindo…' : 'Abrir túnel'}
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {tunnels.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-700 text-xs text-center px-3">
+                    <Network size={20}/>
+                    <p>Nenhum túnel ativo</p>
+                    <p className="text-[10px]">Ex: local 3000 → VPS 3000 para acessar seu servidor</p>
+                  </div>
+                ) : tunnels.map(t => (
+                  <div key={t.id} className="flex items-center gap-2 px-3 py-2 border-b border-slate-800/50 text-xs">
+                    <Globe size={11} className="text-emerald-400 shrink-0"/>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-slate-300 font-mono">localhost:{t.localPort} → {t.remoteHost}:{t.remotePort}</p>
+                      <a href={`http://localhost:${t.localPort}`} target="_blank" rel="noreferrer"
+                        className="text-brand-400 hover:underline text-[10px]">
+                        Abrir no navegador
+                      </a>
+                    </div>
+                    <button onClick={()=>closeTunnel(t.id)} className="text-slate-700 hover:text-red-400 shrink-0"><X size={11}/></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ─── resize handle ─── */}
@@ -1305,56 +1412,110 @@ export default function IDEPage() {
         {/* ─── RIGHT: editor + terminal ─── */}
         <div className="flex-1 flex flex-col overflow-hidden">
 
-          {/* editor area */}
-          <div className="flex-1 overflow-hidden">
-            {gitDiff ? (
-              <div className="flex flex-col h-full">
-                <div className="flex items-center gap-2 px-3 py-1 bg-slate-900 border-b border-slate-800 shrink-0">
-                  <GitCommitIcon size={11} className="text-amber-400"/>
-                  <span className="text-xs text-amber-300">{gitDiff.filePath}</span>
-                  <span className="text-xs text-slate-600">({gitDiff.staged?'staged':'unstaged'})</span>
-                  <button onClick={()=>setGitDiff(null)} className="ml-auto text-slate-600 hover:text-slate-400"><X size={11}/></button>
+          {/* IDE-15: editor area — single ou split */}
+          <div className="flex-1 overflow-hidden flex">
+
+            {/* ── Painel esquerdo (sempre visível) ── */}
+            <div className={`flex flex-col overflow-hidden ${splitMode ? 'w-1/2 border-r border-slate-700' : 'flex-1'}`}
+              onClick={()=>setFocusedPane(1)}>
+              {gitDiff ? (
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-slate-900 border-b border-slate-800 shrink-0">
+                    <GitCommitIcon size={11} className="text-amber-400"/>
+                    <span className="text-xs text-amber-300">{gitDiff.filePath}</span>
+                    <span className="text-xs text-slate-600">({gitDiff.staged?'staged':'unstaged'})</span>
+                    <button onClick={e=>{e.stopPropagation();setGitDiff(null)}} className="ml-auto text-slate-600 hover:text-slate-400"><X size={11}/></button>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <Editor height="100%" theme="vs-dark" language="diff"
+                      value={gitDiff.content||'(sem diferenças)'}
+                      options={{ readOnly:true, fontSize:13, fontFamily:'"Cascadia Code",Consolas,monospace', lineNumbers:'off', minimap:{enabled:false}, scrollBeyondLastLine:false, wordWrap:'on', padding:{top:8} }}/>
+                  </div>
                 </div>
-                <div className="flex-1 overflow-hidden">
-                  <Editor height="100%" theme="vs-dark" language="diff"
-                    value={gitDiff.content||'(sem diferenças)'}
-                    options={{ readOnly:true, fontSize:13, fontFamily:'"Cascadia Code",Consolas,monospace', lineNumbers:'off', minimap:{enabled:false}, scrollBeyondLastLine:false, wordWrap:'on', padding:{top:8} }}/>
+              ) : activeFile?.imageDataUrl ? (
+                <div className="flex flex-col items-center justify-center h-full bg-[#0a0f1a] gap-3 p-6">
+                  <img src={activeFile.imageDataUrl} alt={activeFile.name} className="max-h-[75%] max-w-full object-contain rounded-lg shadow-2xl border border-slate-800/50"/>
+                  <p className="text-xs text-slate-600">{activeFile.name}</p>
                 </div>
-              </div>
-            ) : activeFile?.imageDataUrl ? (
-              /* IDE-11: preview de imagem */
-              <div className="flex flex-col items-center justify-center h-full bg-[#0a0f1a] gap-3 p-6">
-                <img
-                  src={activeFile.imageDataUrl}
-                  alt={activeFile.name}
-                  className="max-h-[75%] max-w-full object-contain rounded-lg shadow-2xl border border-slate-800/50"
-                />
-                <p className="text-xs text-slate-600">{activeFile.name}</p>
-              </div>
-            ) : !activeFile ? (
-              <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-800">
-                <FileCode size={36}/>
-                <p className="text-sm">Selecione um arquivo para editar</p>
-                <p className="text-xs text-slate-700">Ctrl+Shift+F · busca · Ctrl+Shift+P · paleta · Ctrl+` · terminal</p>
-              </div>
-            ) : activeFile.loading ? (
-              <div className="flex items-center justify-center h-full gap-2 text-slate-600">
-                <Loader2 size={16} className="animate-spin"/> Carregando {activeFile.name}…
-              </div>
-            ) : (
-              <Editor height="100%" theme="vs-dark"
-                language={activeFile.language} value={activeFile.content} path={activeFile.path}
-                onMount={handleEditorMount}
-                onChange={val=>setOpenFiles(f=>f.map(fl=>fl.path===activeTab?{...fl,content:val??''}:fl))}
-                options={{
-                  fontSize:14, fontFamily:'"Cascadia Code","Fira Code",Consolas,"Courier New",monospace',
-                  fontLigatures:true, lineHeight:1.6, minimap:{enabled:true}, wordWrap:'on',
-                  automaticLayout:true, scrollBeyondLastLine:false, renderLineHighlight:'gutter',
-                  bracketPairColorization:{enabled:true}, smoothScrolling:true,
-                  cursorBlinking:'smooth', cursorSmoothCaretAnimation:'on',
-                  padding:{top:10,bottom:10}, tabSize:2,
-                }}/>
-            )}
+              ) : !activeFile ? (
+                <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-800">
+                  <FileCode size={36}/>
+                  <p className="text-sm">Selecione um arquivo para editar</p>
+                  <p className="text-xs text-slate-700">Ctrl+Shift+F · busca · Ctrl+Shift+P · paleta · Ctrl+` · terminal</p>
+                </div>
+              ) : activeFile.loading ? (
+                <div className="flex items-center justify-center h-full gap-2 text-slate-600">
+                  <Loader2 size={16} className="animate-spin"/> Carregando {activeFile.name}…
+                </div>
+              ) : (
+                <Editor height="100%" theme="vs-dark"
+                  language={activeFile.language} value={activeFile.content} path={activeFile.path}
+                  onMount={handleEditorMount}
+                  onChange={val=>setOpenFiles(f=>f.map(fl=>fl.path===activeTab?{...fl,content:val??''}:fl))}
+                  options={{
+                    fontSize:14, fontFamily:'"Cascadia Code","Fira Code",Consolas,"Courier New",monospace',
+                    fontLigatures:true, lineHeight:1.6, minimap:{enabled:splitMode?false:true}, wordWrap:'on',
+                    automaticLayout:true, scrollBeyondLastLine:false, renderLineHighlight:'gutter',
+                    bracketPairColorization:{enabled:true}, smoothScrolling:true,
+                    cursorBlinking:'smooth', cursorSmoothCaretAnimation:'on',
+                    padding:{top:10,bottom:10}, tabSize:2,
+                  }}/>
+              )}
+            </div>
+
+            {/* ── Painel direito (split mode) ── */}
+            {splitMode && (() => {
+              const activeFile2 = openFiles.find(f=>f.path===activeTab2)
+              return (
+                <div className="w-1/2 flex flex-col overflow-hidden" onClick={()=>setFocusedPane(2)}>
+                  {/* tab bar do painel direito */}
+                  <div className={`flex items-center border-b shrink-0 overflow-x-auto ${focusedPane===2?'border-brand-700/50 bg-slate-950':'border-slate-800 bg-slate-900'}`}>
+                    {openFiles.map(f => (
+                      <div key={f.path}
+                        onClick={e=>{e.stopPropagation();setActiveTab2(f.path);setFocusedPane(2)}}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs cursor-pointer border-r border-slate-800 shrink-0 transition-colors ${
+                          f.path===activeTab2?'bg-slate-950 text-slate-100 border-t-2 border-t-brand-400':'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}`}>
+                        <FileIcon name={f.name} isDir={false} sz={11}/>
+                        <span className="max-w-[80px] truncate">{f.name}</span>
+                        {isDirty(f) && <Circle size={5} className="text-brand-400 fill-brand-400 shrink-0"/>}
+                      </div>
+                    ))}
+                    {openFiles.length === 0 && (
+                      <span className="px-3 py-1.5 text-xs text-slate-700 italic">Abra um arquivo</span>
+                    )}
+                  </div>
+                  {/* conteúdo do painel direito */}
+                  {!activeFile2 ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-800">
+                      <Columns2 size={28}/>
+                      <p className="text-sm">Clique em uma aba para abrir</p>
+                    </div>
+                  ) : activeFile2.loading ? (
+                    <div className="flex items-center justify-center h-full gap-2 text-slate-600">
+                      <Loader2 size={16} className="animate-spin"/> Carregando…
+                    </div>
+                  ) : activeFile2.imageDataUrl ? (
+                    <div className="flex flex-col items-center justify-center h-full bg-[#0a0f1a] gap-3 p-6">
+                      <img src={activeFile2.imageDataUrl} alt={activeFile2.name} className="max-h-[75%] max-w-full object-contain rounded-lg border border-slate-800/50"/>
+                    </div>
+                  ) : (
+                    <Editor height="100%" theme="vs-dark"
+                      language={activeFile2.language} value={activeFile2.content}
+                      path={activeFile2.path + '__split2'}
+                      onMount={ed => { editorRef2.current = ed }}
+                      onChange={val=>setOpenFiles(f=>f.map(fl=>fl.path===activeTab2?{...fl,content:val??''}:fl))}
+                      options={{
+                        fontSize:14, fontFamily:'"Cascadia Code","Fira Code",Consolas,"Courier New",monospace',
+                        fontLigatures:true, lineHeight:1.6, minimap:{enabled:false}, wordWrap:'on',
+                        automaticLayout:true, scrollBeyondLastLine:false, renderLineHighlight:'gutter',
+                        bracketPairColorization:{enabled:true}, smoothScrolling:true,
+                        cursorBlinking:'smooth', cursorSmoothCaretAnimation:'on',
+                        padding:{top:10,bottom:10}, tabSize:2,
+                      }}/>
+                  )}
+                </div>
+              )
+            })()}
           </div>
 
           {/* terminal resize handle — oculto no modo local */}
@@ -1681,6 +1842,27 @@ export default function IDEPage() {
         <span className="flex items-center gap-3">
           {activeFile && isDirty(activeFile) && <span className="text-brand-400">● Ctrl+S salvar</span>}
           {activeFile && !gitDiff && <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>}
+          {/* IDE-16: botão LSP na status bar */}
+          {!isLocal && (
+            <button onClick={toggleLSP} disabled={lspLoading}
+              title={lspActive ? 'TypeScript LSP ativo — clique para desconectar' : 'Ativar TypeScript LSP (requer túnel porta 6009)'}
+              className={`flex items-center gap-1 transition-colors ${lspActive?'text-emerald-400 hover:text-emerald-300':'text-slate-600 hover:text-slate-400'}`}>
+              {lspLoading ? <Loader2 size={10} className="animate-spin"/> : <span className="text-[10px]">TS</span>}
+              {lspActive ? ' LSP ✓' : ' LSP'}
+            </button>
+          )}
+          {/* IDE-18: botão DAP debug remoto na status bar */}
+          {!isLocal && (
+            <button
+              title="Debug remoto — abre Chrome DevTools conectado à VPS via túnel 9229"
+              onClick={async () => {
+                const url = `devtools://devtools/bundled/js_app.html?experiments=true&v8only=true&ws=localhost:9229`
+                await ipc.debug.openDevTools(url)
+              }}
+              className="flex items-center gap-1 text-slate-600 hover:text-orange-400 transition-colors text-[10px]">
+              ⬡ DAP
+            </button>
+          )}
           {!isLocal && (
             <span className="flex items-center gap-1">
               <PanelBottom size={10}/> Ctrl+`

@@ -1,5 +1,29 @@
 # CHANGELOG — HEXAGON IDE
 
+## [1.5.0] — 2026-05-31
+
+### Adicionado
+
+- **IDE-15 · Split editor** — botão `⊟` na top bar divide o editor em dois painéis horizontais (50/50); cada painel tem sua própria barra de abas; Ctrl+S salva no painel focado; clicar num painel muda o foco; abrir arquivo vai para o painel ativo; fechar split com o mesmo botão
+- **IDE-16 · TypeScript LSP** — `monaco-languageclient` v10 conecta via WebSocket ao `typescript-language-server` da VPS; botão `TS LSP` na status bar (verde quando ativo); requer túnel SSH na porta 6009 e `typescript-language-server` instalado na VPS; `apps/web/src/lib/lsp.ts`
+- **IDE-17 · Remote Port Forwarding** — nova aba "Portas" no painel esquerdo; cria túneis `localhost:X → VPS:Y` via `ssh2.forwardOut`; lista túneis ativos; botão "Abrir no navegador"; fechar túnel; `TunnelService` em `packages/core/src/tunnel/`; IPC `tunnel:open`, `tunnel:close`, `tunnel:list`
+- **IDE-18 · Depuração remota DAP** — botão `⬡ DAP` na status bar; abre janela Electron com Chrome DevTools Protocol apontado para `ws://localhost:9229`; requer túnel 9229→9229 e `node --inspect` na VPS; `apps/web/src/lib/dap.ts`; IPC `debug:openDevTools`
+
+### Fluxo de uso IDE-16 (LSP):
+```
+VPS: npm i -g typescript-language-server typescript ws websocat
+     websocat --text -E tcp-l:0.0.0.0:6009 exec:typescript-language-server\ --stdio
+IDE: Painel Portas → túnel 6009→6009 → status bar "TS LSP" → clique
+```
+
+### Fluxo de uso IDE-18 (DAP):
+```
+VPS: node --inspect=0.0.0.0:9229 server.js
+IDE: Painel Portas → túnel 9229→9229 → status bar "⬡ DAP" → clique
+```
+
+---
+
 ## [1.4.0] — 2026-05-31
 
 ### Adicionado

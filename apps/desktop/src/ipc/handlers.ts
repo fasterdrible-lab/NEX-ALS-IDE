@@ -14,6 +14,7 @@ import {
   SftpService,
   SftpSession,
   GitService,
+  TunnelService,
 } from '@cwm/core'
 
 function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
@@ -32,6 +33,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
   const diagnostics = new DiagnosticsService()
   const terminal = new TerminalService()
   const terminalSessions = new Map<string, TerminalSession>()
+  const tunnelSvc = new TunnelService()
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
 
@@ -255,6 +257,17 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
     wrapHandler(() => git.log(vpsId, cwd, n))
   )
 
+  // ── IDE-18: DAP — abre DevTools externo para depuração remota ─────────
+  ipcMain.handle('debug:openDevTools', (_, { wsUrl }: { wsUrl: string }) => {
+    const devWin = new (require('electron').BrowserWindow)({
+      width: 1200, height: 800,
+      title: 'HEXAGON IDE — Debug',
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    })
+    devWin.loadURL(wsUrl)
+    return { success: true }
+  })
+
   // ── IDE-20: Local filesystem ─────────────────────────────────────────
   ipcMain.handle('local:openFolder', async () => {
     const result = await dialog.showOpenDialog(win!, {
@@ -310,6 +323,22 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
     await fs.writeFile(filePath, '', { flag: 'wx' }).catch(() => {})
     return { success: true }
   })
+
+  // ── IDE-17: Remote Port Forwarding (SSH tunnel) ───────────────────────────
+  ipcMain.handle('tunnel:open', async (_, { vpsId, localPort, remotePort, remoteHost }:
+    { vpsId: string; localPort: number; remotePort: number; remoteHost?: string }) => {
+    try {
+      const info = await tunnelSvc.open(vpsId, localPort, remotePort, remoteHost)
+      return { success: true, tunnel: info }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  ipcMain.handle('tunnel:close', (_, tunnelId: string) => {
+    tunnelSvc.close(tunnelId)
+    return { success: true }
+  })
+  ipcMain.handle('tunnel:list', () => ({ tunnels: tunnelSvc.list() }))
 
   // ── Import/Export de configurações ─────────────────────────────────────────
   ipcMain.handle('config:export', async () => {

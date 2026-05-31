@@ -18,6 +18,8 @@ const ALLOWED_CHANNELS = new Set([
   'local:writeFile', 'local:mkdir', 'local:delete', 'local:rename', 'local:touch',
   'clipboard:readImage',
   'config:export', 'config:import',
+  'tunnel:open', 'tunnel:close', 'tunnel:list',
+  'debug:openDevTools',
 ])
 
 contextBridge.exposeInMainWorld('electron', {

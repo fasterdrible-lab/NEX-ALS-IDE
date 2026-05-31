@@ -131,6 +131,18 @@ export const ipc = {
     readImage: () =>
       invoke<{ filePath: string } | null>('clipboard:readImage'),
   },
+  debug: {
+    openDevTools: (wsUrl: string) =>
+      invoke<{ success: boolean }>('debug:openDevTools', { wsUrl }),
+  },
+  tunnel: {
+    open: (vpsId: string, localPort: number, remotePort: number, remoteHost?: string) =>
+      invoke<{ success: boolean; tunnel?: { id: string; localPort: number; remotePort: number; status: string }; error?: string }>('tunnel:open', { vpsId, localPort, remotePort, remoteHost }),
+    close: (tunnelId: string) =>
+      invoke<{ success: boolean }>('tunnel:close', tunnelId),
+    list: () =>
+      invoke<{ tunnels: { id: string; vpsId: string; localPort: number; remoteHost: string; remotePort: number; status: string }[] }>('tunnel:list'),
+  },
   config: {
     export: () =>
       invoke<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>('config:export'),
