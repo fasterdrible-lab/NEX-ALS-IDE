@@ -1,12 +1,15 @@
 # CURRENT_STATE.md — HEXAGON IDE
 
 **Data:** 2026-05-30
-**Versão:** 1.2.0
+**Versão:** 1.3.1
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-IDE.git
 
 ## Estado atual
 
-**HEXAGON IDE completo.** Todas as features P0, P1 e P2 do backlog IDE foram implementadas. `pnpm dev` inicia Vite (localhost:5173) + Electron sem erros. O IDE roda fullscreen com cinco painéis/modos: explorer SFTP hierárquico, Monaco Editor com múltiplas abas, terminal SSH multi-tab (xterm.js), painel Source Control (Git) e painel de Problemas.
+**HEXAGON IDE completo.** Todas as features P0, P1, P2 e as novas P2+ foram implementadas. `pnpm dev` inicia Vite (localhost:5173) + Electron sem erros. O IDE opera em dois modos:
+
+- **Modo Remoto (VPS)** — explorer SFTP, Monaco Editor, terminal SSH multi-tab, Git, painel de Problemas, chat Claude; badge vermelho "Produção" visível na top bar.
+- **Modo Local (OneDrive/PC)** — mesmo editor e explorer usando `node:fs` local; badge verde "Local"; terminal e Git ocultos; chat Claude disponível com seletor de VPS.
 
 ## Funcionalidades do app base
 
@@ -51,6 +54,11 @@
 - [x] **IDE-12** — Painel de Problemas: tab no painel inferior, `onDidChangeMarkers`, badge, `jumpToLine`
 - [x] **IDE-13** — Copiar/Duplicar: context menu com `cp -rp` + "Copiar caminho"
 - [x] **IDE-14** — Auto-refresh da tree: ao salvar + polling 30s com `expandedFoldersRef`
+
+### Novas features (IDE-19 a IDE-21)
+- [x] **IDE-19** — Badge PRODUÇÃO: vermelho pulsante no modo remoto; badge verde "Local" no modo local
+- [x] **IDE-20** — Modo Local: rota `/ide/local`, dialog nativo de pasta, IPC `local:*`, filesystem abstraction, botão no Lançador
+- [x] **IDE-21** — Chat Claude: painel lateral direito, `claude -p` via SSH, contexto do arquivo ativo, seletor de VPS, disponível em ambos os modos
 
 ### P3 — Baixa prioridade (pendente)
 - [ ] **IDE-15** — Split editor (dois arquivos lado a lado)

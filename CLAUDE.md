@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`1.2.0` — HEXAGON IDE completo com todas as features P0/P1/P2 implementadas
+`1.3.1` — HEXAGON IDE com modo local, chat Claude (ambos os modos), badge de produção
 
 ## Regras de desenvolvimento
 
@@ -72,3 +72,4 @@ Duas camadas de uso:
 | `Ctrl+Shift+F` | Busca em arquivos (painel esquerdo) |
 | `Ctrl+H` | Find & Replace no arquivo atual |
 | `Ctrl+G` | Ir para linha |
+| Botão **Claude** (roxo) | Abre painel de chat com Claude |

@@ -1,5 +1,15 @@
 # CHANGELOG — HEXAGON IDE
 
+## [1.3.1] — 2026-05-30
+
+### Corrigido / Melhorado
+
+- **Chat Claude em modo local** — chat agora disponível ao editar pastas locais (OneDrive); seletor de VPS no header do painel permite escolher onde `claude -p` executa sem abrir a VPS no IDE
+- **Botão Claude mais visível** — substituído ícone invisível por botão com label "Claude" + cor roxa na top bar de ambos os modos
+- `chatVpsId` centraliza qual VPS é usada em `handleChatSend`; no modo remoto usa a VPS atual; no modo local carrega lista de VPS via `ipc.vps.list()`
+
+---
+
 ## [1.3.0] — 2026-05-30
 
 ### Adicionado

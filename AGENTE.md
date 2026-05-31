@@ -169,6 +169,9 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 | Find/Replace (Ctrl+H) — addCommand garantido no Electron | ✅ | 1.1.1 |
 | Go to Line (Ctrl+G) — addCommand garantido no Electron | ✅ | 1.1.1 |
 | Painel de Problemas — erros/warnings Monaco, jumpToLine | ✅ | 1.1.1 |
+| **Badge PRODUÇÃO** — vermelho pulsante no modo remoto; verde "Local" no modo local | ✅ | 1.3.0 |
+| **Modo Local** — rota `/ide/local`, dialog nativo, IPC `local:*`, filesystem abstraction | ✅ | 1.3.0 |
+| **Chat Claude** — painel lateral, `claude -p` via SSH, seletor de VPS, ambos os modos | ✅ | 1.3.1 |
 
 ## Roles e autenticação
 
@@ -188,7 +191,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`V.1.2.0` — HEXAGON IDE completo. Todas as features P0, P1 e P2 do backlog IDE implementadas. Repositório renomeado para HEXAGON-IDE no GitHub. Ver `docs/CURRENT_STATE.md`.
+`V.1.3.1` — HEXAGON IDE com modo local + chat Claude. IDE opera em modo remoto (VPS/SFTP) e modo local (node:fs). Chat com Claude disponível em ambos os modos via `claude -p` na VPS. Ver `docs/CURRENT_STATE.md`.
 
 ## Próxima tarefa
 
