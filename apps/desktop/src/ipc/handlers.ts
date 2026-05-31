@@ -1,5 +1,5 @@
 import type { IpcMain, BrowserWindow } from 'electron'
-import { dialog } from 'electron'
+import { dialog, clipboard, nativeImage } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -309,5 +309,17 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
   ipcMain.handle('local:touch', async (_, filePath: string) => {
     await fs.writeFile(filePath, '', { flag: 'wx' }).catch(() => {})
     return { success: true }
+  })
+
+  // ── Clipboard — lê imagem nativa do clipboard (funciona no Electron) ──
+  ipcMain.handle('clipboard:readImage', () => {
+    const img = clipboard.readImage()
+    if (img.isEmpty()) return null
+    const png = img.toPNG()
+    return {
+      base64: png.toString('base64'),
+      dataUrl: `data:image/png;base64,${png.toString('base64')}`,
+      mime: 'image/png',
+    }
   })
 }

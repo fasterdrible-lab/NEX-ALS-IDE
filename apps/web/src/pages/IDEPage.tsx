@@ -822,22 +822,13 @@ export default function IDEPage() {
     }
   }
 
-  // IDE-21: colar imagem no chat via Ctrl+V
-  const handleChatPaste = (e: React.ClipboardEvent) => {
-    const file = Array.from(e.clipboardData.items)
-      .find(item => item.type.startsWith('image/'))
-    if (!file) return
+  // IDE-21: colar imagem no chat via Ctrl+V — usa nativeImage do Electron via IPC
+  const handleChatPaste = async (e: React.ClipboardEvent) => {
+    const hasImage = Array.from(e.clipboardData.items).some(item => item.type.startsWith('image/'))
+    if (!hasImage) return
     e.preventDefault()
-    const blob = file.getAsFile()
-    if (!blob) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result as string
-      const base64 = dataUrl.split(',')[1]
-      const mime = blob.type || 'image/png'
-      setChatImage({ dataUrl, base64, mime })
-    }
-    reader.readAsDataURL(blob)
+    const img = await ipc.clipboard.readImage()
+    if (img) setChatImage(img)
   }
 
   // IDE-21: enviar mensagem ao Claude via arquivo temporário na VPS

@@ -16,6 +16,7 @@ const ALLOWED_CHANNELS = new Set([
   'git:push', 'git:pull', 'git:log',
   'local:openFolder', 'local:readdir', 'local:readFile', 'local:readFileBase64',
   'local:writeFile', 'local:mkdir', 'local:delete', 'local:rename', 'local:touch',
+  'clipboard:readImage',
 ])
 
 contextBridge.exposeInMainWorld('electron', {

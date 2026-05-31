@@ -127,6 +127,10 @@ export const ipc = {
     exec: (vpsId: string, cmd: string, timeout?: number) =>
       invoke<{ success: boolean; output: string; error?: string }>('terminal:exec', { vpsId, cmd, timeout }),
   },
+  clipboard: {
+    readImage: () =>
+      invoke<{ base64: string; dataUrl: string; mime: string } | null>('clipboard:readImage'),
+  },
   local: {
     openFolder: () =>
       invoke<string | null>('local:openFolder'),
