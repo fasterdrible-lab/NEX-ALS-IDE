@@ -146,6 +146,8 @@ export default function IDEPage() {
   const [chatVpsList, setChatVpsList] = useState<{id:string;name:string}[]>([])
   const chatEndRef  = useRef<HTMLDivElement>(null)
   const chatTimerRef = useRef<ReturnType<typeof setInterval>|null>(null)
+  const [chatSaveAs, setChatSaveAs] = useState<{code:string;lang:string}|null>(null)
+  const [chatSaveAsName, setChatSaveAsName] = useState('')
 
   // ── IDE-02: hierarchical file tree ─────────────────────────────────
 
@@ -1472,16 +1474,24 @@ export default function IDEPage() {
                                       className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
                                       Copiar
                                     </button>
-                                    <button
-                                      onClick={() => {
-                                        if (!activeTab) { showToast(false,'Abra um arquivo no editor primeiro'); return }
-                                        setOpenFiles(f => f.map(fl => fl.path===activeTab ? {...fl, content:code} : fl))
-                                        showToast(true, `Código aplicado em ${activeFile?.name} — revise e salve (Ctrl+S)`)
-                                      }}
-                                      className="text-[10px] px-2 py-0.5 rounded bg-purple-700 hover:bg-purple-600 text-white transition-colors"
-                                      title={activeFile ? `Aplicar em ${activeFile.name}` : 'Abra um arquivo no editor primeiro'}>
-                                      ▶ Aplicar
-                                    </button>
+                                    {activeFile ? (
+                                      <button
+                                        onClick={() => {
+                                          setOpenFiles(f => f.map(fl => fl.path===activeTab ? {...fl, content:code} : fl))
+                                          showToast(true, `Aplicado em ${activeFile.name} — Ctrl+S para salvar`)
+                                        }}
+                                        className="text-[10px] px-2 py-0.5 rounded bg-purple-700 hover:bg-purple-600 text-white transition-colors"
+                                        title={`Substituir conteúdo de ${activeFile.name}`}>
+                                        ▶ Aplicar em {activeFile.name}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => { setChatSaveAs({code, lang}); setChatSaveAsName('') }}
+                                        className="text-[10px] px-2 py-0.5 rounded bg-purple-700 hover:bg-purple-600 text-white transition-colors"
+                                        title="Salvar como novo arquivo">
+                                        ▶ Salvar como…
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                                 <pre className="text-[11px] font-mono text-slate-300 p-3 overflow-x-auto bg-slate-900/80 whitespace-pre">{code}</pre>
@@ -1508,6 +1518,61 @@ export default function IDEPage() {
                 )}
                 <div ref={chatEndRef}/>
               </div>
+              {/* modal: salvar código como novo arquivo */}
+              {chatSaveAs && (
+                <div className="px-3 py-3 border-t border-slate-700 bg-slate-800/80 shrink-0">
+                  <p className="text-[11px] text-slate-300 mb-2 font-medium">Salvar código como arquivo:</p>
+                  <input
+                    autoFocus
+                    value={chatSaveAsName}
+                    onChange={e=>setChatSaveAsName(e.target.value)}
+                    placeholder={`ex: src/utils/funcao.${chatSaveAs.lang||'ts'}`}
+                    className="w-full text-xs bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 mb-2"
+                    onKeyDown={async e => {
+                      if (e.key === 'Escape') { setChatSaveAs(null); return }
+                      if (e.key !== 'Enter' || !chatSaveAsName.trim()) return
+                      const root = isLocal ? localRootRef.current : activeDir
+                      const rel  = chatSaveAsName.trim().replace(/\\/g, '/')
+                      const fullPath = rel.startsWith('/') ? rel : `${root}/${rel}`
+                      const r = await fsWriteFile(fullPath, chatSaveAs.code)
+                      if (r.success) {
+                        const name = fullPath.split('/').pop() || rel
+                        const entry = { name, path:fullPath, isDirectory:false, size:0, modifiedAt:Date.now(), permissions:'' }
+                        openFile(entry)
+                        reloadDir(fullPath.split('/').slice(0,-1).join('/') || root)
+                        showToast(true, `${name} criado — Ctrl+S para salvar`)
+                        setChatSaveAs(null)
+                      } else {
+                        showToast(false, r.error ?? 'Erro ao criar arquivo')
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!chatSaveAsName.trim()) return
+                        const root = isLocal ? localRootRef.current : activeDir
+                        const rel  = chatSaveAsName.trim().replace(/\\/g, '/')
+                        const fullPath = rel.startsWith('/') ? rel : `${root}/${rel}`
+                        const r = await fsWriteFile(fullPath, chatSaveAs.code)
+                        if (r.success) {
+                          const name = fullPath.split('/').pop() || rel
+                          openFile({ name, path:fullPath, isDirectory:false, size:0, modifiedAt:Date.now(), permissions:'' })
+                          reloadDir(fullPath.split('/').slice(0,-1).join('/') || root)
+                          showToast(true, `${name} criado`)
+                          setChatSaveAs(null)
+                        } else showToast(false, r.error ?? 'Erro ao criar arquivo')
+                      }}
+                      className="flex-1 text-[11px] py-1 rounded bg-purple-700 hover:bg-purple-600 text-white transition-colors">
+                      Criar arquivo
+                    </button>
+                    <button onClick={()=>setChatSaveAs(null)} className="text-[11px] px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* input */}
               <div className="px-3 py-2 border-t border-slate-800 shrink-0">
                 <div className="flex gap-2">
