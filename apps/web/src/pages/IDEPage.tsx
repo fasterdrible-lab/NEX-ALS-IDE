@@ -1449,11 +1449,54 @@ export default function IDEPage() {
                 {chatMessages.map((m, i) => (
                   <div key={i} className={`flex flex-col gap-1 ${m.role==='user'?'items-end':'items-start'}`}>
                     <span className="text-[10px] text-slate-600">{m.role==='user'?'Você':'Claude'}</span>
-                    <div className={`text-xs rounded-lg px-3 py-2 max-w-full whitespace-pre-wrap break-words ${
-                      m.role==='user'
-                        ? 'bg-purple-900/50 text-purple-100 border border-purple-700/30'
-                        : 'bg-slate-800 text-slate-200 border border-slate-700/50'
-                    }`}>{m.text}</div>
+                    {m.role === 'user' ? (
+                      <div className="text-xs rounded-lg px-3 py-2 max-w-full whitespace-pre-wrap break-words bg-purple-900/50 text-purple-100 border border-purple-700/30">
+                        {m.text}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 max-w-full w-full">
+                        {/* Renderiza blocos de código com botões, texto normal como parágrafo */}
+                        {m.text.split(/(```[\s\S]*?```)/g).map((part, pi) => {
+                          const codeMatch = part.match(/^```(\w*)\n?([\s\S]*?)```$/)
+                          if (codeMatch) {
+                            const lang = codeMatch[1] || 'código'
+                            const code = codeMatch[2]
+                            return (
+                              <div key={pi} className="rounded-lg border border-slate-700 overflow-hidden">
+                                {/* header do bloco */}
+                                <div className="flex items-center justify-between px-3 py-1 bg-slate-800/80 border-b border-slate-700">
+                                  <span className="text-[10px] text-slate-500 font-mono">{lang}</span>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => navigator.clipboard.writeText(code).then(()=>showToast(true,'Código copiado'))}
+                                      className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
+                                      Copiar
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (!activeTab) { showToast(false,'Abra um arquivo no editor primeiro'); return }
+                                        setOpenFiles(f => f.map(fl => fl.path===activeTab ? {...fl, content:code} : fl))
+                                        showToast(true, `Código aplicado em ${activeFile?.name} — revise e salve (Ctrl+S)`)
+                                      }}
+                                      className="text-[10px] px-2 py-0.5 rounded bg-purple-700 hover:bg-purple-600 text-white transition-colors"
+                                      title={activeFile ? `Aplicar em ${activeFile.name}` : 'Abra um arquivo no editor primeiro'}>
+                                      ▶ Aplicar
+                                    </button>
+                                  </div>
+                                </div>
+                                <pre className="text-[11px] font-mono text-slate-300 p-3 overflow-x-auto bg-slate-900/80 whitespace-pre">{code}</pre>
+                              </div>
+                            )
+                          }
+                          if (!part.trim()) return null
+                          return (
+                            <div key={pi} className="text-xs rounded-lg px-3 py-2 bg-slate-800 text-slate-200 border border-slate-700/50 whitespace-pre-wrap break-words">
+                              {part.trim()}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {chatLoading && (
