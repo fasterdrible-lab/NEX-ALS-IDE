@@ -311,15 +311,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
     return { success: true }
   })
 
-  // ── Clipboard — lê imagem nativa do clipboard (funciona no Electron) ──
-  ipcMain.handle('clipboard:readImage', () => {
+  // ── Clipboard — salva imagem do clipboard em arquivo temp e retorna o path ──
+  ipcMain.handle('clipboard:readImage', async () => {
     const img = clipboard.readImage()
     if (img.isEmpty()) return null
     const png = img.toPNG()
-    return {
-      base64: png.toString('base64'),
-      dataUrl: `data:image/png;base64,${png.toString('base64')}`,
-      mime: 'image/png',
-    }
+    const tmpPath = path.join(require('os').tmpdir(), `hexagon_clip_${Date.now()}.png`)
+    await fs.writeFile(tmpPath, png)
+    return { filePath: tmpPath.replace(/\\/g, '/') }
   })
 }

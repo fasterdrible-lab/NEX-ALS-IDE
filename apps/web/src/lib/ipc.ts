@@ -129,7 +129,7 @@ export const ipc = {
   },
   clipboard: {
     readImage: () =>
-      invoke<{ base64: string; dataUrl: string; mime: string } | null>('clipboard:readImage'),
+      invoke<{ filePath: string } | null>('clipboard:readImage'),
   },
   local: {
     openFolder: () =>

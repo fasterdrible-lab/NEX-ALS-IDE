@@ -148,7 +148,7 @@ export default function IDEPage() {
   const chatTimerRef = useRef<ReturnType<typeof setInterval>|null>(null)
   const [chatSaveAs, setChatSaveAs] = useState<{code:string;lang:string}|null>(null)
   const [chatSaveAsName, setChatSaveAsName] = useState('')
-  const [chatImage, setChatImage] = useState<{dataUrl:string; base64:string; mime:string}|null>(null)
+  const [chatImage, setChatImage] = useState<{dataUrl:string; base64:string; mime:string; filePath:string}|null>(null)
 
   // ── IDE-02: hierarchical file tree ─────────────────────────────────
 
@@ -822,13 +822,20 @@ export default function IDEPage() {
     }
   }
 
-  // IDE-21: colar imagem no chat via Ctrl+V — usa nativeImage do Electron via IPC
+  // IDE-21: colar imagem no chat via Ctrl+V
   const handleChatPaste = async (e: React.ClipboardEvent) => {
     const hasImage = Array.from(e.clipboardData.items).some(item => item.type.startsWith('image/'))
     if (!hasImage) return
     e.preventDefault()
-    const img = await ipc.clipboard.readImage()
-    if (img) setChatImage(img)
+    // Salva imagem do clipboard em arquivo temp via main process
+    const res = await ipc.clipboard.readImage()
+    if (!res?.filePath) return
+    // Lê o arquivo como base64 usando ipc.local (mesmo método do IDE-11 — garantido funcionar)
+    const r = await ipc.local.readFileBase64(res.filePath)
+    if (r) {
+      const dataUrl = `data:image/png;base64,${r}`
+      setChatImage({ dataUrl, base64: r as string, mime: 'image/png', filePath: res.filePath })
+    }
   }
 
   // IDE-21: enviar mensagem ao Claude via arquivo temporário na VPS
