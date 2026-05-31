@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`1.3.1` — HEXAGON IDE com modo local, chat Claude (ambos os modos), badge de produção
+`1.3.2` — HEXAGON IDE com chat Claude completo, modo local, badge de produção
 
 ## Regras de desenvolvimento
 

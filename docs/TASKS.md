@@ -32,8 +32,8 @@
 ## Concluídas recentemente
 
 - [x] **IDE-19 · Badge PRODUÇÃO** — indicador vermelho pulsante na top bar do modo remoto VPS — 2026-05-30
-- [x] **IDE-20 · Modo Local** — rota `/ide/local`; dialog de pasta nativa; IPC `local:*` (readdir/readFile/writeFile/mkdir/delete/rename/touch/readFileBase64); badge verde "Local"; terminal e Git ocultos no modo local; botão "Abrir pasta local" no Launcher — 2026-05-30
-- [x] **IDE-21 · Chat Claude via SSH** — painel lateral direito redimensionável; envia `claude -p '...'` na VPS via `terminal:exec`; contexto do arquivo ativo incluído; histórico de mensagens; Enter para enviar; Shift+Enter nova linha — 2026-05-30
+- [x] **IDE-20 · Modo Local** — rota `/ide/local`; dialog de pasta nativa; IPC `local:*`; filesystem abstraction; badge verde "Local"; terminal e Git ocultos; botão "Abrir pasta local" no Launcher — 2026-05-30
+- [x] **IDE-21 · Chat Claude** — painel lateral direito redimensionável; `claude -p` via SSH; prompt via arquivo SFTP (sem escaping); contexto completo (árvore 2 níveis + docs + arquivo ativo); seletor de VPS; timer de espera; botões Copiar/Aplicar/Salvar como nos blocos de código; paste de print Ctrl+V (badge "📷 Print anexado"); instrução offline para Claude usar conteúdo inline — 2026-05-31
 
 ## Backlog IDE — P3 BAIXA PRIORIDADE (futuro)
 

@@ -1,5 +1,33 @@
 # CHANGELOG — HEXAGON IDE
 
+## [1.3.2] — 2026-05-31
+
+### Adicionado
+
+- **Chat · Botões Copiar e Aplicar** — mensagens do Claude com blocos de código ganham botão "Copiar" (clipboard) e "▶ Aplicar em arquivo.tsx" (substitui conteúdo do arquivo ativo no Monaco, marca como dirty para revisão com Ctrl+S)
+- **Chat · Salvar como** — quando não há arquivo aberto, botão vira "▶ Salvar como…" com input inline para digitar caminho relativo; cria o arquivo no projeto, abre no editor e atualiza a tree
+- **Chat · Colar print (Ctrl+V)** — textarea aceita paste de imagem; badge "📷 Print anexado" confirma recebimento; imagem enviada inline no prompt para o Claude
+- **Chat · Contexto automático do projeto local** — ao usar o chat em modo local, envia automaticamente: árvore de pastas (2 níveis, ignorando `node_modules`/`.git`/etc.), arquivos-chave (`CLAUDE.md`, `README.md`, `docs/TASKS.md`, `docs/CURRENT_STATE.md`, `docs/ARCHITECTURE.md`, `CHANGELOG.md`) e conteúdo do arquivo aberto no editor
+- **Chat · Instrução offline** — prompt inclui aviso explícito para Claude não tentar ler arquivos do disco e usar apenas o conteúdo fornecido inline
+- **Chat · Timer de espera** — exibe "Claude pensando… Xs" com contagem durante o processamento
+- **IPC `clipboard:readImage`** — main process usa `nativeImage` do Electron para ler imagem do clipboard; retorna path do arquivo temp PNG
+
+### Corrigido
+
+- **Chat · `stdin` warning** — adicionado `< /dev/null` no comando `claude -p` para suprimir aviso de stdin
+- **Chat · Prompt via arquivo SFTP** — prompt escrito em `/tmp/hexagon_chat_<ts>.txt` via SFTP antes de executar, evitando escaping de shell e limite de tamanho de linha de comando
+- **Chat · `--image` não suportado** — flag `--image` removida (não existe no `claude -p`); imagem enviada como bloco base64 inline no prompt
+- **Chat · Contexto do projeto local** — adicionada instrução explícita para Claude usar conteúdo inline e não tentar acessar o filesystem da VPS
+- **Botão Aplicar** — mostra nome do arquivo alvo ("Aplicar em arquivo.tsx") em vez de label genérico; exibe erro claro quando nenhum arquivo está aberto
+- Timeout `terminal:exec` aumentado para 120s para respostas longas do Claude
+
+### Limitações conhecidas
+
+- `claude -p` não processa imagens como visão real (multimodal); para análise de imagem, prefer colar o **texto** do erro no chat
+- Para suporte multimodal completo e respostas mais rápidas, seria necessário API Key da Anthropic
+
+---
+
 ## [1.3.1] — 2026-05-30
 
 ### Corrigido / Melhorado

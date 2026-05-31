@@ -1,7 +1,7 @@
 # CURRENT_STATE.md — HEXAGON IDE
 
-**Data:** 2026-05-30
-**Versão:** 1.3.1
+**Data:** 2026-05-31
+**Versão:** 1.3.2
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-IDE.git
 
 ## Estado atual
@@ -10,6 +10,7 @@
 
 - **Modo Remoto (VPS)** — explorer SFTP, Monaco Editor, terminal SSH multi-tab, Git, painel de Problemas, chat Claude; badge vermelho "Produção" visível na top bar.
 - **Modo Local (OneDrive/PC)** — mesmo editor e explorer usando `node:fs` local; badge verde "Local"; terminal e Git ocultos; chat Claude disponível com seletor de VPS.
+- **Chat Claude integrado** — painel lateral direito; `claude -p` via SSH com contexto automático do projeto (árvore, docs, arquivo ativo); botões Copiar/Aplicar nos blocos de código; Salvar como para criar novo arquivo; paste de print via Ctrl+V; timer de espera; prompt via arquivo SFTP (sem problemas de escaping).
 
 ## Funcionalidades do app base
 
@@ -58,7 +59,7 @@
 ### Novas features (IDE-19 a IDE-21)
 - [x] **IDE-19** — Badge PRODUÇÃO: vermelho pulsante no modo remoto; badge verde "Local" no modo local
 - [x] **IDE-20** — Modo Local: rota `/ide/local`, dialog nativo de pasta, IPC `local:*`, filesystem abstraction, botão no Lançador
-- [x] **IDE-21** — Chat Claude: painel lateral direito, `claude -p` via SSH, contexto do arquivo ativo, seletor de VPS, disponível em ambos os modos
+- [x] **IDE-21** — Chat Claude: painel lateral direito, `claude -p` via SSH, contexto completo do projeto (árvore + docs + arquivo ativo), seletor de VPS, ambos os modos, botões Copiar/Aplicar/Salvar como, paste de print (Ctrl+V), timer de espera, prompt via arquivo SFTP
 
 ### P3 — Baixa prioridade (pendente)
 - [ ] **IDE-15** — Split editor (dois arquivos lado a lado)
@@ -102,7 +103,8 @@
 3. **VS Code Remote SSH** — usuário precisa ter extensão "Remote - SSH" instalada no VS Code
 4. **Claude Code** — autenticação ocorre dentro de cada VPS, não dentro do app
 5. **Monaco markers** — erros/warnings dependem de language workers habilitados; TypeScript e JSON são detectados nativamente, outras linguagens requerem LSP (IDE-16)
-6. **Sem testes automatizados** — primeira versão sem cobertura de testes
+6. **Chat · imagem** — `claude -p` não processa imagens como visão real; para análise de erro, colar o texto do erro é mais confiável que print; suporte multimodal completo requer API Key Anthropic
+7. **Sem testes automatizados** — primeira versão sem cobertura de testes
 
 ## Próximo passo recomendado
 

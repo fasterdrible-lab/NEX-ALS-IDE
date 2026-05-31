@@ -171,7 +171,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 | Painel de Problemas — erros/warnings Monaco, jumpToLine | ✅ | 1.1.1 |
 | **Badge PRODUÇÃO** — vermelho pulsante no modo remoto; verde "Local" no modo local | ✅ | 1.3.0 |
 | **Modo Local** — rota `/ide/local`, dialog nativo, IPC `local:*`, filesystem abstraction | ✅ | 1.3.0 |
-| **Chat Claude** — painel lateral, `claude -p` via SSH, seletor de VPS, ambos os modos | ✅ | 1.3.1 |
+| **Chat Claude** — `claude -p` via SSH, contexto automático (árvore+docs+arquivo), seletor de VPS, ambos os modos, Copiar/Aplicar/Salvar como, paste de print | ✅ | 1.3.2 |
 
 ## Roles e autenticação
 
@@ -191,7 +191,17 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`V.1.3.1` — HEXAGON IDE com modo local + chat Claude. IDE opera em modo remoto (VPS/SFTP) e modo local (node:fs). Chat com Claude disponível em ambos os modos via `claude -p` na VPS. Ver `docs/CURRENT_STATE.md`.
+`V.1.3.2` — HEXAGON IDE com modo local + chat Claude completo. IDE opera em modo remoto (VPS/SFTP) e modo local (node:fs). Chat envia contexto automático do projeto (árvore + docs-chave + arquivo ativo), botões Copiar/Aplicar/Salvar em blocos de código, paste de print. Ver `docs/CURRENT_STATE.md`.
+
+## Uso do Chat Claude
+
+| Situação | Recomendação |
+|---|---|
+| Analisar erro | Cole o **texto** do erro, não print |
+| Corrigir arquivo aberto | Abra o arquivo → descreva o problema → clique Aplicar |
+| Criar novo arquivo | Peça ao Claude → clique "Salvar como…" → informe o caminho |
+| Projeto local (OneDrive) | Claude recebe árvore + docs automaticamente |
+| Print/screenshot | Ctrl+V cola a imagem; processamento visual não garantido no `claude -p` |
 
 ## Próxima tarefa
 
