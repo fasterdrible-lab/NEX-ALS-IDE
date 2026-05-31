@@ -136,11 +136,13 @@ export default function IDEPage() {
   const [problems,    setProblems]    = useState<Problem[]>([])
   const markerDisposableRef = useRef<{ dispose(): void } | null>(null)
 
-  // IDE-21: Chat Claude via SSH
+  // IDE-21: Chat Claude via SSH (disponível em ambos os modos)
   const [showChat,    setShowChat]    = useState(false)
   const [chatMessages, setChatMessages] = useState<{role:'user'|'assistant'; text:string}[]>([])
   const [chatInput,   setChatInput]   = useState('')
   const [chatLoading, setChatLoading] = useState(false)
+  const [chatVpsId,   setChatVpsId]   = useState<string>(vpsId ?? '')  // VPS usada para claude -p
+  const [chatVpsList, setChatVpsList] = useState<{id:string;name:string}[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // ── IDE-02: hierarchical file tree ─────────────────────────────────
@@ -538,6 +540,18 @@ export default function IDEPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, openFiles])
 
+  // IDE-21: carregar lista de VPS para seletor de chat no modo local
+  useEffect(() => {
+    if (!isLocal) return
+    ipc.vps.list().then(list => {
+      if (Array.isArray(list)) {
+        setChatVpsList(list.map((v: {id:string;name:string}) => ({ id:v.id, name:v.name })))
+        if (list.length > 0 && !chatVpsId) setChatVpsId(list[0].id)
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLocal])
+
   // ── file operations ───────────────────────────────────────────────────
 
   const openFile = async (entry:FileEntry, revealLine?:number) => {
@@ -805,7 +819,7 @@ export default function IDEPage() {
 
   // IDE-21: enviar mensagem ao Claude via SSH exec
   const handleChatSend = async () => {
-    if (!vpsId || !chatInput.trim() || chatLoading) return
+    if (!chatVpsId || !chatInput.trim() || chatLoading) return
     const userMsg = chatInput.trim()
     setChatInput('')
     setChatMessages(m => [...m, { role:'user', text:userMsg }])
@@ -816,7 +830,7 @@ export default function IDEPage() {
         : ''
       const prompt = `${ctx}${userMsg}`
       const escaped = prompt.replace(/'/g, `'\\''`)
-      const r = await ipc.terminal.exec(vpsId, `claude -p '${escaped}' 2>&1`, 60000)
+      const r = await ipc.terminal.exec(chatVpsId, `claude -p '${escaped}' 2>&1`, 60000)
       const reply = r.success ? (r.output || '(sem resposta)') : `Erro: ${r.error}`
       setChatMessages(m => [...m, { role:'assistant', text:reply }])
     } finally {
@@ -889,13 +903,11 @@ export default function IDEPage() {
               <TerminalSquare size={14}/>
             </button>
           )}
-          {/* IDE-21: botão chat Claude (só modo remoto — Claude roda na VPS) */}
-          {!isLocal && (
-            <button onClick={()=>setShowChat(v=>!v)} title="Chat com Claude (executa claude -p na VPS)"
-              className={`p-1.5 rounded text-xs transition-colors ${showChat?'bg-purple-600/30 text-purple-300':'text-slate-500 hover:text-slate-300 hover:bg-slate-700'}`}>
-              <Bot size={14}/>
-            </button>
-          )}
+          {/* IDE-21: botão chat Claude — disponível em ambos os modos */}
+          <button onClick={()=>setShowChat(v=>!v)} title="Chat com Claude (executa claude -p na VPS)"
+            className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${showChat?'bg-purple-600/40 text-purple-200 border border-purple-500/40':'text-purple-400 hover:text-purple-200 hover:bg-purple-900/40 border border-transparent'}`}>
+            <Bot size={13}/> Claude
+          </button>
         </div>
       </div>
 
@@ -1321,18 +1333,35 @@ export default function IDEPage() {
           </div>
         </div>
 
-        {/* ─── IDE-21: CHAT CLAUDE (painel direito) ─── */}
-        {showChat && !isLocal && (
+        {/* ─── IDE-21: CHAT CLAUDE (painel direito — ambos os modos) ─── */}
+        {showChat && (
           <>
             {/* resize handle */}
             <div className="w-1 bg-slate-800 hover:bg-purple-600/50 cursor-col-resize shrink-0 transition-colors active:bg-purple-500" onMouseDown={startResizeChat}/>
             <div className="flex flex-col bg-slate-900 border-l border-slate-800 shrink-0 overflow-hidden" style={{width:chatW}}>
               {/* header */}
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 shrink-0">
-                <Bot size={13} className="text-purple-400"/>
-                <span className="text-xs font-semibold text-slate-300 flex-1">Claude</span>
-                <span className="text-[10px] text-slate-600">via SSH · claude -p</span>
-                <button onClick={()=>setChatMessages([])} className="text-slate-700 hover:text-slate-400 text-[10px]" title="Limpar">✕</button>
+              <div className="flex flex-col border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <Bot size={13} className="text-purple-400"/>
+                  <span className="text-xs font-semibold text-slate-300 flex-1">Claude</span>
+                  <span className="text-[10px] text-slate-600">claude -p</span>
+                  <button onClick={()=>setChatMessages([])} className="text-slate-700 hover:text-slate-400 text-[10px]" title="Limpar histórico">✕</button>
+                </div>
+                {/* seletor de VPS — sempre visível para escolher onde o Claude roda */}
+                <div className="px-3 pb-2 flex items-center gap-2">
+                  <span className="text-[10px] text-slate-600 shrink-0">VPS:</span>
+                  {isLocal ? (
+                    <select value={chatVpsId} onChange={e=>setChatVpsId(e.target.value)}
+                      className="flex-1 text-[10px] bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-300 focus:outline-none focus:border-purple-500">
+                      {chatVpsList.length === 0
+                        ? <option value="">Nenhuma VPS cadastrada</option>
+                        : chatVpsList.map(v => <option key={v.id} value={v.id}>{v.name}</option>)
+                      }
+                    </select>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">{displayName}</span>
+                  )}
+                </div>
               </div>
               {/* messages */}
               <div className="flex-1 overflow-y-auto p-3 space-y-3">

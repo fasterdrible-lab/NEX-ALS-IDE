@@ -5,7 +5,8 @@
       "Bash(grep -n \"showTerm\\\\|leftPanel.*git\\\\|'git'\\\\|Terminal.*button\\\\|PanelBottom\\\\|Ctrl.*\\\\`\" \"c:/Users/phpos/OneDrive/Claude Workspace Manager/apps/web/src/pages/IDEPage.tsx\")",
       "Bash(pnpm --filter web typecheck)",
       "Bash(git -C \"c:/Users/phpos/OneDrive/Claude Workspace Manager\" add -A)",
-      "Bash(git -C 'c:/Users/phpos/OneDrive/Claude Workspace Manager' commit -m ' *)"
+      "Bash(git -C 'c:/Users/phpos/OneDrive/Claude Workspace Manager' commit -m ' *)",
+      "Bash(node -e \"const lr = require\\('c:/Users/phpos/OneDrive/Claude Workspace Manager/node_modules/.pnpm/lucide-react@0.468.0_react@18.3.1/node_modules/lucide-react'\\); console.log\\('Bot' in lr, 'MessageSquare' in lr\\)\")"
     ]
   }
 }
