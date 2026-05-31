@@ -6,7 +6,11 @@
       "Bash(pnpm --filter web typecheck)",
       "Bash(git -C \"c:/Users/phpos/OneDrive/Claude Workspace Manager\" add -A)",
       "Bash(git -C 'c:/Users/phpos/OneDrive/Claude Workspace Manager' commit -m ' *)",
-      "Bash(node -e \"const lr = require\\('c:/Users/phpos/OneDrive/Claude Workspace Manager/node_modules/.pnpm/lucide-react@0.468.0_react@18.3.1/node_modules/lucide-react'\\); console.log\\('Bot' in lr, 'MessageSquare' in lr\\)\")"
+      "Bash(node -e \"const lr = require\\('c:/Users/phpos/OneDrive/Claude Workspace Manager/node_modules/.pnpm/lucide-react@0.468.0_react@18.3.1/node_modules/lucide-react'\\); console.log\\('Bot' in lr, 'MessageSquare' in lr\\)\")",
+      "Bash(git -C \"c:/Users/phpos/OneDrive/Claude Workspace Manager\" add CHANGELOG.md CLAUDE.md AGENTE.md docs/CURRENT_STATE.md package.json apps/desktop/package.json apps/web/package.json apps/web/src/components/Layout.tsx apps/web/src/pages/Help.tsx)",
+      "Bash(git -C \"c:/Users/phpos/OneDrive/Claude Workspace Manager\" add apps/web/src/pages/IDEPage.tsx)",
+      "Bash(git -C 'c:/Users/phpos/OneDrive/Claude Workspace Manager' commit -m 'fix: suprimir warning stdin do claude -p com < /dev/null *)",
+      "Bash(git -C 'c:/Users/phpos/OneDrive/Claude Workspace Manager' commit -m 'fix: claude -p roda em /tmp com --allowedTools '\\\\'''\\\\'' para evitar pedido de permissão *)"
     ]
   }
 }

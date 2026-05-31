@@ -1,3 +1,14 @@
 pnpm build
 pnpm --filter @cwm/desktop exec electron-builder --dir
 
+Hash e salt existem — a senha está cadastrada. O fato de os logs não mostrarem nada sugere que a request pode estar chegando com um Server Action ID desatualizado e sendo rejeitada antes de tocar o banco.
+
+Causa provável: cache do Cloudflare servindo o JS antigo para todos os browsers.
+
+Teste 1 — confirmar se é problema de Server Action:
+Tente criar uma conta nova em vez de logar. Se o cadastro também falhar, o problema é de infraestrutura. Se funcionar, o problema é específico da senha/hash do usuário.
+
+Teste 2 — purgar o cache do Cloudflare:
+No painel Cloudflare → Caching → Configuration → Purge Everything.
+
+Depois tente logar novamente.

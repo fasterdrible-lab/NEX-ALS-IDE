@@ -138,7 +138,7 @@ export default function IDEPage() {
 
   // IDE-21: Chat Claude via SSH (disponível em ambos os modos)
   const [showChat,    setShowChat]    = useState(false)
-  const [chatMessages, setChatMessages] = useState<{role:'user'|'assistant'; text:string}[]>([])
+  const [chatMessages, setChatMessages] = useState<{role:'user'|'assistant'; text:string; imageDataUrl?:string}[]>([])
   const [chatInput,   setChatInput]   = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [chatElapsed, setChatElapsed] = useState(0)
@@ -148,6 +148,7 @@ export default function IDEPage() {
   const chatTimerRef = useRef<ReturnType<typeof setInterval>|null>(null)
   const [chatSaveAs, setChatSaveAs] = useState<{code:string;lang:string}|null>(null)
   const [chatSaveAsName, setChatSaveAsName] = useState('')
+  const [chatImage, setChatImage] = useState<{dataUrl:string; base64:string; mime:string}|null>(null)
 
   // ── IDE-02: hierarchical file tree ─────────────────────────────────
 
@@ -821,12 +822,36 @@ export default function IDEPage() {
     }
   }
 
+  // IDE-21: colar imagem no chat via Ctrl+V
+  const handleChatPaste = (e: React.ClipboardEvent) => {
+    const file = Array.from(e.clipboardData.items)
+      .find(item => item.type.startsWith('image/'))
+    if (!file) return
+    e.preventDefault()
+    const blob = file.getAsFile()
+    if (!blob) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      const base64 = dataUrl.split(',')[1]
+      const mime = blob.type || 'image/png'
+      setChatImage({ dataUrl, base64, mime })
+    }
+    reader.readAsDataURL(blob)
+  }
+
   // IDE-21: enviar mensagem ao Claude via arquivo temporário na VPS
   const handleChatSend = async () => {
-    if (!chatVpsId || !chatInput.trim() || chatLoading) return
+    if (!chatVpsId || (!chatInput.trim() && !chatImage) || chatLoading) return
     const userMsg = chatInput.trim()
+    const pendingImage = chatImage
     setChatInput('')
-    setChatMessages(m => [...m, { role:'user', text:userMsg }])
+    setChatImage(null)
+    setChatMessages(m => [...m, {
+      role:'user',
+      text: userMsg,
+      imageDataUrl: pendingImage?.dataUrl,
+    } as {role:'user'|'assistant'; text:string; imageDataUrl?:string}])
     setChatLoading(true)
     setChatElapsed(0)
     chatTimerRef.current = setInterval(() => setChatElapsed(s => s + 1), 1000)
@@ -891,22 +916,39 @@ export default function IDEPage() {
 
       const prompt = `${ctx}${userMsg}`
 
-      // Escreve prompt em arquivo temporário na VPS via SFTP para evitar
-      // problemas de escaping e limite de tamanho da linha de comando
-      const tmpFile = `/tmp/hexagon_chat_${Date.now()}.txt`
+      // Escreve prompt + imagem (opcional) via SFTP e executa claude -p
+      const ts = Date.now()
+      const tmpPrompt = `/tmp/hexagon_chat_${ts}.txt`
       let reply = ''
       const sftp = await ipc.sftp.open(chatVpsId)
       if (sftp.success && sftp.sessionId) {
-        await ipc.sftp.writeFile(sftp.sessionId, tmpFile, prompt)
+        await ipc.sftp.writeFile(sftp.sessionId, tmpPrompt, prompt)
+
+        let imgFlag = ''
+        if (pendingImage) {
+          // Decodifica base64 e escreve imagem na VPS via SFTP
+          const ext = pendingImage.mime.split('/')[1]?.replace('jpeg','jpg') || 'png'
+          const tmpImg = `/tmp/hexagon_img_${ts}.${ext}`
+          // writeFile recebe string; enviamos base64 e decodificamos no servidor
+          await ipc.sftp.writeFile(sftp.sessionId, `${tmpImg}.b64`, pendingImage.base64)
+          imgFlag = `base64 -d ${tmpImg}.b64 > ${tmpImg} && `
+          imgFlag += `IMG_FLAG="--image ${tmpImg}" && `
+        }
+
         await ipc.sftp.close(sftp.sessionId)
+
+        const cleanup = pendingImage
+          ? `rm -f ${tmpPrompt} /tmp/hexagon_img_${ts}.* 2>/dev/null`
+          : `rm -f ${tmpPrompt}`
+
         const r = await ipc.terminal.exec(
           chatVpsId,
-          `cd /tmp && claude -p "$(cat ${tmpFile})" --allowedTools '' < /dev/null 2>&1; rm -f ${tmpFile}`,
+          `cd /tmp && ${imgFlag}claude -p "$(cat ${tmpPrompt})" $\{IMG_FLAG:-} --allowedTools '' < /dev/null 2>&1; ${cleanup}`,
           120000
         )
         reply = r.success ? (r.output?.trim() || '(sem resposta)') : `Erro: ${r.error}`
       } else {
-        reply = 'Erro ao conectar SFTP para enviar prompt. Verifique a VPS selecionada.'
+        reply = 'Erro ao conectar SFTP. Verifique a VPS selecionada.'
       }
       setChatMessages(m => [...m, { role:'assistant', text:reply }])
     } finally {
@@ -1452,8 +1494,15 @@ export default function IDEPage() {
                   <div key={i} className={`flex flex-col gap-1 ${m.role==='user'?'items-end':'items-start'}`}>
                     <span className="text-[10px] text-slate-600">{m.role==='user'?'Você':'Claude'}</span>
                     {m.role === 'user' ? (
-                      <div className="text-xs rounded-lg px-3 py-2 max-w-full whitespace-pre-wrap break-words bg-purple-900/50 text-purple-100 border border-purple-700/30">
-                        {m.text}
+                      <div className="flex flex-col gap-1.5 items-end max-w-full">
+                        {m.imageDataUrl && (
+                          <img src={m.imageDataUrl} alt="print" className="max-w-full rounded-lg border border-purple-700/30 max-h-48 object-contain"/>
+                        )}
+                        {m.text && (
+                          <div className="text-xs rounded-lg px-3 py-2 max-w-full whitespace-pre-wrap break-words bg-purple-900/50 text-purple-100 border border-purple-700/30">
+                            {m.text}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-col gap-2 max-w-full w-full">
@@ -1575,12 +1624,23 @@ export default function IDEPage() {
 
               {/* input */}
               <div className="px-3 py-2 border-t border-slate-800 shrink-0">
+                {/* preview da imagem colada */}
+                {chatImage && (
+                  <div className="relative mb-2 inline-block">
+                    <img src={chatImage.dataUrl} alt="imagem" className="max-h-28 rounded border border-purple-700/50 object-contain"/>
+                    <button onClick={()=>setChatImage(null)}
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white text-[10px] flex items-center justify-center hover:bg-red-500">
+                      ×
+                    </button>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <textarea
                     value={chatInput}
                     onChange={e=>setChatInput(e.target.value)}
                     onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleChatSend()} }}
-                    placeholder="Pergunte algo… (Enter para enviar)"
+                    onPaste={handleChatPaste}
+                    placeholder="Pergunte algo… (Enter para enviar, Ctrl+V para colar imagem)"
                     rows={3}
                     className="flex-1 text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-purple-500"
                   />
