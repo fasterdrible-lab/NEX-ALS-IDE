@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Rocket, Terminal, FolderOpen, Server,
   Loader2, CheckCircle, XCircle, User,
-  BotMessageSquare, AlertTriangle, HelpCircle,
+  BotMessageSquare, AlertTriangle, HelpCircle, HardDrive, Code2,
 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import type { Project, VpsServer, ClaudeCheckResult } from '@cwm/config'
@@ -58,11 +59,11 @@ function ClaudeBadge({ status }: { status: ClaudeStatus }) {
 }
 
 export default function Launcher() {
+  const navigate = useNavigate()
   const [projects, setProjects] = useState<Project[]>([])
   const [vps, setVps] = useState<VpsServer[]>([])
   const [loading, setLoading] = useState(true)
   const [launchStates, setLaunchStates] = useState<Record<string, LaunchState>>({})
-  const [terminalStates, setTerminalStates] = useState<Record<string, LaunchState>>({})
   const [claudeStatuses, setClaudeStatuses] = useState<Record<string, ClaudeStatus>>({})
 
   useEffect(() => {
@@ -95,15 +96,8 @@ export default function Launcher() {
     }
   }
 
-  const handleOpenTerminal = async (vpsId: string) => {
-    setTerminalStates(s => ({ ...s, [vpsId]: { loading: true } }))
-    try {
-      const result = await ipc.launcher.openTerminal(vpsId)
-      setTerminalStates(s => ({ ...s, [vpsId]: { loading: false, success: result.success, message: result.message } }))
-      setTimeout(() => setTerminalStates(s => ({ ...s, [vpsId]: { loading: false } })), 3000)
-    } catch (e) {
-      setTerminalStates(s => ({ ...s, [vpsId]: { loading: false, success: false, message: String(e) } }))
-    }
+  const handleOpenTerminal = (vpsId: string, vpsName: string) => {
+    navigate(`/terminal/${vpsId}/${encodeURIComponent(vpsName)}`)
   }
 
   if (loading) {
@@ -123,7 +117,6 @@ export default function Launcher() {
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">Terminais SSH</h2>
           <div className="grid grid-cols-2 gap-3">
             {vps.map(v => {
-              const state = terminalStates[v.id]
               const claudeStatus = claudeStatuses[v.id]
               return (
                 <div key={v.id} className="card flex items-center justify-between gap-3">
@@ -135,21 +128,31 @@ export default function Launcher() {
                       <p className="font-medium text-slate-100 text-sm">{v.name}</p>
                       <p className="text-xs text-slate-500">{v.username}@{v.host}:{v.port}</p>
                       <ClaudeBadge status={claudeStatus} />
-                      {state?.message && !state.loading && (
-                        <p className={`text-xs mt-0.5 ${state.success ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {state.message}
-                        </p>
-                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleOpenTerminal(v.id)}
-                    disabled={state?.loading}
-                    className="btn-secondary text-xs py-1.5 px-3 shrink-0"
-                  >
-                    {state?.loading ? <Loader2 size={13} className="animate-spin" /> : <Terminal size={13} />}
-                    Terminal
-                  </button>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => navigate(`/ide/${v.id}/${encodeURIComponent(v.name)}`)}
+                      className="btn-primary text-xs py-1.5 px-3"
+                      title="IDE integrado — editor + terminal + explorer"
+                    >
+                      <Code2 size={13} /> IDE
+                    </button>
+                    <button
+                      onClick={() => navigate(`/explorer/${v.id}/${encodeURIComponent(v.name)}`)}
+                      className="btn-secondary text-xs py-1.5 px-3"
+                      title="Explorador de arquivos"
+                    >
+                      <HardDrive size={13} /> Explorer
+                    </button>
+                    <button
+                      onClick={() => handleOpenTerminal(v.id, v.name)}
+                      className="btn-secondary text-xs py-1.5 px-3"
+                      title="Terminal SSH"
+                    >
+                      <Terminal size={13} /> Terminal
+                    </button>
+                  </div>
                 </div>
               )
             })}

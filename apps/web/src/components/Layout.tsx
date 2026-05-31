@@ -21,10 +21,10 @@ export default function Layout() {
       <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-800">
           <BotMessageSquare size={22} className="text-brand-400 shrink-0" />
-          <span className="font-semibold text-sm text-slate-100 leading-tight">
-            Claude Workspace<br />
-            <span className="text-slate-400 font-normal text-xs">Manager</span>
-          </span>
+          <div className="leading-tight">
+            <span className="font-bold text-sm text-slate-100 tracking-wide">HEXAGON IDE</span>
+            <p className="text-slate-500 text-xs font-normal">Multi-conta Claude</p>
+          </div>
         </div>
 
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">

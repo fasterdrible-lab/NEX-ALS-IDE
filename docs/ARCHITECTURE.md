@@ -161,7 +161,44 @@ Não há mistura de autenticação porque cada VPS é um servidor Linux independ
 3. **Prisma + Electron** — Prisma precisa de `prisma generate` antes do build. Caminhos do binário devem ser incluídos no electron-builder.
 4. **Atualizações do Prisma** — mudanças de schema exigem `prisma migrate` ou `prisma db push`.
 5. **Remote SSH URI** — formato pode variar entre versões do VS Code. Implementado com fallback.
-6. **[CRÍTICO] require("electron") + pnpm + Windows** — Electron 28+ no Windows não intercepta `require("electron")` para código fora de `resources/`. Causa: o `node_init.js` compilado no binário aplica `Module._nodeModulePaths` que isola código externo. O npm stub (`node_modules/electron/index.js`) retorna o path do executável em vez da API. **Solução: migrar para `electron-vite`** que bundla o main process com Rollup com `electron` como external, gerando um pacote compatível com o mecanismo de carregamento do Electron. Alternativa rápida: `pnpm --filter @cwm/desktop exec electron-builder --dir` empacota o app em `resources/app/` onde `require("electron")` funciona.
+6. **[CRÍTICO] `ELECTRON_RUN_AS_NODE` + pnpm + Windows** — Quando `ELECTRON_RUN_AS_NODE=1` está no ambiente (definido por ferramentas como Claude Code para evitar janelas Electron durante tool calls), o binário Electron roda como Node.js puro, sem a API Electron. `require('electron')` retorna o npm stub (string com path do binário), tornando `electron.app`, `electron.BrowserWindow`, etc. `undefined`. **Solução:** `scripts/dev.js` deleta `process.env['ELECTRON_RUN_AS_NODE']` antes de iniciar o concurrently, eliminando a herança nos processos filhos. Nota: Electron verifica a EXISTÊNCIA da var (qualquer valor, inclusive `"0"` ou `"false"`, ativa o modo Node) — é necessário deletar, não setar.
+7. **[CRÍTICO] `app.isPackaged` em nível de módulo** — Acessar `app.isPackaged` fora de uma função (no topo do módulo, antes de `app.whenReady()`) causa crash quando `require('electron')` retorna o npm stub. **Solução:** usar `process.env['ELECTRON_RENDERER_URL']` (definido pelo electron-vite em dev) para detecção de modo, com fallback para `!app.isPackaged` DENTRO de `createWindow()` (chamada apenas após `whenReady()`).
+
+## Roteamento — fullscreen vs layout
+
+```
+/ (Layout com sidebar)
+  /vps, /projects, /accounts, /launcher, /settings, /diagnostics, /help
+
+/terminal/:vpsId/:vpsName  ← TerminalPage (fullscreen, sem sidebar)
+/explorer/:vpsId/:vpsName  ← FileExplorerPage (fullscreen, sem sidebar)
+/ide/:vpsId/:vpsName       ← IDEPage (fullscreen, sem sidebar)
+```
+
+Ferramentas de desenvolvimento são montadas fora do `<Layout />` para ocupar 100% da viewport.
+
+## IDE — arquitetura de painéis
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    TOP BAR (vps name, tabs, ações)       │
+├──────────┬───┬───────────────────────────────────────────┤
+│          │   │                                           │
+│  Explorer│ ↔ │  Monaco Editor                            │
+│  SFTP    │   │                                           │
+│          │   ├───────────────────────────────────────────┤
+│          │   │ ↕ drag handle                             │
+│          │   ├───────────────────────────────────────────┤
+│          │   │  xterm.js Terminal SSH (Ctrl+`)           │
+├──────────┴───┴───────────────────────────────────────────┤
+│                    STATUS BAR                            │
+└──────────────────────────────────────────────────────────┘
+```
+
+- Painéis redimensionáveis via arrastar (hook `useResize`)
+- SFTP e Terminal são sessões SSH independentes (2 conexões ssh2)
+- Monaco workers locais (`monacoSetup.ts`) — funciona offline
+- Ctrl+S salva o arquivo ativo; Ctrl+\` toggle do terminal
 
 ## Futuras melhorias arquiteturais
 

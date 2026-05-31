@@ -7,6 +7,7 @@
 3. `docs/CURRENT_STATE.md`
 4. `docs/TASKS.md`
 5. `docs/ARCHITECTURE.md`
+6. `docs/IDE_ROADMAP.md` ← roadmap detalhado das features IDE pendentes
 
 ---
 
@@ -14,20 +15,24 @@
 
 Aplicação desktop Electron para gerenciar múltiplas VPS, múltiplos projetos remotos e múltiplas contas Claude Code. Substitui scripts .bat manuais por uma interface visual simples. Permite abrir VS Code remoto via Remote SSH na conta e VPS correta, evitando conflitos de autenticação entre contas Claude.
 
+Inclui **HEXAGON IDE** — editor de código integrado com Monaco Editor, explorer SFTP, terminal SSH xterm.js, Git integrado, busca em arquivos, painel de problemas e múltiplas abas de terminal, tudo rodando diretamente na VPS via SSH/SFTP.
+
 ## Stack
 
 - **Runtime:** Node.js 22 LTS
-- **Desktop:** Electron (latest stable)
+- **Desktop:** Electron (latest stable) + electron-vite + electron-builder
 - **Frontend:** React 18 + Vite 6 + TypeScript 5.7
 - **Estilo:** Tailwind CSS 3 + Lucide React
 - **DB:** SQLite via Prisma ORM + better-sqlite3
 - **Validação:** Zod 3
 - **Package manager:** pnpm 9
-- **Build:** electron-builder
+- **IDE — Editor:** Monaco Editor (`@monaco-editor/react`)
+- **IDE — Terminal:** xterm.js (`@xterm/xterm` + `@xterm/addon-fit`)
+- **IDE — SSH/SFTP:** ssh2 (bindings nativos Windows)
 
 ## Versão atual
 
-`0.1.0` — Setup + scaffold inicial
+`1.1.1` — HEXAGON IDE completo com todas as features P0/P1/P2 implementadas
 
 ## Regras de desenvolvimento
 
@@ -41,6 +46,7 @@ Aplicação desktop Electron para gerenciar múltiplas VPS, múltiplos projetos 
 8. Toda alteração importante atualiza `CHANGELOG.md`.
 9. Toda mudança de arquitetura atualiza `docs/ARCHITECTURE.md`.
 10. Próximas etapas registradas em `docs/TASKS.md`.
+11. Versão sincronizada nos 3 `package.json`: raiz, `apps/desktop`, `apps/web`.
 
 ## Regras de segurança
 
@@ -50,3 +56,14 @@ Aplicação desktop Electron para gerenciar múltiplas VPS, múltiplos projetos 
 - Não executar comandos SSH com input não sanitizado
 - Não expor `ipcMain` diretamente no renderer
 - Validar todos os dados recebidos via IPC no main process
+
+## Atalhos do HEXAGON IDE
+
+| Atalho | Ação |
+|---|---|
+| `Ctrl+S` | Salvar arquivo |
+| `` Ctrl+` `` | Abrir/fechar terminal |
+| `Ctrl+Shift+P` | Paleta de comandos Monaco |
+| `Ctrl+Shift+F` | Busca em arquivos (painel esquerdo) |
+| `Ctrl+H` | Find & Replace no arquivo atual |
+| `Ctrl+G` | Ir para linha |

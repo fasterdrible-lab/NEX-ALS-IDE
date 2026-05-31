@@ -6,8 +6,8 @@ import { disconnectPrisma, initializeDatabase } from '@cwm/db'
 // electron-vite output: out/main/index.js
 // preload:              out/preload/index.js
 // renderer (prod):      ../../web/dist/index.html (relative to out/main/)
-
-const isDev = process.env.NODE_ENV !== 'production' && !app.isPackaged
+// electron-vite sets ELECTRON_RENDERER_URL in dev mode — usar isso é mais seguro
+// que app.isPackaged no nível do módulo com pnpm + Windows + Electron 33
 
 let mainWindow: BrowserWindow | null = null
 
@@ -17,19 +17,20 @@ function setDatabasePath(): void {
 }
 
 function createWindow(): void {
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 960,
     minHeight: 640,
     webPreferences: {
-      // electron-vite output: out/preload/index.js
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
     },
-    title: 'Claude Workspace Manager',
+    title: 'HEXAGON IDE',
     show: false,
     backgroundColor: '#0f172a',
   })
@@ -43,11 +44,14 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  if (isDev) {
+  if (rendererUrl) {
+    mainWindow.loadURL(rendererUrl)
+    mainWindow.webContents.openDevTools()
+  } else if (!app.isPackaged) {
+    // dev sem ELECTRON_RENDERER_URL — Vite roda separado em localhost:5173
     mainWindow.loadURL('http://localhost:5173')
     mainWindow.webContents.openDevTools()
   } else {
-    // em produção o web dist fica em resources/renderer/ (via extraResources no electron-builder)
     const indexPath = path.join(process.resourcesPath, 'renderer', 'index.html')
     mainWindow.loadFile(indexPath)
   }

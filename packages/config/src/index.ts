@@ -125,3 +125,26 @@ export interface LaunchProjectInput {
 export interface OpenTerminalInput {
   vpsId: string
 }
+
+export interface GitFileStatus {
+  path: string
+  status: string
+  type: 'staged' | 'unstaged' | 'untracked'
+}
+
+export interface GitStatus {
+  branch: string
+  ahead: number
+  behind: number
+  staged: GitFileStatus[]
+  unstaged: GitFileStatus[]
+  untracked: GitFileStatus[]
+  isRepo: boolean
+}
+
+export interface GitCommit {
+  hash: string
+  message: string
+  author: string
+  date: string
+}

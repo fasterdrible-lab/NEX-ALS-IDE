@@ -1,4 +1,7 @@
 export { VpsService } from './vps/vps.service.js'
+export { GitService } from './git/git.service.js'
+export { TerminalService, TerminalSession } from './terminal/terminal.service.js'
+export { SftpService, SftpSession, type FileEntry } from './sftp/sftp.service.js'
 export { ProjectsService } from './projects/projects.service.js'
 export { AccountsService } from './accounts/accounts.service.js'
 export { LauncherService } from './launcher/launcher.service.js'

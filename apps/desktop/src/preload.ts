@@ -8,6 +8,12 @@ const ALLOWED_CHANNELS = new Set([
   'launcher:openProject', 'launcher:openTerminal', 'launcher:checkClaude',
   'settings:get', 'settings:update',
   'diagnostics:run',
+  'terminal:open', 'terminal:input', 'terminal:resize', 'terminal:close', 'terminal:exec',
+  'terminal:data', 'terminal:exit',
+  'sftp:open', 'sftp:readdir', 'sftp:readFile', 'sftp:writeFile',
+  'sftp:mkdir', 'sftp:delete', 'sftp:rename', 'sftp:close', 'sftp:touch', 'sftp:readFileBase64',
+  'git:status', 'git:diff', 'git:add', 'git:restore', 'git:commit',
+  'git:push', 'git:pull', 'git:log',
 ])
 
 contextBridge.exposeInMainWorld('electron', {
@@ -16,6 +22,13 @@ contextBridge.exposeInMainWorld('electron', {
       return Promise.reject(new Error(`Canal IPC não autorizado: ${channel}`))
     }
     return ipcRenderer.invoke(channel, data)
+  },
+  send: (channel: string, data?: unknown): void => {
+    if (!ALLOWED_CHANNELS.has(channel)) {
+      console.warn(`Canal IPC não autorizado: ${channel}`)
+      return
+    }
+    ipcRenderer.send(channel, data)
   },
   on: (channel: string, callback: (...args: unknown[]) => void): (() => void) => {
     if (!ALLOWED_CHANNELS.has(channel)) {

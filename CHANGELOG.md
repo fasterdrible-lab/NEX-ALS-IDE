@@ -1,5 +1,132 @@
 # CHANGELOG — Claude Workspace Manager
 
+## [1.1.1] — 2026-05-30
+
+### Adicionado
+
+- **IDE-08 · Find/Replace (Ctrl+H)** — `addCommand` em `handleEditorMount` registra explicitamente `editor.action.startFindReplaceAction`, garantindo que o Electron não intercepte o atalho antes do Monaco
+- **IDE-09 · Go to Line (Ctrl+G)** — `addCommand` em `handleEditorMount` registra explicitamente `editor.action.gotoLine`, garantindo que o atalho funcione mesmo com foco fora do editor
+- **IDE-12 · Painel de Problemas** — aba "Problemas" no painel inferior (ao lado de "Terminal"); lista erros/avisos do Monaco via `onDidChangeMarkers`; badge com contagem colorido (vermelho/âmbar); clique em item navega para a linha (`jumpToLine`); ícone `Check` quando não há problemas
+
+### Corrigido
+
+- Import `WifiOff` não utilizado removido (TS6133)
+- Parâmetro anônimo do `markers.map` tipado como `import('monaco-editor').editor.IMarker` (TS7006)
+
+### Observação técnica
+
+- **IDE-10 (Breadcrumbs)** — `breadcrumbs` não existe em `IStandaloneEditorConstructionOptions`; é propriedade exclusiva do VS Code completo. Tarefa marcada como N/A.
+
+---
+
+## [1.1.0] — 2026-05-30
+
+### Adicionado
+
+- **IDE-11 · Preview de imagem** — PNG, JPG, JPEG, GIF, WebP, ICO abrem no editor como `<img>` (background escuro, centralizado, max-height 75%); leitura via `sftp:readFileBase64`; MIME detectado por extensão; tab integrada ao sistema de tabs existente
+- **IDE-13 · Copiar/Duplicar arquivos** — context menu expandido com "Duplicar" (`cp -rp` via SSH, nome `_copia`), "Copiar caminho" (clipboard) e separadores visuais; funciona para arquivos e diretórios
+- **IDE-14 · Auto-refresh da tree** — refresh da pasta pai ao salvar (`Ctrl+S`); polling de 30s atualiza `/root` e todos os diretórios expandidos sem bloquear UI (usa `expandedFoldersRef` para evitar re-criação de interval)
+- `SftpSession.readFileBase64(path)` — lê arquivo remoto como Buffer e retorna string base64
+- IPC `sftp:readFileBase64` + preload whitelist + helper `ipc.sftp.readFileBase64`
+
+### Alterado
+
+- `BIN_EXT` removeu `png,jpg,jpeg,gif,webp,ico` (agora preview); adicionado `IMG_PREVIEW` set separado
+- Context menu: 2 itens → 4 itens com separadores
+
+---
+
+## [1.0.9] — 2026-05-30
+
+### Adicionado
+
+- **IDE-02 · Tree view hierárquica** — explorer expandível inline por pasta (lazy load por pasta); chevron rotaciona ao expandir; indentação por profundidade; `activeDir` rastreia a pasta ativa para criação de arquivos/pastas; `flattenTree()` produz lista plana a partir do estado de expansão
+- **IDE-03 · Find in Files (Ctrl+Shift+F)** — painel "Busca" no switcher esquerdo; input de query + filtro glob (ex: `*.ts,*.tsx`) + toggle case-sensitive; executa `grep -rn` via SSH (`terminal:exec`); resultados agrupados por arquivo com número de linha; click abre o arquivo e revela a linha no Monaco
+- **IDE-05 · Múltiplas abas de terminal** — tab bar com título, indicador de status colorido (verde/vermelho/piscando), botão `+` para novo terminal, `×` para fechar; cada aba é uma sessão SSH independente (`ipc.terminal.open`); containers xterm montados via callback ref, visibilidade via `display: block/none` (preserva histórico); `switchTermTab` re-fits ao trocar
+- `TerminalService.exec(vpsId, cmd, timeout)` — SSH exec one-shot para comandos não-interativos
+- IPC `terminal:exec` + whitelist preload + helper `ipc.terminal.exec`
+
+### Alterado
+
+- IDEPage: `curPath`+`entries` substituídos por `rootEntries`+`expandedFolders`+`folderChildren`+`loadingFolders`+`activeDir` (estado de árvore hierárquica)
+- IDEPage: terminal único → array `termTabs` + `termInstancesRef` Map (multi-tab)
+- IDEPage: painel esquerdo tem 3 tabs (Files, Search, Git) em vez de 2
+- `TerminalService.openShell` refatorado para usar `sshConnect()` privado (DRY)
+
+---
+
+## [1.0.8] — 2026-05-30
+
+### Adicionado
+
+- **IDE-07 · Paleta de comandos** — `Ctrl+Shift+P` abre a paleta nativa do Monaco; botão `⌘` na top bar; `Escape` fecha diff
+- **IDE-01 · Criar arquivo** — botão `FilePlus` no explorer; input inline com `Enter`/`Escape`; arquivo aberto automaticamente após criação; IPC `sftp:touch` + `SftpSession.touch()`
+- **IDE-04 · Git integrado** — painel Source Control completo no HEXAGON IDE:
+  - Tab "Git" na esquerda com badge de contagem de alterações
+  - Status: branch atual, commits ahead/behind (↑↓)
+  - Seções: Staged, Alterações, Não rastreados — com ícones de status (M/A/D/U)
+  - Stage/Unstage por arquivo ou "Stage all" / "Unstage all"
+  - Diff viewer: clique no arquivo → diff colorido no Monaco (linguagem `diff`)
+  - Commit: textarea de mensagem + botão com contagem de arquivos staged
+  - Push / Pull com feedback de resultado
+  - Branch e contagem de alterações na **status bar** inferior
+- **Status bar melhorada**: branch git (clicável → abre painel git), `Ln X, Col Y` ao editar, hint `Ctrl+Shift+P`
+- **Cursor position tracking**: `editor.onDidChangeCursorPosition` atualiza status bar em tempo real
+- `GitService` em `packages/core/src/git/git.service.ts` com: `status`, `diff`, `add`, `restore`, `commit`, `push`, `pull`, `log`
+- IPC channels: `git:status`, `git:diff`, `git:add`, `git:restore`, `git:commit`, `git:push`, `git:pull`, `git:log`
+- Tipos `GitStatus`, `GitFileStatus`, `GitCommit` adicionados ao `@cwm/config`
+
+### Alterado
+
+- `IDEPage.tsx`: painel esquerdo vira switcher Files/Git; adicionado `GitFileRow` sub-component
+- Painel de arquivos: botão `FilePlus` ao lado do `FolderPlus`
+
+---
+
+## [1.0.7] — 2026-05-30
+
+### Corrigido
+
+- **Bloqueador crítico: `require('electron')` retornava npm stub no Windows + pnpm**
+  - `app.isPackaged` acessado no nível do módulo causava crash antes de `app.whenReady()`
+  - Corrigido: removida declaração `isDev` de nível de módulo; usa `ELECTRON_RENDERER_URL` env var (setada pelo electron-vite) ou fallback para `http://localhost:5173` quando `!app.isPackaged`
+- **`ELECTRON_RUN_AS_NODE=1` no ambiente de execução quebrava Electron**
+  - Electron verifica a EXISTÊNCIA da var (qualquer valor, inclusive `"0"`) para rodar como Node.js puro sem API Electron
+  - Corrigido: `scripts/dev.js` deleta `ELECTRON_RUN_AS_NODE` do `process.env` antes de invocar o `concurrently`, eliminando a herança nos processos filhos
+- `pnpm dev` substituído por `node scripts/dev.js` no package.json raiz
+
+### Adicionado
+
+- `cross-env ^7.0.3` como devDependency (auxílio a outras abordagens cross-platform)
+- `scripts/dev.js` — launcher Node.js que limpa `ELECTRON_RUN_AS_NODE` e inicia o concurrently
+- Script `dev:inner` no package.json raiz para separar lógica do launcher
+
+---
+
+## [1.0.6] — 2026-05-30
+
+### Adicionado
+
+- **HEXAGON IDE** — layout IDE completo com três painéis integrados e redimensionáveis:
+  - Explorer SFTP (esquerda) — navega, cria pastas, renomeia e exclui arquivos na VPS via SFTP
+  - Monaco Editor (centro) — edição com syntax highlighting, IntelliSense, tabs múltiplas e Ctrl+S
+  - Terminal SSH xterm.js (baixo, togglável com Ctrl+\`) — shell interativo full-color diretamente na VPS
+- Rota `/ide/:vpsId/:vpsName` registrada no React Router
+- Botão **IDE** (primário) no card de cada VPS no Lançador
+- Rotas `/terminal`, `/explorer` e `/ide` movidas para fora do Layout → fullscreen sem sidebar
+- `TerminalService` — sessão SSH interativa bidirecional (ssh2 shell)
+- `SftpService` — sessão SFTP com readdir, readFile, writeFile, mkdir, delete, rename
+- IPC channels: `terminal:*` e `sftp:*` (handler + preload whitelist)
+- Monaco workers locais configurados (`monacoSetup.ts`) — funciona offline no Electron
+- `@monaco-editor/react`, `monaco-editor`, `@xterm/xterm`, `@xterm/addon-fit` adicionados ao `@cwm/web`
+
+### Alterado
+
+- `App.tsx` reestruturado: páginas de gerenciamento com sidebar; ferramentas (terminal, explorer, IDE) fullscreen
+- `Launcher.tsx`: estado `terminalStates` não usado removido
+
+---
+
 ## [1.0.5] — 2026-05-30
 
 ### Adicionado
