@@ -830,7 +830,7 @@ export default function IDEPage() {
         : ''
       const prompt = `${ctx}${userMsg}`
       const escaped = prompt.replace(/'/g, `'\\''`)
-      const r = await ipc.terminal.exec(chatVpsId, `claude -p '${escaped}' < /dev/null 2>&1`, 60000)
+      const r = await ipc.terminal.exec(chatVpsId, `cd /tmp && claude -p '${escaped}' --allowedTools '' < /dev/null 2>&1`, 60000)
       const reply = r.success ? (r.output || '(sem resposta)') : `Erro: ${r.error}`
       setChatMessages(m => [...m, { role:'assistant', text:reply }])
     } finally {
