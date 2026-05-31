@@ -1,4 +1,7 @@
-import type { IpcMain } from 'electron'
+import type { IpcMain, BrowserWindow } from 'electron'
+import { dialog } from 'electron'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import {
   VpsService,
   ProjectsService,
@@ -19,7 +22,7 @@ function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
   }))
 }
 
-export function setupIpcHandlers(ipcMain: IpcMain): void {
+export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
   const vps = new VpsService()
   const projects = new ProjectsService()
   const accounts = new AccountsService()
@@ -112,9 +115,9 @@ export function setupIpcHandlers(ipcMain: IpcMain): void {
     return { success: true }
   })
 
-  ipcMain.handle('terminal:exec', async (_, { vpsId, cmd }: { vpsId: string; cmd: string }) => {
+  ipcMain.handle('terminal:exec', async (_, { vpsId, cmd, timeout }: { vpsId: string; cmd: string; timeout?: number }) => {
     try {
-      const out = await terminal.exec(vpsId, cmd)
+      const out = await terminal.exec(vpsId, cmd, timeout)
       return { success: true, output: out }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err), output: '' }
@@ -251,4 +254,60 @@ export function setupIpcHandlers(ipcMain: IpcMain): void {
   ipcMain.handle('git:log', (_, { vpsId, cwd, n }: { vpsId: string; cwd: string; n?: number }) =>
     wrapHandler(() => git.log(vpsId, cwd, n))
   )
+
+  // ── IDE-20: Local filesystem ─────────────────────────────────────────
+  ipcMain.handle('local:openFolder', async () => {
+    const result = await dialog.showOpenDialog(win!, {
+      properties: ['openDirectory'],
+      title: 'Abrir pasta local no HEXAGON IDE',
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('local:readdir', async (_, dirPath: string) => {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true })
+    return entries.map(e => ({
+      name: e.name,
+      path: path.join(dirPath, e.name).replace(/\\/g, '/'),
+      isDirectory: e.isDirectory(),
+    })).sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  })
+
+  ipcMain.handle('local:readFile', async (_, filePath: string) => {
+    return fs.readFile(filePath, 'utf-8')
+  })
+
+  ipcMain.handle('local:readFileBase64', async (_, filePath: string) => {
+    const buf = await fs.readFile(filePath)
+    return buf.toString('base64')
+  })
+
+  ipcMain.handle('local:writeFile', async (_, { filePath, content }: { filePath: string; content: string }) => {
+    await fs.writeFile(filePath, content, 'utf-8')
+    return { success: true }
+  })
+
+  ipcMain.handle('local:mkdir', async (_, dirPath: string) => {
+    await fs.mkdir(dirPath, { recursive: true })
+    return { success: true }
+  })
+
+  ipcMain.handle('local:delete', async (_, filePath: string) => {
+    await fs.rm(filePath, { recursive: true, force: true })
+    return { success: true }
+  })
+
+  ipcMain.handle('local:rename', async (_, { oldPath, newPath }: { oldPath: string; newPath: string }) => {
+    await fs.rename(oldPath, newPath)
+    return { success: true }
+  })
+
+  ipcMain.handle('local:touch', async (_, filePath: string) => {
+    await fs.writeFile(filePath, '', { flag: 'wx' }).catch(() => {})
+    return { success: true }
+  })
 }

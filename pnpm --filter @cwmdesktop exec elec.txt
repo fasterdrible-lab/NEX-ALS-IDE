@@ -1,0 +1,3 @@
+pnpm build
+pnpm --filter @cwm/desktop exec electron-builder --dir
+

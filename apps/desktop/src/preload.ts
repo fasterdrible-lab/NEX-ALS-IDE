@@ -14,6 +14,8 @@ const ALLOWED_CHANNELS = new Set([
   'sftp:mkdir', 'sftp:delete', 'sftp:rename', 'sftp:close', 'sftp:touch', 'sftp:readFileBase64',
   'git:status', 'git:diff', 'git:add', 'git:restore', 'git:commit',
   'git:push', 'git:pull', 'git:log',
+  'local:openFolder', 'local:readdir', 'local:readFile', 'local:readFileBase64',
+  'local:writeFile', 'local:mkdir', 'local:delete', 'local:rename', 'local:touch',
 ])
 
 contextBridge.exposeInMainWorld('electron', {

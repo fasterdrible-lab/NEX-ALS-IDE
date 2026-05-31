@@ -32,6 +32,8 @@ export default function App() {
       <Route path="/terminal/:vpsId/:vpsName" element={<TerminalPage />} />
       <Route path="/explorer/:vpsId/:vpsName" element={<FileExplorerPage />} />
       <Route path="/ide/:vpsId/:vpsName" element={<IDEPage />} />
+      {/* IDE-20: modo local (sem VPS) */}
+      <Route path="/ide/local" element={<IDEPage />} />
     </Routes>
   )
 }

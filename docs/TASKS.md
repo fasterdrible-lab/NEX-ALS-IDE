@@ -1,4 +1,4 @@
-# TASKS.md — Claude Workspace Manager / HEXAGON IDE
+# TASKS.md — HEXAGON IDE
 
 ## Em andamento
 
@@ -16,7 +16,6 @@
 
 - [x] **IDE-04 · Git integrado** — painel Source Control, diff viewer Monaco, stage/unstage/commit/push/pull, branch na status bar — 2026-05-30
 - [x] **IDE-05 · Múltiplas abas de terminal** — tab bar + N sessões SSH independentes + callback ref pattern para xterm — 2026-05-30
-- [x] **IDE-05 · Múltiplas abas de terminal** — tab bar + N sessões SSH independentes + callback ref pattern para xterm — 2026-05-30
 - [x] **IDE-06 · Status bar completa** — branch git (clicável), Ln/Col ao editar, hint paleta — 2026-05-30
 - [x] **IDE-07 · Paleta de comandos (Ctrl+Shift+P)** — mapeado + botão `⌘` na top bar — 2026-05-30
 
@@ -29,6 +28,12 @@
 - [x] **IDE-12 · Painel de Problemas** — erros/warnings do Monaco como tab no painel inferior; `onDidChangeMarkers`; `jumpToLine` — 2026-05-30
 - [x] **IDE-13 · Copiar/mover arquivos** — "Duplicar" (`cp -rp`) + "Copiar caminho" (clipboard) no context menu — 2026-05-30
 - [x] **IDE-14 · Auto-refresh da tree** — refresh ao salvar + polling 30s com `expandedFoldersRef` — 2026-05-30
+
+## Concluídas recentemente
+
+- [x] **IDE-19 · Badge PRODUÇÃO** — indicador vermelho pulsante na top bar do modo remoto VPS — 2026-05-30
+- [x] **IDE-20 · Modo Local** — rota `/ide/local`; dialog de pasta nativa; IPC `local:*` (readdir/readFile/writeFile/mkdir/delete/rename/touch/readFileBase64); badge verde "Local"; terminal e Git ocultos no modo local; botão "Abrir pasta local" no Launcher — 2026-05-30
+- [x] **IDE-21 · Chat Claude via SSH** — painel lateral direito redimensionável; envia `claude -p '...'` na VPS via `terminal:exec`; contexto do arquivo ativo incluído; histórico de mensagens; Enter para enviar; Shift+Enter nova linha — 2026-05-30
 
 ## Backlog IDE — P3 BAIXA PRIORIDADE (futuro)
 
@@ -57,15 +62,13 @@
 - [x] **Claude Code check** — badges de status no Launcher — 2026-05-30
 - [x] **HEXAGON IDE v1** — Explorer SFTP + Monaco Editor + Terminal xterm.js em painéis redimensionáveis; rotas fullscreen; botão IDE no Lançador — 2026-05-30
 - [x] **Fix startup bloqueadores** — remover `app.isPackaged` de nível de módulo; `scripts/dev.js` deleta `ELECTRON_RUN_AS_NODE` antes de spawnar; `pnpm dev` funciona — 2026-05-30
-- [x] **IDE-07 Paleta de comandos** — Ctrl+Shift+P mapeado + botão ⌘ na top bar — 2026-05-30
 - [x] **IDE-01 Criar arquivo** — FilePlus + touch() + abre automaticamente — 2026-05-30
 - [x] **IDE-04 Git integrado** — GitService completo (status/diff/add/restore/commit/push/pull); painel Source Control no IDE; branch na status bar — 2026-05-30
 - [x] **IDE-06 Status bar melhorada** — branch git, Ln/Col, hint paleta — 2026-05-30
-
----
-
-## Próxima tarefa recomendada
-
-**IDE-07 (Paleta de comandos)** — trivial, 5 linhas, alto impacto visual  
-**IDE-01 (Criar arquivo)** — essencial, ~30 minutos de trabalho  
-**IDE-04 (Git integrado)** — maior valor, ~4 horas, maior esforço
+- [x] **IDE-07 Paleta de comandos** — Ctrl+Shift+P mapeado + botão ⌘ na top bar — 2026-05-30
+- [x] **IDE-08 Find/Replace (Ctrl+H)** — addCommand garante atalho no Electron — 2026-05-30
+- [x] **IDE-09 Go to Line (Ctrl+G)** — addCommand garante atalho no Electron — 2026-05-30
+- [x] **IDE-11 Preview de imagem** — base64 SFTP + img tag — 2026-05-30
+- [x] **IDE-12 Painel de Problemas** — onDidChangeMarkers + jumpToLine + badge — 2026-05-30
+- [x] **IDE-13 Copiar/Duplicar arquivos** — cp -rp + clipboard — 2026-05-30
+- [x] **IDE-14 Auto-refresh tree** — save + polling 30s — 2026-05-30

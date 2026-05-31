@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Rocket, Terminal, FolderOpen, Server,
   Loader2, CheckCircle, XCircle, User,
-  BotMessageSquare, AlertTriangle, HelpCircle, HardDrive, Code2,
+  BotMessageSquare, AlertTriangle, HelpCircle, HardDrive, Code2, FolderOpen as FolderOpenIcon,
 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import type { Project, VpsServer, ClaudeCheckResult } from '@cwm/config'
@@ -109,6 +109,14 @@ export default function Launcher() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-100">Lançador</h1>
         <p className="text-slate-400 mt-1">Abra ambientes VS Code remotos com um clique</p>
+        {/* IDE-20: botão para abrir pasta local no IDE */}
+        <button
+          onClick={() => navigate('/ide/local')}
+          className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-900/40 border border-emerald-700/50 text-emerald-300 hover:bg-emerald-900/70 text-sm font-medium transition-colors"
+          title="Abre uma pasta do seu PC (OneDrive, etc.) no HEXAGON IDE — sem risco de alterar produção"
+        >
+          <FolderOpenIcon size={15}/> Abrir pasta local no IDE
+        </button>
       </div>
 
       {/* VPS Terminals */}

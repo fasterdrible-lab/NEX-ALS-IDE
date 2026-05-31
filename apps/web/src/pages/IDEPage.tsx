@@ -8,9 +8,10 @@ import '@xterm/xterm/css/xterm.css'
 import {
   ArrowLeft, Folder, FolderOpen, File, FileCode, FileText, FileJson, FileImage,
   Loader2, RefreshCw, FolderPlus, FilePlus, Trash2, Pencil, ChevronRight,
-  AlertCircle, Save, X, Circle, TerminalSquare, HardDrive,
+  AlertCircle, Save, X, Circle, TerminalSquare, HardDrive, ShieldAlert,
   GitBranch, Plus, Minus, Upload, Download, GitCommit as GitCommitIcon,
-  Command, Search, PanelBottom, Copy, Files, Check,
+  Command, Search, PanelBottom, Copy, Files, Check, FolderOpen as FolderOpenIcon,
+  MessageSquare, Send, Bot,
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
 
@@ -116,15 +117,31 @@ function useResize(initial:number, min:number, max:number, axis:'x'|'y') {
 export default function IDEPage() {
   const { vpsId, vpsName } = useParams<{ vpsId:string; vpsName:string }>()
   const navigate = useNavigate()
-  const displayName = vpsName ? decodeURIComponent(vpsName) : 'VPS'
+
+  // IDE-20: modo local (sem VPS) quando rota é /ide/local
+  const isLocal = !vpsId
+  const [localRoot, setLocalRoot] = useState('')
+  const localRootRef = useRef('')
+
+  const displayName = isLocal
+    ? (localRoot ? localRoot.split(/[\\/]/).pop() || 'Local' : 'Abrindo…')
+    : (vpsName ? decodeURIComponent(vpsName) : 'VPS')
 
   const [leftW,    startResizeLeft] = useResize(240, 140, 500, 'x')
   const [termH,    startResizeTerm] = useResize(200, 100, 600, 'y')
+  const [chatW,    startResizeChat] = useResize(320, 200, 600, 'x')
   const [showTerm,    setShowTerm]    = useState(false)
   const [leftPanel,   setLeftPanel]   = useState<'files'|'search'|'git'>('files')
   const [bottomPanel, setBottomPanel] = useState<'terminal'|'problems'>('terminal')
   const [problems,    setProblems]    = useState<Problem[]>([])
   const markerDisposableRef = useRef<{ dispose(): void } | null>(null)
+
+  // IDE-21: Chat Claude via SSH
+  const [showChat,    setShowChat]    = useState(false)
+  const [chatMessages, setChatMessages] = useState<{role:'user'|'assistant'; text:string}[]>([])
+  const [chatInput,   setChatInput]   = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
 
   // ── IDE-02: hierarchical file tree ─────────────────────────────────
 
@@ -181,25 +198,109 @@ export default function IDEPage() {
   const showToast = (ok:boolean, text:string) => { setToast({ok,text}); setTimeout(()=>setToast(null), 3500) }
   const isDirty = (f:OpenFile) => f.content !== f.savedContent && !f.loading
 
-  // ── SFTP connect ──────────────────────────────────────────────────────
+  // ── IDE-20: filesystem abstraction (local vs remote SFTP) ─────────────
 
-  const loadRootEntries = useCallback(async (sid:string) => {
-    const r = await ipc.sftp.readdir(sid, '/root')
-    if (r.success) { setRootEntries(r.entries); setTreeConnecting(false) }
-    else { setTreeError(r.error ?? 'Erro ao conectar SFTP'); setTreeConnecting(false) }
-  }, [])
+  const fsReaddir = useCallback(async (dir: string): Promise<{ success: boolean; entries: FileEntry[] }> => {
+    if (isLocal) {
+      try {
+        const entries = await ipc.local.readdir(dir)
+        return { success: true, entries: (entries ?? []).map(e => ({ ...e, size:0, modifiedAt:0, permissions:'' })) }
+      } catch { return { success: false, entries: [] } }
+    }
+    if (!sftpSession.current) return { success: false, entries: [] }
+    return ipc.sftp.readdir(sftpSession.current, dir)
+  }, [isLocal])
+
+  const fsReadFile = useCallback(async (filePath: string): Promise<{ success: boolean; content: string; error?: string }> => {
+    if (isLocal) {
+      try { return { success: true, content: (await ipc.local.readFile(filePath)) ?? '' } }
+      catch (e) { return { success: false, content: '', error: String(e) } }
+    }
+    if (!sftpSession.current) return { success: false, content: '', error: 'Sem sessão SFTP' }
+    return ipc.sftp.readFile(sftpSession.current, filePath)
+  }, [isLocal])
+
+  const fsReadFileBase64 = useCallback(async (filePath: string): Promise<{ success: boolean; data: string; error?: string }> => {
+    if (isLocal) {
+      try { return { success: true, data: (await ipc.local.readFileBase64(filePath)) ?? '' } }
+      catch (e) { return { success: false, data: '', error: String(e) } }
+    }
+    if (!sftpSession.current) return { success: false, data: '', error: 'Sem sessão SFTP' }
+    return ipc.sftp.readFileBase64(sftpSession.current, filePath)
+  }, [isLocal])
+
+  const fsWriteFile = useCallback(async (filePath: string, content: string): Promise<{ success: boolean; error?: string }> => {
+    if (isLocal) {
+      try { return await ipc.local.writeFile(filePath, content) ?? { success: true } }
+      catch (e) { return { success: false, error: String(e) } }
+    }
+    if (!sftpSession.current) return { success: false, error: 'Sem sessão SFTP' }
+    return ipc.sftp.writeFile(sftpSession.current, filePath, content)
+  }, [isLocal])
+
+  const fsMkdir = useCallback(async (dirPath: string): Promise<{ success: boolean; error?: string }> => {
+    if (isLocal) {
+      try { return await ipc.local.mkdir(dirPath) ?? { success: true } }
+      catch (e) { return { success: false, error: String(e) } }
+    }
+    if (!sftpSession.current) return { success: false, error: 'Sem sessão SFTP' }
+    return ipc.sftp.mkdir(sftpSession.current, dirPath)
+  }, [isLocal])
+
+  const fsDelete = useCallback(async (filePath: string, isDir: boolean): Promise<{ success: boolean; error?: string }> => {
+    if (isLocal) {
+      try { return await ipc.local.delete(filePath) ?? { success: true } }
+      catch (e) { return { success: false, error: String(e) } }
+    }
+    if (!sftpSession.current) return { success: false, error: 'Sem sessão SFTP' }
+    return ipc.sftp.delete(sftpSession.current, filePath, isDir)
+  }, [isLocal])
+
+  const fsRename = useCallback(async (oldPath: string, newPath: string): Promise<{ success: boolean; error?: string }> => {
+    if (isLocal) {
+      try { return await ipc.local.rename(oldPath, newPath) ?? { success: true } }
+      catch (e) { return { success: false, error: String(e) } }
+    }
+    if (!sftpSession.current) return { success: false, error: 'Sem sessão SFTP' }
+    return ipc.sftp.rename(sftpSession.current, oldPath, newPath)
+  }, [isLocal])
+
+  const fsTouch = useCallback(async (filePath: string): Promise<{ success: boolean; error?: string }> => {
+    if (isLocal) {
+      try { return await ipc.local.touch(filePath) ?? { success: true } }
+      catch (e) { return { success: false, error: String(e) } }
+    }
+    if (!sftpSession.current) return { success: false, error: 'Sem sessão SFTP' }
+    return ipc.sftp.touch(sftpSession.current, filePath)
+  }, [isLocal])
+
+  // ── connect (local folder picker or remote SFTP) ───────────────────────
 
   useEffect(() => {
+    if (isLocal) {
+      ipc.local.openFolder().then(async folder => {
+        if (!folder) { navigate(-1); return }
+        const root = folder.replace(/\\/g, '/')
+        setLocalRoot(root); localRootRef.current = root
+        setActiveDir(root)
+        const entries = await ipc.local.readdir(root)
+        setRootEntries((entries ?? []).map(e => ({ ...e, size:0, modifiedAt:0, permissions:'' })))
+        setTreeConnecting(false)
+      }).catch(() => { setTreeError('Erro ao abrir pasta'); setTreeConnecting(false) })
+      return
+    }
     if (!vpsId) return
     let sid:string|null = null
     ipc.sftp.open(vpsId).then(async r => {
       if (!r.success || !r.sessionId) { setTreeError(r.error ?? 'Falha SFTP'); setTreeConnecting(false); return }
       sid = r.sessionId; sftpSession.current = sid
-      await loadRootEntries(sid)
+      const r2 = await ipc.sftp.readdir(sid, '/root')
+      if (r2.success) { setRootEntries(r2.entries); setTreeConnecting(false) }
+      else { setTreeError(r2.error ?? 'Erro SFTP'); setTreeConnecting(false) }
     })
     return () => { if (sid) ipc.sftp.close(sid) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vpsId])
+  }, [])
 
   // IDE-14: mantém ref sincronizada para polling sem re-criar interval
   useEffect(() => { expandedFoldersRef.current = expandedFolders }, [expandedFolders])
@@ -207,49 +308,47 @@ export default function IDEPage() {
   // IDE-14: auto-refresh da tree a cada 30s
   useEffect(() => {
     const id = setInterval(async () => {
-      if (!sftpSession.current) return
-      const r = await ipc.sftp.readdir(sftpSession.current, '/root')
+      const root = isLocal ? localRootRef.current : '/root'
+      if (!root) return
+      const r = await fsReaddir(root)
       if (r.success) setRootEntries(r.entries)
-      expandedFoldersRef.current.forEach(async path => {
-        if (!sftpSession.current) return
-        const fr = await ipc.sftp.readdir(sftpSession.current, path)
-        if (fr.success) setFolderChildren(m => new Map([...m, [path, fr.entries]]))
+      expandedFoldersRef.current.forEach(async p => {
+        const fr = await fsReaddir(p)
+        if (fr.success) setFolderChildren(m => new Map([...m, [p, fr.entries]]))
       })
     }, 30000)
     return () => clearInterval(id)
-  }, []) // roda só uma vez; usa a ref para expandedFolders
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLocal]) // fsReaddir é estável
 
   // ── IDE-02: tree operations ───────────────────────────────────────────
 
   const reloadDir = useCallback(async (dirPath:string) => {
-    if (!sftpSession.current) return
-    const r = await ipc.sftp.readdir(sftpSession.current, dirPath)
+    const r = await fsReaddir(dirPath)
     if (!r.success) return
-    if (dirPath === '/root') {
-      setRootEntries(r.entries)
-    } else {
-      setFolderChildren(m => new Map([...m, [dirPath, r.entries]]))
-    }
-  }, [])
+    const root = isLocal ? localRootRef.current : '/root'
+    if (dirPath === root) setRootEntries(r.entries)
+    else setFolderChildren(m => new Map([...m, [dirPath, r.entries]]))
+  }, [fsReaddir, isLocal])
 
   const handleToggleFolder = useCallback(async (entry:FileEntry) => {
-    const path = entry.path
-    setActiveDir(path)
-    if (expandedFolders.has(path)) {
-      setExpandedFolders(s => { const n = new Set(s); n.delete(path); return n })
+    const p = entry.path
+    setActiveDir(p)
+    if (expandedFolders.has(p)) {
+      setExpandedFolders(s => { const n = new Set(s); n.delete(p); return n })
     } else {
-      setExpandedFolders(s => new Set([...s, path]))
-      if (!folderChildren.has(path) && sftpSession.current) {
-        setLoadingFolders(s => new Set([...s, path]))
+      setExpandedFolders(s => new Set([...s, p]))
+      if (!folderChildren.has(p)) {
+        setLoadingFolders(s => new Set([...s, p]))
         try {
-          const r = await ipc.sftp.readdir(sftpSession.current, path)
-          if (r.success) setFolderChildren(m => new Map([...m, [path, r.entries]]))
+          const r = await fsReaddir(p)
+          if (r.success) setFolderChildren(m => new Map([...m, [p, r.entries]]))
         } finally {
-          setLoadingFolders(s => { const n = new Set(s); n.delete(path); return n })
+          setLoadingFolders(s => { const n = new Set(s); n.delete(p); return n })
         }
       }
     }
-  }, [expandedFolders, folderChildren])
+  }, [expandedFolders, folderChildren, fsReaddir])
 
   // ── git status ────────────────────────────────────────────────────────
 
@@ -451,8 +550,7 @@ export default function IDEPage() {
       if (existing) { setActiveTab(entry.path); setGitDiff(null); return }
       const nf:OpenFile = { path:entry.path, name:entry.name, content:'', savedContent:'', language:'plaintext', loading:true }
       setOpenFiles(f=>[...f,nf]); setActiveTab(entry.path); setGitDiff(null)
-      if (!sftpSession.current) return
-      const r = await ipc.sftp.readFileBase64(sftpSession.current, entry.path)
+      const r = await fsReadFileBase64(entry.path)
       const mime = ext==='svg' ? 'image/svg+xml' : `image/${ext==='jpg'?'jpeg':ext}`
       const dataUrl = r.success ? `data:${mime};base64,${r.data}` : ''
       setOpenFiles(f=>f.map(fl=>fl.path===entry.path ? {...fl, loading:false, imageDataUrl:dataUrl} : fl))
@@ -469,22 +567,20 @@ export default function IDEPage() {
     const nf:OpenFile = { path:entry.path, name:entry.name, content:'', savedContent:'', language:detectLang(entry.name), loading:true }
     setOpenFiles(f=>[...f,nf]); setActiveTab(entry.path); setGitDiff(null)
     if (revealLine) pendingRevealLine.current = revealLine
-    if (!sftpSession.current) return
-    const r = await ipc.sftp.readFile(sftpSession.current, entry.path)
+    const r = await fsReadFile(entry.path)
     setOpenFiles(f=>f.map(fl=>fl.path===entry.path ? {...fl, content:r.success?r.content:`// Erro: ${r.error}`, savedContent:r.success?r.content:'', loading:false} : fl))
   }
 
-  const handleSave = async (path:string) => {
-    if (!sftpSession.current) return
-    const file = openFiles.find(f=>f.path===path)
+  const handleSave = async (filePath:string) => {
+    const file = openFiles.find(f=>f.path===filePath)
     if (!file||!isDirty(file)) return
-    const r = await ipc.sftp.writeFile(sftpSession.current, path, file.content)
+    const r = await fsWriteFile(filePath, file.content)
     if (r.success) {
-      setOpenFiles(f=>f.map(fl=>fl.path===path?{...fl,savedContent:fl.content}:fl))
+      setOpenFiles(f=>f.map(fl=>fl.path===filePath?{...fl,savedContent:fl.content}:fl))
       showToast(true, `${file.name} salvo`)
       // IDE-14: refresh da pasta após salvar
-      const parentDir = path.split('/').slice(0,-1).join('/') || '/root'
-      reloadDir(parentDir).catch(() => {})
+      const parentDir = filePath.split('/').slice(0,-1).join('/')
+      reloadDir(parentDir || (isLocal ? localRootRef.current : '/root')).catch(() => {})
     } else showToast(false, r.error??'Erro ao salvar')
   }
 
@@ -498,23 +594,22 @@ export default function IDEPage() {
   }
 
   const handleDelete = async (e:FileEntry) => {
-    if (!sftpSession.current) return
     if (!confirm(`Excluir "${e.name}"?`)) return
-    const r = await ipc.sftp.delete(sftpSession.current, e.path, e.isDirectory)
+    const r = await fsDelete(e.path, e.isDirectory)
     if (r.success) {
       showToast(true, `"${e.name}" excluído`)
       setOpenFiles(f=>f.filter(fl=>fl.path!==e.path))
       if (activeTab===e.path) setActiveTab(null)
-      const parentDir = e.path.split('/').slice(0,-1).join('/') || '/root'
+      const parentDir = e.path.split('/').slice(0,-1).join('/') || (isLocal ? localRootRef.current : '/root')
       await reloadDir(parentDir)
     } else showToast(false, r.error??'Erro ao excluir')
   }
 
   const handleRename = async () => {
-    if (!sftpSession.current||!renaming||!renameVal.trim()) return
-    const parentDir = renaming.path.split('/').slice(0,-1).join('/') || '/root'
+    if (!renaming||!renameVal.trim()) return
+    const parentDir = renaming.path.split('/').slice(0,-1).join('/') || (isLocal ? localRootRef.current : '/root')
     const newPath = parentDir + '/' + renameVal.trim()
-    const r = await ipc.sftp.rename(sftpSession.current, renaming.path, newPath)
+    const r = await fsRename(renaming.path, newPath)
     if (r.success) {
       showToast(true, `Renomeado para "${renameVal.trim()}"`)
       setOpenFiles(f=>f.map(fl=>fl.path===renaming.path ? {...fl,path:newPath,name:renameVal.trim()} : fl))
@@ -525,22 +620,22 @@ export default function IDEPage() {
   }
 
   const handleMkdir = async () => {
-    if (!sftpSession.current||!newDirName.trim()) return
-    const path = activeDir.replace(/\/$/,'') + '/' + newDirName.trim()
-    const r = await ipc.sftp.mkdir(sftpSession.current, path)
+    if (!newDirName.trim()) return
+    const p = activeDir.replace(/\/$/,'') + '/' + newDirName.trim()
+    const r = await fsMkdir(p)
     if (r.success) { showToast(true,'Pasta criada'); await reloadDir(activeDir) }
     else showToast(false, r.error??'Erro ao criar pasta')
     setNewDirMode(false); setNewDirName('')
   }
 
   const handleTouch = async () => {
-    if (!sftpSession.current||!newFileName.trim()) return
-    const path = activeDir.replace(/\/$/,'') + '/' + newFileName.trim()
-    const r = await ipc.sftp.touch(sftpSession.current, path)
+    if (!newFileName.trim()) return
+    const p = activeDir.replace(/\/$/,'') + '/' + newFileName.trim()
+    const r = await fsTouch(p)
     if (r.success) {
       showToast(true, `"${newFileName.trim()}" criado`)
       await reloadDir(activeDir)
-      openFile({ name:newFileName.trim(), path, isDirectory:false, size:0, modifiedAt:Date.now(), permissions:'' })
+      openFile({ name:newFileName.trim(), path:p, isDirectory:false, size:0, modifiedAt:Date.now(), permissions:'' })
     } else showToast(false, r.error??'Erro ao criar arquivo')
     setNewFileMode(false); setNewFileName('')
   }
@@ -708,6 +803,28 @@ export default function IDEPage() {
     }
   }
 
+  // IDE-21: enviar mensagem ao Claude via SSH exec
+  const handleChatSend = async () => {
+    if (!vpsId || !chatInput.trim() || chatLoading) return
+    const userMsg = chatInput.trim()
+    setChatInput('')
+    setChatMessages(m => [...m, { role:'user', text:userMsg }])
+    setChatLoading(true)
+    try {
+      const ctx = activeFile
+        ? `Arquivo atual: ${activeFile.name}\n\`\`\`\n${activeFile.content.slice(0, 3000)}\n\`\`\`\n\n`
+        : ''
+      const prompt = `${ctx}${userMsg}`
+      const escaped = prompt.replace(/'/g, `'\\''`)
+      const r = await ipc.terminal.exec(vpsId, `claude -p '${escaped}' 2>&1`, 60000)
+      const reply = r.success ? (r.output || '(sem resposta)') : `Erro: ${r.error}`
+      setChatMessages(m => [...m, { role:'assistant', text:reply }])
+    } finally {
+      setChatLoading(false)
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior:'smooth' }), 100)
+    }
+  }
+
   // ══════════════════════════════════════════════════════════════════════
   return (
     <div className="flex flex-col h-full bg-slate-950 overflow-hidden select-none">
@@ -720,6 +837,16 @@ export default function IDEPage() {
         <div className="w-px h-3.5 bg-slate-700"/>
         <HardDrive size={12} className="text-brand-400 shrink-0"/>
         <span className="text-xs text-slate-300 font-medium shrink-0">{displayName}</span>
+        {/* IDE-19/20: badge de modo */}
+        {isLocal ? (
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-emerald-900/60 text-emerald-400 border border-emerald-700/50 shrink-0">
+            <FolderOpenIcon size={9}/> Local
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-900/60 text-red-400 border border-red-700/50 shrink-0 animate-pulse" title="Você está editando arquivos diretamente na VPS remota">
+            <ShieldAlert size={9}/> Produção
+          </span>
+        )}
 
         {/* file tabs */}
         <div className="flex items-center gap-0 flex-1 min-w-0 overflow-x-auto mx-1">
@@ -756,10 +883,19 @@ export default function IDEPage() {
             title="Paleta de comandos (Ctrl+Shift+P)" className="p-1.5 rounded text-slate-600 hover:text-slate-300 hover:bg-slate-700">
             <Command size={13}/>
           </button>
-          <button onClick={()=>setShowTerm(v=>!v)} title="Terminal (Ctrl+`)"
-            className={`p-1.5 rounded text-xs transition-colors ${showTerm?'bg-brand-600/30 text-brand-300':'text-slate-500 hover:text-slate-300 hover:bg-slate-700'}`}>
-            <TerminalSquare size={14}/>
-          </button>
+          {!isLocal && (
+            <button onClick={()=>setShowTerm(v=>!v)} title="Terminal (Ctrl+`)"
+              className={`p-1.5 rounded text-xs transition-colors ${showTerm?'bg-brand-600/30 text-brand-300':'text-slate-500 hover:text-slate-300 hover:bg-slate-700'}`}>
+              <TerminalSquare size={14}/>
+            </button>
+          )}
+          {/* IDE-21: botão chat Claude (só modo remoto — Claude roda na VPS) */}
+          {!isLocal && (
+            <button onClick={()=>setShowChat(v=>!v)} title="Chat com Claude (executa claude -p na VPS)"
+              className={`p-1.5 rounded text-xs transition-colors ${showChat?'bg-purple-600/30 text-purple-300':'text-slate-500 hover:text-slate-300 hover:bg-slate-700'}`}>
+              <Bot size={14}/>
+            </button>
+          )}
         </div>
       </div>
 
@@ -771,12 +907,12 @@ export default function IDEPage() {
         {/* ─── LEFT PANEL ─── */}
         <div className="flex flex-col bg-slate-900 border-r border-slate-800 overflow-hidden shrink-0" style={{width:leftW}}>
 
-          {/* panel tabs — Files | Search | Git */}
+          {/* panel tabs — Files | Search | Git (Git oculto no modo local) */}
           <div className="flex border-b border-slate-800 shrink-0">
             {([
               { id:'files', icon:<Folder size={11}/>, label:'Arquivos' },
               { id:'search', icon:<Search size={11}/>, label:'Busca' },
-              { id:'git', icon:<GitBranch size={11}/>, label:'Git', badge: totalGitChanges },
+              ...(!isLocal ? [{ id:'git', icon:<GitBranch size={11}/>, label:'Git', badge: totalGitChanges }] : []),
             ] as const).map(p => (
               <button key={p.id}
                 onClick={()=>{ setLeftPanel(p.id as 'files'|'search'|'git'); if(p.id==='git'&&!gitStatus&&!gitLoading) loadGitStatus() }}
@@ -1084,13 +1220,13 @@ export default function IDEPage() {
             )}
           </div>
 
-          {/* terminal resize handle */}
-          {showTerm && (
+          {/* terminal resize handle — oculto no modo local */}
+          {!isLocal && showTerm && (
             <div className="h-1 bg-slate-800 hover:bg-brand-600/50 cursor-row-resize shrink-0 transition-colors active:bg-brand-500" onMouseDown={startResizeTerm}/>
           )}
 
-          {/* ─── PAINEL INFERIOR: Terminal + Problemas (IDE-05 + IDE-12) ─── */}
-          <div style={{ height: showTerm ? termH : 0, overflow:'hidden', flexShrink:0 }}>
+          {/* ─── PAINEL INFERIOR: Terminal + Problemas — oculto no modo local ─── */}
+          <div style={{ height: (!isLocal && showTerm) ? termH : 0, overflow:'hidden', flexShrink:0 }}>
             <div className="flex flex-col h-full bg-[#0d1117]">
 
               {/* header: modo Terminal | Problemas + tabs do terminal ativo + fechar */}
@@ -1184,6 +1320,66 @@ export default function IDEPage() {
             </div>
           </div>
         </div>
+
+        {/* ─── IDE-21: CHAT CLAUDE (painel direito) ─── */}
+        {showChat && !isLocal && (
+          <>
+            {/* resize handle */}
+            <div className="w-1 bg-slate-800 hover:bg-purple-600/50 cursor-col-resize shrink-0 transition-colors active:bg-purple-500" onMouseDown={startResizeChat}/>
+            <div className="flex flex-col bg-slate-900 border-l border-slate-800 shrink-0 overflow-hidden" style={{width:chatW}}>
+              {/* header */}
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 shrink-0">
+                <Bot size={13} className="text-purple-400"/>
+                <span className="text-xs font-semibold text-slate-300 flex-1">Claude</span>
+                <span className="text-[10px] text-slate-600">via SSH · claude -p</span>
+                <button onClick={()=>setChatMessages([])} className="text-slate-700 hover:text-slate-400 text-[10px]" title="Limpar">✕</button>
+              </div>
+              {/* messages */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {chatMessages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-700 text-xs text-center px-4">
+                    <Bot size={24}/>
+                    <p>Pergunte ao Claude sobre o arquivo aberto. O contexto do arquivo é enviado automaticamente.</p>
+                  </div>
+                )}
+                {chatMessages.map((m, i) => (
+                  <div key={i} className={`flex flex-col gap-1 ${m.role==='user'?'items-end':'items-start'}`}>
+                    <span className="text-[10px] text-slate-600">{m.role==='user'?'Você':'Claude'}</span>
+                    <div className={`text-xs rounded-lg px-3 py-2 max-w-full whitespace-pre-wrap break-words ${
+                      m.role==='user'
+                        ? 'bg-purple-900/50 text-purple-100 border border-purple-700/30'
+                        : 'bg-slate-800 text-slate-200 border border-slate-700/50'
+                    }`}>{m.text}</div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex items-center gap-2 text-slate-600 text-xs">
+                    <Loader2 size={12} className="animate-spin"/> Claude está respondendo…
+                  </div>
+                )}
+                <div ref={chatEndRef}/>
+              </div>
+              {/* input */}
+              <div className="px-3 py-2 border-t border-slate-800 shrink-0">
+                <div className="flex gap-2">
+                  <textarea
+                    value={chatInput}
+                    onChange={e=>setChatInput(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleChatSend()} }}
+                    placeholder="Pergunte algo… (Enter para enviar)"
+                    rows={3}
+                    className="flex-1 text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-purple-500"
+                  />
+                  <button onClick={handleChatSend} disabled={chatLoading||!chatInput.trim()}
+                    className="shrink-0 self-end p-2 rounded-lg bg-purple-700 hover:bg-purple-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors">
+                    <Send size={13}/>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-700 mt-1">Shift+Enter = nova linha · Enter = enviar</p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ═══ STATUS BAR ═══ */}
@@ -1203,9 +1399,11 @@ export default function IDEPage() {
         <span className="flex items-center gap-3">
           {activeFile && isDirty(activeFile) && <span className="text-brand-400">● Ctrl+S salvar</span>}
           {activeFile && !gitDiff && <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>}
-          <span className="flex items-center gap-1">
-            <PanelBottom size={10}/> Ctrl+`
-          </span>
+          {!isLocal && (
+            <span className="flex items-center gap-1">
+              <PanelBottom size={10}/> Ctrl+`
+            </span>
+          )}
         </span>
       </div>
 

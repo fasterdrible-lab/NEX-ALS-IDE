@@ -1,5 +1,22 @@
 # CHANGELOG — HEXAGON IDE
 
+## [1.3.0] — 2026-05-30
+
+### Adicionado
+
+- **IDE-19 · Badge PRODUÇÃO** — indicador vermelho pulsante na top bar sempre que o IDE estiver conectado a uma VPS remota; badge verde "Local" no modo local
+- **IDE-20 · Modo Local** — nova rota `/ide/local`; botão "Abrir pasta local" no Lançador; dialog nativo do SO para escolha de pasta; IPC `local:*` completo (readdir, readFile, readFileBase64, writeFile, mkdir, delete, rename, touch); filesystem abstraction (`fsReaddir`, `fsReadFile`, etc.) que alterna entre SFTP e `node:fs/promises`; terminal e painel Git ocultos no modo local; badge verde "Local" na top bar
+- **IDE-21 · Chat Claude via SSH** — painel lateral direito redimensionável (botão `Bot` na top bar, só modo remoto); contexto do arquivo ativo enviado automaticamente (até 3000 chars); executa `claude -p '...'` na VPS via `terminal:exec` com timeout de 60s; histórico de mensagens com bolhas visuais; Enter = enviar, Shift+Enter = nova linha; botão limpar histórico
+
+### Alterado
+
+- `terminal:exec` IPC aceita `timeout?` opcional (usado pelo chat para aguardar Claude)
+- `ipc.terminal.exec()` atualizado para repassar `timeout`
+- `setupIpcHandlers()` agora recebe `win?: BrowserWindow` para o dialog de pasta nativa
+- `createWindow()` chamado antes de `setupIpcHandlers()` no main process
+
+---
+
 ## [1.2.0] — 2026-05-30
 
 ### Alterado

@@ -64,8 +64,8 @@ function createWindow(): void {
 app.whenReady().then(async () => {
   setDatabasePath()
   await initializeDatabase()
-  setupIpcHandlers(ipcMain)
   createWindow()
+  setupIpcHandlers(ipcMain, mainWindow ?? undefined)
 })
 
 app.on('window-all-closed', async () => {

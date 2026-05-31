@@ -124,7 +124,27 @@ export const ipc = {
       window.electron?.send('terminal:resize', { sessionId, cols, rows }),
     close: (sessionId: string) =>
       invoke<{ success: boolean }>('terminal:close', sessionId),
-    exec: (vpsId: string, cmd: string) =>
-      invoke<{ success: boolean; output: string; error?: string }>('terminal:exec', { vpsId, cmd }),
+    exec: (vpsId: string, cmd: string, timeout?: number) =>
+      invoke<{ success: boolean; output: string; error?: string }>('terminal:exec', { vpsId, cmd, timeout }),
+  },
+  local: {
+    openFolder: () =>
+      invoke<string | null>('local:openFolder'),
+    readdir: (dirPath: string) =>
+      invoke<{ name: string; path: string; isDirectory: boolean }[]>('local:readdir', dirPath),
+    readFile: (filePath: string) =>
+      invoke<string>('local:readFile', filePath),
+    readFileBase64: (filePath: string) =>
+      invoke<string>('local:readFileBase64', filePath),
+    writeFile: (filePath: string, content: string) =>
+      invoke<{ success: boolean }>('local:writeFile', { filePath, content }),
+    mkdir: (dirPath: string) =>
+      invoke<{ success: boolean }>('local:mkdir', dirPath),
+    delete: (filePath: string) =>
+      invoke<{ success: boolean }>('local:delete', filePath),
+    rename: (oldPath: string, newPath: string) =>
+      invoke<{ success: boolean }>('local:rename', { oldPath, newPath }),
+    touch: (filePath: string) =>
+      invoke<{ success: boolean }>('local:touch', filePath),
   },
 }
