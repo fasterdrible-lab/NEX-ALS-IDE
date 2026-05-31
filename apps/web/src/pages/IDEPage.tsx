@@ -930,36 +930,26 @@ export default function IDEPage() {
         ].filter(Boolean).join('\n\n')
       }
 
-      const prompt = `${ctx}${userMsg}`
+      // Se há imagem, inclui como base64 inline no prompt
+      // (claude -p não suporta --image; a imagem vai como dado no texto)
+      let imageNote = ''
+      if (pendingImage?.base64) {
+        imageNote = `\n\n[IMAGEM ANEXADA — base64 PNG]\ndata:image/png;base64,${pendingImage.base64}\n[FIM DA IMAGEM]`
+      }
 
-      // Escreve prompt + imagem (opcional) via SFTP e executa claude -p
+      const prompt = `${ctx}${userMsg}${imageNote}`
+
+      // Escreve prompt via SFTP e executa claude -p
       const ts = Date.now()
       const tmpPrompt = `/tmp/hexagon_chat_${ts}.txt`
       let reply = ''
       const sftp = await ipc.sftp.open(chatVpsId)
       if (sftp.success && sftp.sessionId) {
         await ipc.sftp.writeFile(sftp.sessionId, tmpPrompt, prompt)
-
-        let imgFlag = ''
-        if (pendingImage) {
-          // Decodifica base64 e escreve imagem na VPS via SFTP
-          const ext = pendingImage.mime.split('/')[1]?.replace('jpeg','jpg') || 'png'
-          const tmpImg = `/tmp/hexagon_img_${ts}.${ext}`
-          // writeFile recebe string; enviamos base64 e decodificamos no servidor
-          await ipc.sftp.writeFile(sftp.sessionId, `${tmpImg}.b64`, pendingImage.base64)
-          imgFlag = `base64 -d ${tmpImg}.b64 > ${tmpImg} && `
-          imgFlag += `IMG_FLAG="--image ${tmpImg}" && `
-        }
-
         await ipc.sftp.close(sftp.sessionId)
-
-        const cleanup = pendingImage
-          ? `rm -f ${tmpPrompt} /tmp/hexagon_img_${ts}.* 2>/dev/null`
-          : `rm -f ${tmpPrompt}`
-
         const r = await ipc.terminal.exec(
           chatVpsId,
-          `cd /tmp && ${imgFlag}claude -p "$(cat ${tmpPrompt})" $\{IMG_FLAG:-} --allowedTools '' < /dev/null 2>&1; ${cleanup}`,
+          `cd /tmp && claude -p "$(cat ${tmpPrompt})" --allowedTools '' < /dev/null 2>&1; rm -f ${tmpPrompt}`,
           120000
         )
         reply = r.success ? (r.output?.trim() || '(sem resposta)') : `Erro: ${r.error}`
