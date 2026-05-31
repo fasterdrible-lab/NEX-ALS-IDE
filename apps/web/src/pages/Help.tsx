@@ -386,7 +386,7 @@ apt-get install -y nodejs`}</Block>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            ['Versão', '1.0.5'],
+            ['Versão', '1.2.0'],
             ['Runtime', 'Electron + Node.js'],
             ['Interface', 'React + Tailwind CSS'],
             ['Banco de dados', 'SQLite (local)'],
