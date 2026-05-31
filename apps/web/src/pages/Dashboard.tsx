@@ -31,7 +31,7 @@ export default function Dashboard() {
     <div className="p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
-        <p className="text-slate-400 mt-1">Gerencie seus ambientes Claude Code</p>
+        <p className="text-slate-400 mt-1">Gerencie seus ambientes VPS</p>
       </div>
 
       {/* Stats */}
