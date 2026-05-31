@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import path from 'node:path'
 import { setupIpcHandlers } from './ipc/handlers'
 import { disconnectPrisma, initializeDatabase } from '@cwm/db'
+import { autoUpdater } from 'electron-updater'
 
 // electron-vite output: out/main/index.js
 // preload:              out/preload/index.js
@@ -66,6 +67,11 @@ app.whenReady().then(async () => {
   await initializeDatabase()
   createWindow()
   setupIpcHandlers(ipcMain, mainWindow ?? undefined)
+
+  // Auto-update: verifica silenciosamente após iniciar (só em produção)
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdatesAndNotify().catch(() => { /* sem servidor de update configurado */ })
+  }
 })
 
 app.on('window-all-closed', async () => {

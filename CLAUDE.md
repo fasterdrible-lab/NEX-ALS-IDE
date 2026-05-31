@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`1.3.2` — HEXAGON IDE com chat Claude completo, modo local, badge de produção
+`1.4.0` — HEXAGON IDE completo: packaging Windows, import/export, SSH passphrase, auto-update, testes
 
 ## Regras de desenvolvimento
 

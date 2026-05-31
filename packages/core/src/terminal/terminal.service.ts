@@ -73,9 +73,16 @@ export class TerminalService {
         host: vps.host, port: vps.port, username: vps.username,
         readyTimeout: 10000, hostVerifier: () => true,
       }
-      if (privateKey) config.privateKey = privateKey
-      else if (password) config.password = password
-      else if (process.env['SSH_AUTH_SOCK']) config.agent = process.env['SSH_AUTH_SOCK']
+      if (privateKey) {
+        config.privateKey = privateKey
+        if (password) config.passphrase = password
+      } else if (password) {
+        config.password = password
+      } else {
+        const agentSock = process.env['SSH_AUTH_SOCK']
+          ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
+        if (agentSock) config.agent = agentSock
+      }
       conn.connect(config)
     })
   }
@@ -110,9 +117,16 @@ export class TerminalService {
         host: vps.host, port: vps.port, username: vps.username,
         readyTimeout: 15000, hostVerifier: () => true,
       }
-      if (privateKey) config.privateKey = privateKey
-      else if (password) config.password = password
-      else if (process.env['SSH_AUTH_SOCK']) config.agent = process.env['SSH_AUTH_SOCK']
+      if (privateKey) {
+        config.privateKey = privateKey
+        if (password) config.passphrase = password
+      } else if (password) {
+        config.password = password
+      } else {
+        const agentSock = process.env['SSH_AUTH_SOCK']
+          ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
+        if (agentSock) config.agent = agentSock
+      }
       conn.connect(config)
     })
   }

@@ -1,5 +1,23 @@
 # CHANGELOG — HEXAGON IDE
 
+## [1.4.0] — 2026-05-31
+
+### Adicionado
+
+- **Packaging Windows** — `pnpm package:win` gera instalador NSIS (`.exe`) + versão portátil (`.exe` standalone) com wizard de instalação (diretório configurável, atalho no Desktop e Start Menu, licença); config `publish` aponta para GitHub Releases (fasterdrible-lab/HEXAGON-IDE); pasta `apps/desktop/build/` com `LICENSE.txt` e instrução de ícone
+- **Import/Export de configurações** — botões "Exportar backup (.json)" e "Importar backup" na página de Configurações; exporta todas as VPS, projetos e contas cadastradas em JSON com timestamp; importa de forma não-destrutiva (não sobrescreve registros existentes); senhas SSH não exportadas; IPC `config:export` e `config:import` com dialog nativo de salvar/abrir arquivo
+- **SSH passphrase** — chave SSH com passphrase agora funciona: quando há chave privada configurada, o campo "Senha SSH" vira a passphrase da chave (em vez de senha do servidor); suporte ao SSH agent do Windows via named pipe `\\.\pipe\openssh-ssh-agent` (além de `SSH_AUTH_SOCK` no Unix)
+- **Auto-update** — `electron-updater` instalado; em produção verifica atualizações silenciosamente ao iniciar via `autoUpdater.checkForUpdatesAndNotify()`; publicação via GitHub Releases configurada
+- **Testes automatizados** — Vitest adicionado aos pacotes `@cwm/config` e `@cwm/core`; 18 testes passando: encryptPassword/decryptPassword, Zod schemas (VPS, Project, ClaudeAccount, Settings), parsing de status Git (staged/unstaged/untracked, ahead/behind)
+
+### Alterado
+
+- Descrição do `@cwm/desktop` atualizada para "HEXAGON IDE — gerenciador de ambientes VPS com IDE integrado"
+- Scripts `package:win` e `package:dir` adicionados ao `apps/desktop/package.json` e `pnpm package:win` na raiz
+- `pnpm test` roda os testes dos pacotes
+
+---
+
 ## [1.3.2] — 2026-05-31
 
 ### Adicionado

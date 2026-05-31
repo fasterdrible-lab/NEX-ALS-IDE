@@ -171,9 +171,16 @@ export class SftpService {
         hostVerifier: () => true,
       }
 
-      if (privateKey) config.privateKey = privateKey
-      else if (plainPassword) config.password = plainPassword
-      else if (process.env['SSH_AUTH_SOCK']) config.agent = process.env['SSH_AUTH_SOCK']
+      if (privateKey) {
+        config.privateKey = privateKey
+        if (plainPassword) config.passphrase = plainPassword
+      } else if (plainPassword) {
+        config.password = plainPassword
+      } else {
+        const agentSock = process.env['SSH_AUTH_SOCK']
+          ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
+        if (agentSock) config.agent = agentSock
+      }
 
       conn.connect(config)
     })

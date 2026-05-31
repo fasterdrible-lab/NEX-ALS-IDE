@@ -131,6 +131,12 @@ export const ipc = {
     readImage: () =>
       invoke<{ filePath: string } | null>('clipboard:readImage'),
   },
+  config: {
+    export: () =>
+      invoke<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>('config:export'),
+    import: () =>
+      invoke<{ success: boolean; imported?: { vps: number; projects: number; accounts: number }; canceled?: boolean; error?: string }>('config:import'),
+  },
   local: {
     openFolder: () =>
       invoke<string | null>('local:openFolder'),

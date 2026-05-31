@@ -311,6 +311,62 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
     return { success: true }
   })
 
+  // ── Import/Export de configurações ─────────────────────────────────────────
+  ipcMain.handle('config:export', async () => {
+    const { filePath, canceled } = await dialog.showSaveDialog(win!, {
+      title: 'Exportar configurações HEXAGON IDE',
+      defaultPath: `hexagon-ide-backup-${new Date().toISOString().slice(0,10)}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    if (canceled || !filePath) return { success: false, canceled: true }
+    try {
+      const [vpsList, projectsList, accountsList, settingsData] = await Promise.all([
+        vps.list(), projects.list(), accounts.list(), settings.get(),
+      ])
+      const backup = {
+        version: '1.3.2',
+        exportedAt: new Date().toISOString(),
+        vps: vpsList,
+        projects: projectsList,
+        accounts: accountsList,
+        settings: settingsData,
+      }
+      await fs.writeFile(filePath, JSON.stringify(backup, null, 2), 'utf-8')
+      return { success: true, filePath }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('config:import', async () => {
+    const { filePaths, canceled } = await dialog.showOpenDialog(win!, {
+      title: 'Importar configurações HEXAGON IDE',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      properties: ['openFile'],
+    })
+    if (canceled || filePaths.length === 0) return { success: false, canceled: true }
+    try {
+      const raw = await fs.readFile(filePaths[0], 'utf-8')
+      const backup = JSON.parse(raw)
+      if (!backup.version || !Array.isArray(backup.vps)) {
+        return { success: false, error: 'Arquivo inválido ou não é um backup do HEXAGON IDE.' }
+      }
+      let imported = { vps: 0, projects: 0, accounts: 0 }
+      for (const v of (backup.vps ?? [])) {
+        try { await vps.create(v); imported.vps++ } catch {}
+      }
+      for (const p of (backup.projects ?? [])) {
+        try { await projects.create(p); imported.projects++ } catch {}
+      }
+      for (const a of (backup.accounts ?? [])) {
+        try { await accounts.create(a); imported.accounts++ } catch {}
+      }
+      return { success: true, imported }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   // ── Clipboard — salva imagem do clipboard em arquivo temp e retorna o path ──
   ipcMain.handle('clipboard:readImage', async () => {
     const img = clipboard.readImage()

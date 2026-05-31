@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Settings, Loader2, CheckCircle, FolderSearch, Key } from 'lucide-react'
+import { Settings, Loader2, CheckCircle, FolderSearch, Key, Download, Upload } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import type { SettingsInput } from '@cwm/config'
 
@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
     ipc.settings.get()
@@ -30,6 +31,27 @@ export default function SettingsPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally { setSaving(false) }
+  }
+
+  const handleExport = async () => {
+    const r = await ipc.config.export()
+    if (r.canceled) return
+    setBackupMsg(r.success
+      ? { ok: true, text: `Backup salvo em ${r.filePath?.split(/[\\/]/).pop()}` }
+      : { ok: false, text: r.error ?? 'Erro ao exportar' })
+    setTimeout(() => setBackupMsg(null), 4000)
+  }
+
+  const handleImport = async () => {
+    const r = await ipc.config.import()
+    if (r.canceled) return
+    if (r.success && r.imported) {
+      const { vps, projects, accounts } = r.imported
+      setBackupMsg({ ok: true, text: `Importados: ${vps} VPS, ${projects} projetos, ${accounts} contas` })
+    } else {
+      setBackupMsg({ ok: false, text: r.error ?? 'Erro ao importar' })
+    }
+    setTimeout(() => setBackupMsg(null), 5000)
   }
 
   if (loading) {
@@ -82,9 +104,7 @@ export default function SettingsPage() {
         <div className="border-t border-slate-800" />
 
         <div className="flex items-center gap-3">
-          {error && (
-            <p className="flex-1 text-sm text-red-400">{error}</p>
-          )}
+          {error && <p className="flex-1 text-sm text-red-400">{error}</p>}
           {saved && (
             <div className="flex items-center gap-2 text-sm text-emerald-400">
               <CheckCircle size={14} /> Configurações salvas
@@ -96,6 +116,32 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Backup / Restore */}
+      <div className="mt-6 card space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-1">
+            <Download size={14} className="text-slate-400"/> Backup e Restauração
+          </h2>
+          <p className="text-xs text-slate-500">Exporta e importa todas as VPS, projetos e contas cadastradas. Senhas SSH não são armazenadas e não fazem parte do backup.</p>
+        </div>
+
+        {backupMsg && (
+          <div className={`text-sm px-3 py-2 rounded-lg ${backupMsg.ok ? 'bg-emerald-900/40 text-emerald-300' : 'bg-red-900/40 text-red-300'}`}>
+            {backupMsg.text}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-sm">
+            <Download size={14}/> Exportar backup (.json)
+          </button>
+          <button onClick={handleImport} className="btn-secondary flex items-center gap-2 text-sm">
+            <Upload size={14}/> Importar backup
+          </button>
+        </div>
+        <p className="text-xs text-slate-600">O backup pode ser usado para migrar configurações para outro PC ou como cópia de segurança.</p>
       </div>
 
       <div className="mt-6 card border-slate-800/50">

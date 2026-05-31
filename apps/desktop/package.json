@@ -1,7 +1,7 @@
 {
   "name": "@cwm/desktop",
-  "version": "1.3.2",
-  "description": "Claude Workspace Manager — gerenciador de VPS e contas Claude Code",
+  "version": "1.4.0",
+  "description": "HEXAGON IDE — gerenciador de ambientes VPS com IDE integrado",
   "author": "HEXAGON TECNOLOGIA",
   "private": true,
   "main": "out/main/index.js",
@@ -10,12 +10,15 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "package": "electron-vite build && electron-builder"
+    "package": "electron-vite build && electron-builder",
+    "package:win": "electron-vite build && electron-builder --win",
+    "package:dir": "electron-vite build && electron-builder --dir"
   },
   "dependencies": {
     "@cwm/config": "workspace:*",
     "@cwm/core": "workspace:*",
-    "@cwm/db": "workspace:*"
+    "@cwm/db": "workspace:*",
+    "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@electron-toolkit/utils": "^4.0.0",
@@ -30,29 +33,87 @@
   "build": {
     "appId": "com.hexagon.ide",
     "productName": "HEXAGON IDE",
+    "copyright": "Copyright © 2026 HEXAGON TECNOLOGIA",
     "directories": {
       "output": "dist-app"
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "HEXAGON IDE",
+      "deleteAppDataOnUninstall": false,
+      "installerHeaderIcon": "build/icon.ico",
+      "license": "LICENSE.txt"
     },
     "files": [
-      { "from": ".", "to": ".", "filter": ["out/**", "package.json", "node_modules/**", "!node_modules/@cwm/**"] },
-      { "from": "../../packages/config", "to": "node_modules/@cwm/config", "filter": ["dist/**", "package.json"] },
-      { "from": "../../packages/db",     "to": "node_modules/@cwm/db",     "filter": ["dist/**", "generated/**", "package.json"] },
-      { "from": "../../packages/core",   "to": "node_modules/@cwm/core",   "filter": ["dist/**", "package.json"] }
+      {
+        "from": ".",
+        "to": ".",
+        "filter": [
+          "out/**",
+          "package.json",
+          "node_modules/**",
+          "!node_modules/@cwm/**"
+        ]
+      },
+      {
+        "from": "../../packages/config",
+        "to": "node_modules/@cwm/config",
+        "filter": [
+          "dist/**",
+          "package.json"
+        ]
+      },
+      {
+        "from": "../../packages/db",
+        "to": "node_modules/@cwm/db",
+        "filter": [
+          "dist/**",
+          "generated/**",
+          "package.json"
+        ]
+      },
+      {
+        "from": "../../packages/core",
+        "to": "node_modules/@cwm/core",
+        "filter": [
+          "dist/**",
+          "package.json"
+        ]
+      }
     ],
     "extraResources": [
-      { "from": "../web/dist", "to": "renderer" }
+      {
+        "from": "../web/dist",
+        "to": "renderer"
+      }
     ],
     "asar": false,
     "npmRebuild": false,
-    "asarUnpack": [
-      "node_modules/better-sqlite3/**",
-      "node_modules/ssh2/**",
-      "node_modules/cpu-features/**",
-      "node_modules/@prisma/**",
-      "node_modules/prisma/**"
-    ]
+    "publish": {
+      "provider": "github",
+      "owner": "fasterdrible-lab",
+      "repo": "HEXAGON-IDE"
+    }
   }
 }

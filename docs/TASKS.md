@@ -46,11 +46,11 @@
 
 ## Backlog App (funcionalidades não-IDE)
 
-- [ ] **Testes automatizados** — Vitest para packages/core e packages/config
-- [ ] **Import/export** — exportar configurações para JSON (backup portátil)
-- [ ] **SSH agent** — suporte a chave SSH com passphrase via `ssh-agent` no Windows
-- [ ] **Auto-update** — electron-updater para updates automáticos
-- [ ] **Packaging** — gerar .exe e .msi para Windows via electron-builder
+- [x] **Testes automatizados** — Vitest: 13 testes em @cwm/config + 5 em @cwm/core (18 total) — 2026-05-31
+- [x] **Import/export** — exportar/importar VPS+projetos+contas em JSON; botões na página de Configurações — 2026-05-31
+- [x] **SSH passphrase** — campo "Senha SSH" vira passphrase quando chave privada está configurada; Windows OpenSSH agent via named pipe — 2026-05-31
+- [x] **Auto-update** — electron-updater instalado; verifica GitHub Releases silenciosamente em produção — 2026-05-31
+- [x] **Packaging** — NSIS installer + portable .exe; `pnpm package:win`; wizard com atalhos e licença — 2026-05-31
 
 ---
 

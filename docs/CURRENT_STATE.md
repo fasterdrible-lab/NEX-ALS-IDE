@@ -1,7 +1,7 @@
 # CURRENT_STATE.md — HEXAGON IDE
 
 **Data:** 2026-05-31
-**Versão:** 1.3.2
+**Versão:** 1.4.0
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-IDE.git
 
 ## Estado atual
