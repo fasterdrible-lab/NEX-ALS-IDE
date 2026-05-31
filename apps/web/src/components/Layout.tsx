@@ -23,7 +23,7 @@ export default function Layout() {
           <BotMessageSquare size={22} className="text-brand-400 shrink-0" />
           <div className="leading-tight">
             <span className="font-bold text-sm text-slate-100 tracking-wide">HEXAGON IDE</span>
-            <p className="text-slate-500 text-xs font-normal">Multi-conta Claude</p>
+            <p className="text-slate-500 text-xs font-normal">Multi-conta IA</p>
           </div>
         </div>
 
