@@ -829,10 +829,35 @@ export default function IDEPage() {
     setChatElapsed(0)
     chatTimerRef.current = setInterval(() => setChatElapsed(s => s + 1), 1000)
     try {
-      // Monta prompt com contexto do arquivo ativo (sem limite de escaping)
-      const ctx = activeFile && activeFile.content
-        ? `Contexto — arquivo: ${activeFile.name}\n\`\`\`\n${activeFile.content.slice(0, 8000)}\n\`\`\`\n\n`
+      // Contexto: arquivo ativo aberto no editor
+      let ctx = activeFile && activeFile.content
+        ? `## Arquivo aberto no editor: ${activeFile.name}\n\`\`\`\n${activeFile.content.slice(0, 6000)}\n\`\`\`\n\n`
         : ''
+
+      // Modo local: ler automaticamente arquivos-chave do projeto local
+      // para que Claude conheça o projeto sem precisar acessar a VPS
+      if (isLocal && localRootRef.current) {
+        const root = localRootRef.current
+        const KEY_FILES = [
+          'CLAUDE.md', 'README.md', 'AGENTE.md',
+          'docs/TASKS.md', 'docs/CURRENT_STATE.md', 'docs/ARCHITECTURE.md',
+          'TASKS.md', 'CHANGELOG.md',
+        ]
+        const included: string[] = []
+        for (const rel of KEY_FILES) {
+          // não duplicar com o arquivo já aberto no editor
+          const fullPath = root + '/' + rel
+          if (activeFile && (activeFile.path === fullPath || activeFile.name === rel)) continue
+          try {
+            const content = await ipc.local.readFile(fullPath)
+            if (content) included.push(`## ${rel}\n${content.slice(0, 3000)}`)
+          } catch { /* arquivo não existe, ignora */ }
+        }
+        if (included.length > 0) {
+          ctx = `# Projeto local: ${root.split('/').pop() || root}\n\n${included.join('\n\n---\n\n')}\n\n---\n\n` + ctx
+        }
+      }
+
       const prompt = `${ctx}${userMsg}`
 
       // Escreve prompt em arquivo temporário na VPS via SFTP para evitar
