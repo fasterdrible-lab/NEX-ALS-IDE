@@ -1512,7 +1512,9 @@ export default function IDEPage() {
                     {m.role === 'user' ? (
                       <div className="flex flex-col gap-1.5 items-end max-w-full">
                         {m.imageDataUrl && (
-                          <img src={m.imageDataUrl} alt="print" className="max-w-full rounded-lg border border-purple-700/30 max-h-48 object-contain"/>
+                          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-purple-900/30 border border-purple-700/30 text-[10px] text-purple-400">
+                            <FileImage size={11}/> Print enviado
+                          </div>
                         )}
                         {m.text && (
                           <div className="text-xs rounded-lg px-3 py-2 max-w-full whitespace-pre-wrap break-words bg-purple-900/50 text-purple-100 border border-purple-700/30">
@@ -1640,13 +1642,13 @@ export default function IDEPage() {
 
               {/* input */}
               <div className="px-3 py-2 border-t border-slate-800 shrink-0">
-                {/* preview da imagem colada */}
+                {/* badge da imagem colada */}
                 {chatImage && (
-                  <div className="relative mb-2 inline-block">
-                    <img src={chatImage.dataUrl} alt="imagem" className="max-h-28 rounded border border-purple-700/50 object-contain"/>
-                    <button onClick={()=>setChatImage(null)}
-                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-600 text-white text-[10px] flex items-center justify-center hover:bg-red-500">
-                      ×
+                  <div className="flex items-center gap-2 mb-2 px-2 py-1.5 rounded-lg bg-purple-900/40 border border-purple-700/40 text-xs text-purple-300">
+                    <FileImage size={13} className="shrink-0"/>
+                    <span className="flex-1">Print anexado — será enviado com a mensagem</span>
+                    <button onClick={()=>setChatImage(null)} className="text-purple-500 hover:text-red-400 shrink-0">
+                      <X size={12}/>
                     </button>
                   </div>
                 )}
