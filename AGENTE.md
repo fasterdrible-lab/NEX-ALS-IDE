@@ -1,10 +1,15 @@
-# AGENTE.md — Claude Workspace Manager
+# AGENTE.md — HEXAGON IDE
+
+**Repositório:** https://github.com/fasterdrible-lab/HEXAGON-IDE.git
+**Remote local:** `git remote set-url origin https://github.com/fasterdrible-lab/HEXAGON-IDE.git`
 
 ## O que o projeto faz
 
-Interface desktop local (Electron) para gerenciar múltiplos ambientes de desenvolvimento com Claude Code. O problema central é que o Claude Code pode compartilhar autenticação entre diferentes instâncias do VS Code. A solução é isolar as contas em VPS separadas e fornecer uma interface visual simples para abrir o ambiente correto (VS Code Remote SSH) com a conta Claude certa.
+**HEXAGON IDE** é uma aplicação desktop local (Electron) com duas camadas:
 
-Inclui também o **HEXAGON IDE** — editor de código integrado que conecta ao servidor remoto via SSH/SFTP, dispensando o VS Code para edição rápida de arquivos, execução de comandos e gestão de Git, tudo diretamente na VPS.
+1. **Gerenciador de ambientes** — resolve o problema de autenticação compartilhada do Claude Code entre instâncias do VS Code. Isola as contas em VPS separadas e abre o ambiente correto (VS Code Remote SSH) com a conta Claude certa.
+
+2. **IDE integrado** — editor de código completo que conecta ao servidor remoto via SSH/SFTP, com Monaco Editor, terminal xterm.js, Git integrado e painel de problemas. Dispensa o VS Code para edição rápida de arquivos e execução de comandos diretamente na VPS.
 
 ## Domínio de produção
 
@@ -183,7 +188,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`V.1.1.1` — HEXAGON IDE completo. Todas as features P0, P1 e P2 do backlog IDE implementadas. Ver `docs/CURRENT_STATE.md`.
+`V.1.2.0` — HEXAGON IDE completo. Todas as features P0, P1 e P2 do backlog IDE implementadas. Repositório renomeado para HEXAGON-IDE no GitHub. Ver `docs/CURRENT_STATE.md`.
 
 ## Próxima tarefa
 
@@ -200,6 +205,7 @@ Features P3 (split editor, LSP remoto, port forwarding) ou features de app (test
 7. Atualizar CURRENT_STATE.md ao mudar estado do projeto
 8. Atualizar ARCHITECTURE.md ao mudar decisões técnicas
 9. Sincronizar versão nos 3 `package.json` (raiz, desktop, web)
+10. Remote git aponta para `https://github.com/fasterdrible-lab/HEXAGON-IDE.git`
 
 ## Tabela de arquivos de risco
 

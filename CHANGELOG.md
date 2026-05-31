@@ -1,4 +1,15 @@
-# CHANGELOG — Claude Workspace Manager
+# CHANGELOG — HEXAGON IDE
+
+## [1.2.0] — 2026-05-30
+
+### Alterado
+
+- **Repositório renomeado** — `Claude-Workspace-Manager` → `HEXAGON-IDE` no GitHub (`https://github.com/fasterdrible-lab/HEXAGON-IDE.git`)
+- Remote local atualizado (`git remote set-url origin`)
+- `CLAUDE.md` e `AGENTE.md` reescritos para refletir o nome oficial **HEXAGON IDE** e incluir a URL do repositório
+- Versão bumped `1.1.1 → 1.2.0` (marco: IDE completo + rename oficial)
+
+---
 
 ## [1.1.1] — 2026-05-30
 

@@ -1,7 +1,8 @@
-# CURRENT_STATE.md — Claude Workspace Manager
+# CURRENT_STATE.md — HEXAGON IDE
 
 **Data:** 2026-05-30
-**Versão:** 1.1.1
+**Versão:** 1.2.0
+**Repositório:** https://github.com/fasterdrible-lab/HEXAGON-IDE.git
 
 ## Estado atual
 

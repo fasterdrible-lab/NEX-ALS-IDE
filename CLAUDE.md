@@ -1,4 +1,4 @@
-# Claude Workspace Manager — CLAUDE.md
+# HEXAGON IDE — CLAUDE.md
 
 **Sempre leia estes arquivos ao iniciar uma conversa sobre este projeto:**
 
@@ -13,9 +13,13 @@
 
 ## Resumo do projeto
 
-Aplicação desktop Electron para gerenciar múltiplas VPS, múltiplos projetos remotos e múltiplas contas Claude Code. Substitui scripts .bat manuais por uma interface visual simples. Permite abrir VS Code remoto via Remote SSH na conta e VPS correta, evitando conflitos de autenticação entre contas Claude.
+**HEXAGON IDE** é uma aplicação desktop Electron para gerenciar múltiplas VPS, múltiplos projetos remotos e múltiplas contas Claude Code. Substitui scripts .bat manuais por uma interface visual completa.
 
-Inclui **HEXAGON IDE** — editor de código integrado com Monaco Editor, explorer SFTP, terminal SSH xterm.js, Git integrado, busca em arquivos, painel de problemas e múltiplas abas de terminal, tudo rodando diretamente na VPS via SSH/SFTP.
+Duas camadas de uso:
+- **Gerenciador de ambientes** — abre VS Code Remote SSH na conta e VPS correta, evitando conflitos de autenticação entre contas Claude.
+- **IDE integrado (HEXAGON IDE)** — editor de código com Monaco Editor, explorer SFTP hierárquico, terminal SSH xterm.js, Git integrado, busca em arquivos, painel de problemas e múltiplas abas de terminal, tudo rodando diretamente na VPS via SSH/SFTP.
+
+**Repositório:** [github.com/fasterdrible-lab/HEXAGON-IDE](https://github.com/fasterdrible-lab/HEXAGON-IDE)
 
 ## Stack
 
@@ -32,7 +36,7 @@ Inclui **HEXAGON IDE** — editor de código integrado com Monaco Editor, explor
 
 ## Versão atual
 
-`1.1.1` — HEXAGON IDE completo com todas as features P0/P1/P2 implementadas
+`1.2.0` — HEXAGON IDE completo com todas as features P0/P1/P2 implementadas
 
 ## Regras de desenvolvimento
 
@@ -47,6 +51,7 @@ Inclui **HEXAGON IDE** — editor de código integrado com Monaco Editor, explor
 9. Toda mudança de arquitetura atualiza `docs/ARCHITECTURE.md`.
 10. Próximas etapas registradas em `docs/TASKS.md`.
 11. Versão sincronizada nos 3 `package.json`: raiz, `apps/desktop`, `apps/web`.
+12. Remote git aponta para `https://github.com/fasterdrible-lab/HEXAGON-IDE.git`.
 
 ## Regras de segurança
 
