@@ -132,6 +132,12 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 - `TerminalService.openShell(vpsId, onData, onClose)` → `TerminalHandle`
 - `TerminalService.exec(vpsId, cmd, timeout?)` — SSH exec one-shot (não-interativo)
 
+### `packages/core/src/tunnel/` ← adicionado em 1.5.0
+- `TunnelService.open(vpsId, localPort, remotePort, remoteHost?)` — cria túnel SSH local via `ssh2.forwardOut`
+- `TunnelService.close(tunnelId)` — encerra o túnel e o servidor TCP local
+- `TunnelService.list()` — lista túneis ativos
+- `TunnelService.closeAll()` — encerra todos os túneis
+
 ## Rotas do frontend
 
 | Rota | Tela |
@@ -140,13 +146,14 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 | `/vps` | Lista de VPS — CRUD + teste de conexão |
 | `/projects` | Lista de projetos — CRUD + associação |
 | `/accounts` | Contas Claude — CRUD + instruções de login |
-| `/launcher` | Lançador — botão "Abrir Projeto" + botão "IDE" por VPS |
-| `/settings` | Configurações — caminhos VS Code, SSH |
+| `/launcher` | Lançador — botão "Abrir Projeto" + botão "IDE" por VPS + "Abrir pasta local" |
+| `/settings` | Configurações — VS Code/SSH + **Backup/Restore JSON** |
 | `/diagnostics` | Diagnóstico — status de todas as ferramentas |
 | `/help` | Manual de Uso — 9 seções expansíveis |
 | `/terminal/:vpsId/:vpsName` | Terminal SSH fullscreen |
 | `/explorer/:vpsId/:vpsName` | Explorer SFTP fullscreen |
-| `/ide/:vpsId/:vpsName` | **HEXAGON IDE** fullscreen |
+| `/ide/:vpsId/:vpsName` | **HEXAGON IDE** modo remoto (VPS) |
+| `/ide/local` | **HEXAGON IDE** modo local (OneDrive/PC) |
 
 ## HEXAGON IDE — features implementadas
 
@@ -172,6 +179,10 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 | **Badge PRODUÇÃO** — vermelho pulsante no modo remoto; verde "Local" no modo local | ✅ | 1.3.0 |
 | **Modo Local** — rota `/ide/local`, dialog nativo, IPC `local:*`, filesystem abstraction | ✅ | 1.3.0 |
 | **Chat Claude** — `claude -p` via SSH, contexto automático (árvore+docs+arquivo), seletor de VPS, ambos os modos, Copiar/Aplicar/Salvar como, paste de print | ✅ | 1.3.2 |
+| **Split editor** — botão Columns2, dois painéis 50/50, abas independentes por painel | ✅ | 1.5.0 |
+| **TypeScript LSP** — `monaco-languageclient` v10 via WebSocket tunnel porta 6009 | ✅ | 1.5.0 |
+| **Port Forwarding** — aba Portas; `TunnelService`; localhost:X → VPS:Y via ssh2 | ✅ | 1.5.0 |
+| **DAP debug remoto** — Chrome DevTools via `ws://localhost:9229`; botão DAP na status bar | ✅ | 1.5.0 |
 
 ## Roles e autenticação
 
@@ -191,7 +202,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`V.1.3.2` — HEXAGON IDE com modo local + chat Claude completo. IDE opera em modo remoto (VPS/SFTP) e modo local (node:fs). Chat envia contexto automático do projeto (árvore + docs-chave + arquivo ativo), botões Copiar/Aplicar/Salvar em blocos de código, paste de print. Ver `docs/CURRENT_STATE.md`.
+`V.1.5.0` — **Backlog zerado.** HEXAGON IDE completo com todas as features P0→P3 implementadas. Split editor, TypeScript LSP, port forwarding SSH, DAP debug remoto, packaging Windows, testes Vitest, import/export de configurações, SSH passphrase, auto-update. Ver `docs/CURRENT_STATE.md`.
 
 ## Uso do Chat Claude
 
@@ -296,6 +307,25 @@ git pull
 - `sftp:delete` — exclui arquivo/pasta
 - `sftp:rename` — renomeia/move
 - `sftp:touch` — cria arquivo vazio
+
+### tunnel:* (IDE-17)
+- `tunnel:open` — abre túnel SSH local (ssh2.forwardOut)
+- `tunnel:close` — encerra túnel
+- `tunnel:list` — lista túneis ativos
+
+### debug:* (IDE-18)
+- `debug:openDevTools` — abre janela Electron com Chrome DevTools (DAP via WebSocket)
+
+### config:*
+- `config:export` — salva backup JSON com VPS/projetos/contas (dialog de salvar)
+- `config:import` — importa backup JSON (dialog de abrir)
+
+### clipboard:*
+- `clipboard:readImage` — lê imagem do clipboard via `nativeImage`, salva em temp e retorna path
+
+### local:* (IDE-20)
+- `local:openFolder` — dialog nativo para escolher pasta
+- `local:readdir` / `local:readFile` / `local:readFileBase64` / `local:writeFile` / `local:mkdir` / `local:delete` / `local:rename` / `local:touch`
 
 ### git:*
 - `git:status` — status do repositório

@@ -1,111 +1,102 @@
 # CURRENT_STATE.md — HEXAGON IDE
 
 **Data:** 2026-05-31
-**Versão:** 1.4.0
+**Versão:** 1.5.0
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-IDE.git
 
 ## Estado atual
 
-**HEXAGON IDE completo.** Todas as features P0, P1, P2 e as novas P2+ foram implementadas. `pnpm dev` inicia Vite (localhost:5173) + Electron sem erros. O IDE opera em dois modos:
+**HEXAGON IDE 1.5.0 — backlog zerado.** Todas as features P0, P1, P2, P3 e de app foram implementadas. `pnpm dev` inicia Vite + Electron sem erros. `pnpm package:win` gera instalador NSIS + portable.
 
-- **Modo Remoto (VPS)** — explorer SFTP, Monaco Editor, terminal SSH multi-tab, Git, painel de Problemas, chat Claude; badge vermelho "Produção" visível na top bar.
-- **Modo Local (OneDrive/PC)** — mesmo editor e explorer usando `node:fs` local; badge verde "Local"; terminal e Git ocultos; chat Claude disponível com seletor de VPS.
-- **Chat Claude integrado** — painel lateral direito; `claude -p` via SSH com contexto automático do projeto (árvore, docs, arquivo ativo); botões Copiar/Aplicar nos blocos de código; Salvar como para criar novo arquivo; paste de print via Ctrl+V; timer de espera; prompt via arquivo SFTP (sem problemas de escaping).
+### Dois modos de operação
 
-## Funcionalidades do app base
+- **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat Claude; badge vermelho "Produção" na top bar.
+- **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat Claude com seletor de VPS e contexto automático do projeto.
 
-- [x] Estrutura de monorepo pnpm com workspaces
-- [x] Schema Prisma SQLite com todas as tabelas
-- [x] Pacote `@cwm/config` com schemas Zod e tipos TypeScript
-- [x] Pacote `@cwm/db` com Prisma client configurado
-- [x] Pacote `@cwm/core` com serviços: VPS, Projetos, Contas, Launcher, Settings, Diagnósticos
-- [x] Electron main process com BrowserWindow segura (contextIsolation)
-- [x] Preload com contextBridge expondo IPC seguro
-- [x] IPC handlers para todos os módulos
-- [x] React app com React Router 6 (9 rotas — 7 gerenciamento + 3 fullscreen IDE/terminal/explorer)
-- [x] Layout com sidebar responsiva
-- [x] Dashboard com cards de status
-- [x] CRUD de VPS (formulário modal + lista + teste de conexão SSH nativo via ssh2)
-- [x] CRUD de Projetos (formulário modal + lista + criar pasta/clonar via SSH)
-- [x] CRUD de Contas Claude (formulário modal + lista + instruções de autenticação)
-- [x] Launcher com grid de projetos + botão IDE por VPS + badges Claude Code status
-- [x] Página de Settings
-- [x] Página de Diagnósticos
-- [x] Página de Manual de Uso (/help — 9 seções expansíveis)
-- [x] Branding HEXAGON TECNOLOGIA
+## Funcionalidades do app base — todas concluídas
 
-## Funcionalidades do HEXAGON IDE
+- [x] Monorepo pnpm — `@cwm/config`, `@cwm/db`, `@cwm/core`, `@cwm/desktop`, `@cwm/web`
+- [x] Schema Prisma SQLite + Zod schemas + tipos TypeScript
+- [x] Electron + contextBridge (contextIsolation, sem nodeIntegration)
+- [x] React + React Router 6 — 10 rotas (7 gerenciamento + 3 fullscreen)
+- [x] CRUD VPS, Projetos, Contas Claude
+- [x] Launcher — botão IDE + "Abrir pasta local" + badges Claude Code
+- [x] Settings — caminhos VS Code/SSH + **Backup/Restore JSON**
+- [x] Diagnósticos, Manual de Uso (/help)
+- [x] **Import/export** — `config:export` / `config:import` com dialog nativo
+- [x] **SSH passphrase** — `sshPassword` vira passphrase quando há chave privada; Windows SSH agent via named pipe
+- [x] **Auto-update** — `electron-updater`; verifica GitHub Releases em produção
+- [x] **Packaging** — `pnpm package:win` → NSIS installer + portable .exe
+- [x] **Testes** — Vitest: 18 testes passando (`@cwm/config` + `@cwm/core`)
 
-### P0 — Bloqueadores (todos concluídos)
-- [x] **IDE-01** — Criar arquivo: botão `FilePlus`, input inline, `SftpSession.touch()`, abre automaticamente
-- [x] **IDE-02** — Tree view hierárquica: expand/collapse por pasta, lazy load, indentação, `activeDir`
-- [x] **IDE-03** — Find in Files (Ctrl+Shift+F): grep SSH, resultados por arquivo, clique revela linha no Monaco
+## Funcionalidades do HEXAGON IDE — todas concluídas
 
-### P1 — Alta prioridade (todos concluídos)
-- [x] **IDE-04** — Git integrado: Source Control completo (status, stage, unstage, commit, push, pull, diff viewer)
-- [x] **IDE-05** — Múltiplas abas de terminal: N sessões SSH independentes, tab bar, callback ref pattern
-- [x] **IDE-06** — Status bar: branch git clicável, Ln/Col em tempo real, hint Ctrl+Shift+P
-- [x] **IDE-07** — Paleta de comandos (Ctrl+Shift+P): Monaco nativo + botão ⌘ na top bar
+### P0 — Bloqueadores
+- [x] **IDE-01** — Criar arquivo inline (`FilePlus` + `touch()`)
+- [x] **IDE-02** — Tree view hierárquica (expand/collapse lazy load)
+- [x] **IDE-03** — Find in Files (Ctrl+Shift+F) — grep SSH + reveal de linha
 
-### P2 — Média prioridade (todos concluídos)
-- [x] **IDE-08** — Find/Replace (Ctrl+H): `addCommand` no mount, não interceptado pelo Electron
-- [x] **IDE-09** — Go to Line (Ctrl+G): `addCommand` no mount, não interceptado pelo Electron
-- [x] **IDE-10** — Breadcrumbs: N/A — opção não existe em `IStandaloneEditorConstructionOptions`
-- [x] **IDE-11** — Preview de imagem: PNG/JPG/GIF/WebP/ICO como `<img>` base64 via SFTP
-- [x] **IDE-12** — Painel de Problemas: tab no painel inferior, `onDidChangeMarkers`, badge, `jumpToLine`
-- [x] **IDE-13** — Copiar/Duplicar: context menu com `cp -rp` + "Copiar caminho"
-- [x] **IDE-14** — Auto-refresh da tree: ao salvar + polling 30s com `expandedFoldersRef`
+### P1 — Alta prioridade
+- [x] **IDE-04** — Git integrado — Source Control completo
+- [x] **IDE-05** — Múltiplas abas de terminal SSH
+- [x] **IDE-06** — Status bar — branch, Ln/Col, hints
+- [x] **IDE-07** — Paleta de comandos (Ctrl+Shift+P)
 
-### Novas features (IDE-19 a IDE-21)
-- [x] **IDE-19** — Badge PRODUÇÃO: vermelho pulsante no modo remoto; badge verde "Local" no modo local
-- [x] **IDE-20** — Modo Local: rota `/ide/local`, dialog nativo de pasta, IPC `local:*`, filesystem abstraction, botão no Lançador
-- [x] **IDE-21** — Chat Claude: painel lateral direito, `claude -p` via SSH, contexto completo do projeto (árvore + docs + arquivo ativo), seletor de VPS, ambos os modos, botões Copiar/Aplicar/Salvar como, paste de print (Ctrl+V), timer de espera, prompt via arquivo SFTP
+### P2 — Média prioridade
+- [x] **IDE-08** — Find/Replace (Ctrl+H) — `addCommand`
+- [x] **IDE-09** — Go to Line (Ctrl+G) — `addCommand`
+- [x] **IDE-10** — Breadcrumbs — N/A (não existe em `IStandaloneEditorConstructionOptions`)
+- [x] **IDE-11** — Preview de imagem (base64 SFTP)
+- [x] **IDE-12** — Painel de Problemas (`onDidChangeMarkers` + `jumpToLine`)
+- [x] **IDE-13** — Copiar/Duplicar arquivos
+- [x] **IDE-14** — Auto-refresh da tree (salvar + polling 30s)
 
-### P3 — Baixa prioridade (pendente)
-- [ ] **IDE-15** — Split editor (dois arquivos lado a lado)
-- [ ] **IDE-16** — LSP/IntelliSense remoto (`monaco-languageclient` + language server na VPS)
-- [ ] **IDE-17** — Remote port forwarding (túnel SSH para portas da VPS)
-- [ ] **IDE-18** — Depuração remota (DAP via SSH)
+### P2+ — Novas features
+- [x] **IDE-19** — Badge PRODUÇÃO (vermelho) / LOCAL (verde)
+- [x] **IDE-20** — Modo Local — `node:fs`, dialog nativo, filesystem abstraction
+- [x] **IDE-21** — Chat Claude — `claude -p` via SSH, contexto automático, Copiar/Aplicar/Salvar como, paste de print
 
-## Funcionalidades de app pendentes
+### P3 — Baixa prioridade — todas concluídas
+- [x] **IDE-15** — Split editor — dois painéis lado a lado, abas independentes, Ctrl+S no painel focado
+- [x] **IDE-16** — TypeScript LSP — `monaco-languageclient` v10 via WebSocket tunnel (porta 6009)
+- [x] **IDE-17** — Port Forwarding — aba "Portas" no painel esquerdo; `TunnelService` (ssh2.forwardOut)
+- [x] **IDE-18** — DAP debug remoto — janela Chrome DevTools via `ws://localhost:9229`
 
-- [ ] Testes automatizados (Vitest para packages/core e packages/config)
-- [ ] Import/export de configurações (backup JSON portátil)
-- [ ] Suporte a chave SSH com passphrase (ssh-agent no Windows)
-- [ ] Auto-update (electron-updater)
-- [ ] Packaging/installer Windows (.exe + .msi via electron-builder)
-- [ ] Notificação visual ao abrir VS Code Remote
-- [ ] Histórico de lançamentos com filtros
-
-## Decisões técnicas tomadas
+## Decisões técnicas
 
 | Decisão | Escolha | Motivo |
 |---|---|---|
-| Framework desktop | Electron | Node.js-native, sem Rust toolchain, melhor integração Windows |
-| UI | React + Vite | Ecossistema familiar, HMR rápido |
-| Estilo | Tailwind CSS | Sem arquivo CSS separado, classes utilitárias |
-| DB | SQLite + Prisma | Local-first, sem servidor, migrations fáceis |
-| Validação | Zod | Type-safety em runtime + inferência TypeScript |
-| IPC | contextBridge | Máxima segurança, sem nodeIntegration |
-| Monorepo | pnpm workspaces | Performance, deduplicação, symlinks |
-| Build Electron | electron-vite | Main bundado com Rollup, sem import issues |
-| Dev launcher | scripts/dev.js | Limpa ELECTRON_RUN_AS_NODE antes do concurrently |
-| SSH/SFTP | ssh2 (nativo) | Sem dependência de OpenSSH no PATH do Windows |
-| Editor | Monaco Editor | Mesmo engine do VS Code, offline, workers locais |
-| Terminal | xterm.js | Full-color, resize, preserva histórico entre abas |
-| Markers IDE | onDidChangeMarkers | API Monaco para erros em tempo real |
-| Keybindings IDE | addCommand em handleEditorMount | Garante que Electron não intercepte Ctrl+H/Ctrl+G |
+| Framework desktop | Electron | Node.js-native, sem Rust toolchain |
+| UI | React + Vite | HMR rápido, ecossistema familiar |
+| Estilo | Tailwind CSS | Classes utilitárias, sem CSS separado |
+| DB | SQLite + Prisma | Local-first, sem servidor |
+| Validação | Zod | Type-safety em runtime |
+| IPC | contextBridge | Máxima segurança |
+| Monorepo | pnpm workspaces | Performance, deduplicação |
+| Build | electron-vite | Main bundado com Rollup |
+| SSH/SFTP | ssh2 nativo | Sem OpenSSH no PATH do Windows |
+| Editor | Monaco Editor | Mesmo engine do VS Code, offline |
+| Terminal | xterm.js | Full-color, multi-tab, resize |
+| LSP | monaco-languageclient v10 | WebSocket ao language server na VPS |
+| Tunnels | ssh2.forwardOut | Port forwarding sem ferramenta externa |
+| DAP | Chrome DevTools Protocol | Depuração Node.js nativa |
+| Testes | Vitest | Compatível com Node.js ESM |
+| Packaging | electron-builder NSIS | Installer + portable Windows |
+| Auto-update | electron-updater | GitHub Releases |
 
 ## Limitações conhecidas
 
-1. **Sem autenticação interna** — app local, single-user, sem login
-2. **Sem armazenamento de chave SSH privada** — usuário precisa ter chave configurada no sistema
-3. **VS Code Remote SSH** — usuário precisa ter extensão "Remote - SSH" instalada no VS Code
-4. **Claude Code** — autenticação ocorre dentro de cada VPS, não dentro do app
-5. **Monaco markers** — erros/warnings dependem de language workers habilitados; TypeScript e JSON são detectados nativamente, outras linguagens requerem LSP (IDE-16)
-6. **Chat · imagem** — `claude -p` não processa imagens como visão real; para análise de erro, colar o texto do erro é mais confiável que print; suporte multimodal completo requer API Key Anthropic
-7. **Sem testes automatizados** — primeira versão sem cobertura de testes
+1. **Sem autenticação interna** — app local, single-user
+2. **SSH key privada** — usuário configura no sistema; app não armazena
+3. **LSP** — requer `typescript-language-server` + WebSocket wrapper na VPS; configuração manual
+4. **DAP** — requer `node --inspect` na VPS + túnel 9229; sem breakpoints no Monaco (UI é o Chrome DevTools)
+5. **Chat · imagem** — `claude -p` não processa imagens como visão real; colar texto do erro é mais confiável
+6. **Chat · velocidade** — `claude -p` via SSH tem overhead de startup (~15-30s); para respostas instantâneas precisaria de API Key Anthropic
 
 ## Próximo passo recomendado
 
-Features P3 (IDE-15 split editor ou IDE-16 LSP), ou features de app (testes Vitest, packaging .exe).
+Backlog zerado. Próximas iniciativas sugeridas:
+- Suporte a múltiplas contas (workspace multi-VPS simultâneo)
+- Integração com Anthropic API (chat mais rápido + multimodal real)
+- Histórico de lançamentos com filtros
+- Notificação visual ao abrir VS Code Remote

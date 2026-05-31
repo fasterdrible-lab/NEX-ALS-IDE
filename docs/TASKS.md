@@ -2,7 +2,7 @@
 
 ## Em andamento
 
-*(nenhuma)*
+*(nenhuma — backlog zerado)*
 
 ---
 
@@ -35,12 +35,12 @@
 - [x] **IDE-20 · Modo Local** — rota `/ide/local`; dialog de pasta nativa; IPC `local:*`; filesystem abstraction; badge verde "Local"; terminal e Git ocultos; botão "Abrir pasta local" no Launcher — 2026-05-30
 - [x] **IDE-21 · Chat Claude** — painel lateral direito redimensionável; `claude -p` via SSH; prompt via arquivo SFTP (sem escaping); contexto completo (árvore 2 níveis + docs + arquivo ativo); seletor de VPS; timer de espera; botões Copiar/Aplicar/Salvar como nos blocos de código; paste de print Ctrl+V (badge "📷 Print anexado"); instrução offline para Claude usar conteúdo inline — 2026-05-31
 
-## Backlog IDE — P3 BAIXA PRIORIDADE (futuro)
+## Backlog IDE — P3 BAIXA PRIORIDADE — todos concluídos
 
-- [ ] **IDE-15 · Split editor** — dois arquivos lado a lado.
-- [ ] **IDE-16 · LSP/IntelliSense remoto** — `monaco-languageclient` + language server na VPS.
-- [ ] **IDE-17 · Remote port forwarding** — túnel SSH para acessar portas da VPS localmente.
-- [ ] **IDE-18 · Depuração remota** — DAP via SSH. Futuro distante.
+- [x] **IDE-15 · Split editor** — dois painéis 50/50, abas independentes, Ctrl+S no painel focado, botão Columns2 na top bar — 2026-05-31
+- [x] **IDE-16 · LSP TypeScript** — `monaco-languageclient` v10 via WebSocket; botão TS LSP na status bar; requer túnel 6009 + `typescript-language-server` na VPS — 2026-05-31
+- [x] **IDE-17 · Port Forwarding** — `TunnelService` (ssh2.forwardOut); aba Portas no painel esquerdo; IPC tunnel:open/close/list; link "Abrir no navegador" — 2026-05-31
+- [x] **IDE-18 · DAP debug remoto** — `debug:openDevTools` abre janela Electron com Chrome DevTools conectado a `ws://localhost:9229`; requer túnel 9229 + `node --inspect` na VPS — 2026-05-31
 
 ---
 

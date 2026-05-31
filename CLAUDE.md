@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`1.4.0` — HEXAGON IDE completo: packaging Windows, import/export, SSH passphrase, auto-update, testes
+`1.5.0` — HEXAGON IDE: backlog zerado. Split editor, LSP, port forwarding, DAP, packaging, testes
 
 ## Regras de desenvolvimento
 
@@ -73,3 +73,7 @@ Duas camadas de uso:
 | `Ctrl+H` | Find & Replace no arquivo atual |
 | `Ctrl+G` | Ir para linha |
 | Botão **Claude** (roxo) | Abre painel de chat com Claude |
+| Botão **⊟** (Columns2) | Ativa/desativa split editor |
+| **TS LSP** na status bar | Conecta TypeScript LSP via túnel 6009 |
+| **⬡ DAP** na status bar | Abre Chrome DevTools via túnel 9229 |
+| Aba **Portas** (painel esq.) | Gerencia port forwarding SSH |
