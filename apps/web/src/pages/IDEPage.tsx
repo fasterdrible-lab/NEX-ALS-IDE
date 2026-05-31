@@ -823,18 +823,36 @@ export default function IDEPage() {
   }
 
   // IDE-21: colar imagem no chat via Ctrl+V
-  const handleChatPaste = async (e: React.ClipboardEvent) => {
-    const hasImage = Array.from(e.clipboardData.items).some(item => item.type.startsWith('image/'))
-    if (!hasImage) return
+  const handleChatPaste = (e: React.ClipboardEvent) => {
+    const imgItem = Array.from(e.clipboardData.items).find(item => item.type.startsWith('image/'))
+    if (!imgItem) return
     e.preventDefault()
-    // Salva imagem do clipboard em arquivo temp via main process
-    const res = await ipc.clipboard.readImage()
-    if (!res?.filePath) return
-    // Lê o arquivo como base64 usando ipc.local (mesmo método do IDE-11 — garantido funcionar)
-    const r = await ipc.local.readFileBase64(res.filePath)
-    if (r) {
-      const dataUrl = `data:image/png;base64,${r}`
-      setChatImage({ dataUrl, base64: r as string, mime: 'image/png', filePath: res.filePath })
+
+    const blob = imgItem.getAsFile()
+    if (blob) {
+      // Caminho A: getAsFile() funcionou — usa blob: URL para preview (sempre funciona no Electron)
+      const displayUrl = URL.createObjectURL(blob)
+      const reader = new FileReader()
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        const base64 = dataUrl.split(',')[1] ?? ''
+        setChatImage({ dataUrl: displayUrl, base64, mime: blob.type || 'image/png', filePath: '' })
+      }
+      reader.onerror = () => {
+        // base64 falhou mas temos o displayUrl — ainda mostra preview, envia sem imagem
+        setChatImage({ dataUrl: displayUrl, base64: '', mime: blob.type || 'image/png', filePath: '' })
+      }
+      reader.readAsDataURL(blob)
+    } else {
+      // Caminho B: fallback via nativeImage no main process
+      ipc.clipboard.readImage().then(async res => {
+        if (!res?.filePath) return
+        const r = await ipc.local.readFileBase64(res.filePath)
+        if (r) {
+          const dataUrl = `data:image/png;base64,${r}`
+          setChatImage({ dataUrl, base64: r as string, mime: 'image/png', filePath: res.filePath })
+        }
+      })
     }
   }
 
