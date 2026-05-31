@@ -141,9 +141,11 @@ export default function IDEPage() {
   const [chatMessages, setChatMessages] = useState<{role:'user'|'assistant'; text:string}[]>([])
   const [chatInput,   setChatInput]   = useState('')
   const [chatLoading, setChatLoading] = useState(false)
-  const [chatVpsId,   setChatVpsId]   = useState<string>(vpsId ?? '')  // VPS usada para claude -p
+  const [chatElapsed, setChatElapsed] = useState(0)
+  const [chatVpsId,   setChatVpsId]   = useState<string>(vpsId ?? '')
   const [chatVpsList, setChatVpsList] = useState<{id:string;name:string}[]>([])
-  const chatEndRef = useRef<HTMLDivElement>(null)
+  const chatEndRef  = useRef<HTMLDivElement>(null)
+  const chatTimerRef = useRef<ReturnType<typeof setInterval>|null>(null)
 
   // ── IDE-02: hierarchical file tree ─────────────────────────────────
 
@@ -817,23 +819,42 @@ export default function IDEPage() {
     }
   }
 
-  // IDE-21: enviar mensagem ao Claude via SSH exec
+  // IDE-21: enviar mensagem ao Claude via arquivo temporário na VPS
   const handleChatSend = async () => {
     if (!chatVpsId || !chatInput.trim() || chatLoading) return
     const userMsg = chatInput.trim()
     setChatInput('')
     setChatMessages(m => [...m, { role:'user', text:userMsg }])
     setChatLoading(true)
+    setChatElapsed(0)
+    chatTimerRef.current = setInterval(() => setChatElapsed(s => s + 1), 1000)
     try {
-      const ctx = activeFile
-        ? `Arquivo atual: ${activeFile.name}\n\`\`\`\n${activeFile.content.slice(0, 3000)}\n\`\`\`\n\n`
+      // Monta prompt com contexto do arquivo ativo (sem limite de escaping)
+      const ctx = activeFile && activeFile.content
+        ? `Contexto — arquivo: ${activeFile.name}\n\`\`\`\n${activeFile.content.slice(0, 8000)}\n\`\`\`\n\n`
         : ''
       const prompt = `${ctx}${userMsg}`
-      const escaped = prompt.replace(/'/g, `'\\''`)
-      const r = await ipc.terminal.exec(chatVpsId, `cd /tmp && claude -p '${escaped}' --allowedTools '' < /dev/null 2>&1`, 60000)
-      const reply = r.success ? (r.output || '(sem resposta)') : `Erro: ${r.error}`
+
+      // Escreve prompt em arquivo temporário na VPS via SFTP para evitar
+      // problemas de escaping e limite de tamanho da linha de comando
+      const tmpFile = `/tmp/hexagon_chat_${Date.now()}.txt`
+      let reply = ''
+      const sftp = await ipc.sftp.open(chatVpsId)
+      if (sftp.success && sftp.sessionId) {
+        await ipc.sftp.writeFile(sftp.sessionId, tmpFile, prompt)
+        await ipc.sftp.close(sftp.sessionId)
+        const r = await ipc.terminal.exec(
+          chatVpsId,
+          `cd /tmp && claude -p "$(cat ${tmpFile})" --allowedTools '' < /dev/null 2>&1; rm -f ${tmpFile}`,
+          120000
+        )
+        reply = r.success ? (r.output?.trim() || '(sem resposta)') : `Erro: ${r.error}`
+      } else {
+        reply = 'Erro ao conectar SFTP para enviar prompt. Verifique a VPS selecionada.'
+      }
       setChatMessages(m => [...m, { role:'assistant', text:reply }])
     } finally {
+      if (chatTimerRef.current) { clearInterval(chatTimerRef.current); chatTimerRef.current = null }
       setChatLoading(false)
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior:'smooth' }), 100)
     }
@@ -1382,8 +1403,10 @@ export default function IDEPage() {
                   </div>
                 ))}
                 {chatLoading && (
-                  <div className="flex items-center gap-2 text-slate-600 text-xs">
-                    <Loader2 size={12} className="animate-spin"/> Claude está respondendo…
+                  <div className="flex items-center gap-2 text-slate-500 text-xs bg-slate-800/50 rounded-lg px-3 py-2">
+                    <Loader2 size={12} className="animate-spin text-purple-400"/>
+                    <span>Claude pensando… <span className="text-slate-600">{chatElapsed}s</span></span>
+                    <span className="text-slate-700 text-[10px]">(pode levar 15-30s)</span>
                   </div>
                 )}
                 <div ref={chatEndRef}/>
