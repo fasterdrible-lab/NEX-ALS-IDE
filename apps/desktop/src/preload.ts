@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 // electron/renderer would also work; 'electron' is fine in preload context
 
 const ALLOWED_CHANNELS = new Set([
-  'vps:list', 'vps:create', 'vps:update', 'vps:delete', 'vps:test', 'vps:setupRemoteProject',
+  'vps:list', 'vps:create', 'vps:update', 'vps:delete', 'vps:test', 'vps:clearFingerprint', 'vps:setupRemoteProject',
   'projects:list', 'projects:create', 'projects:update', 'projects:delete', 'projects:recent',
   'accounts:list', 'accounts:create', 'accounts:update', 'accounts:delete',
   'launcher:openProject', 'launcher:openTerminal', 'launcher:checkClaude',
@@ -20,6 +20,18 @@ const ALLOWED_CHANNELS = new Set([
   'config:export', 'config:import',
   'tunnel:open', 'tunnel:close', 'tunnel:list',
   'debug:openDevTools',
+  'history:list',
+  'monitor:getStats', 'monitor:diskUsage',
+  'docker:list', 'docker:start', 'docker:stop', 'docker:logs', 'docker:remove',
+  'pm2:list', 'pm2:restart', 'pm2:stop', 'pm2:logs', 'pm2:delete',
+  'ai:list', 'ai:save', 'ai:delete', 'ai:test', 'ai:chat', 'ai:chatAgent',
+  'ai:models', 'ai:chatCtx',
+  'ai:stream:start', 'ai:stream:cancel', 'ai:stream:chunk',
+  'ai:conv:list', 'ai:conv:get', 'ai:conv:create', 'ai:conv:updateTitle',
+  'ai:conv:pin', 'ai:conv:delete', 'ai:conv:messages', 'ai:conv:addMsg',
+  'window:openIde', 'window:openIncident', 'window:openDeploy',
+  'memory:list', 'memory:save', 'memory:delete', 'memory:build',
+  'tool:confirmRequest', 'tool:confirmResponse',
 ])
 
 contextBridge.exposeInMainWorld('electron', {

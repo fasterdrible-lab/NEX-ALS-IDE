@@ -61,7 +61,7 @@ export const LaunchHistorySchema = z.object({
   errorMsg: z.string().optional().nullable(),
 })
 
-export type VpsServer = z.infer<typeof VpsServerSchema> & { id: string; createdAt: Date; updatedAt: Date }
+export type VpsServer = z.infer<typeof VpsServerSchema> & { id: string; createdAt: Date; updatedAt: Date; sshHostFingerprint?: string | null }
 export type VpsServerInput = z.infer<typeof VpsServerSchema>
 
 export type Project = z.infer<typeof ProjectSchema> & {
@@ -147,4 +147,25 @@ export interface GitCommit {
   message: string
   author: string
   date: string
+}
+
+export interface AiProviderConfig {
+  provider: string
+  model: string
+  enabled: boolean
+  isDefault: boolean
+  hasKey: boolean
+  keyPreview: string
+}
+
+export interface AiChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface AiChatInput {
+  provider?: string
+  messages: AiChatMessage[]
+  systemPrompt?: string
+  maxTokens?: number
 }

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Client as SshClient, type ConnectConfig } from 'ssh2'
 import { getPrismaClient } from '@cwm/db'
 import { VpsServerSchema, type VpsServerInput, type TestConnectionResult, type ClaudeCheckResult, encryptPassword, decryptPassword } from '@cwm/config'
+import { buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
 
 export class VpsService {
   private get db() {
@@ -39,6 +40,11 @@ export class VpsService {
     return this.db.vpsServer.delete({ where: { id } })
   }
 
+  async clearFingerprint(id: string): Promise<void> {
+    await this.findById(id)
+    await this.db.vpsServer.update({ where: { id }, data: { sshHostFingerprint: null } })
+  }
+
   /** Abre uma conexão SSH, executa um comando e retorna stdout. Lança erro em falha de conexão. */
   private async _sshExec(vpsId: string, command: string, timeoutMs = 15000): Promise<string> {
     const vps = await this.findById(vpsId)
@@ -49,6 +55,8 @@ export class VpsService {
     try { privateKey = readFileSync(keyPath) } catch { /* sem chave explícita */ }
 
     const plainPassword = vps.sshPassword ? decryptPassword(vps.sshPassword) : undefined
+
+    const { hostVerifier, wasMismatch } = buildHostVerifier(vps.id, vps.sshHostFingerprint ?? null)
 
     return new Promise<string>((resolve, reject) => {
       const conn = new SshClient()
@@ -84,7 +92,8 @@ export class VpsService {
       conn.on('error', (err) => {
         const msg = err.message || ''
         fail(
-          msg.includes('ECONNREFUSED') ? 'Conexão recusada — verifique a porta SSH'
+          wasMismatch() ? FINGERPRINT_MISMATCH_MSG
+          : msg.includes('ECONNREFUSED') ? 'Conexão recusada — verifique a porta SSH'
           : msg.includes('ETIMEDOUT') ? 'Timeout de conexão'
           : msg.toLowerCase().includes('auth') ? 'Autenticação falhou — verifique usuário/chave/senha SSH'
           : msg.split('\n')[0]
@@ -96,7 +105,7 @@ export class VpsService {
         port: vps.port,
         username: vps.username,
         readyTimeout: timeoutMs,
-        hostVerifier: () => true,
+        hostVerifier,
       }
 
       if (privateKey) {

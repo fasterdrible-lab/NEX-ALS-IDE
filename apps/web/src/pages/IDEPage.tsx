@@ -11,7 +11,8 @@ import {
   AlertCircle, Save, X, Circle, TerminalSquare, HardDrive, ShieldAlert,
   GitBranch, Plus, Minus, Upload, Download, GitCommit as GitCommitIcon,
   Command, Search, PanelBottom, Copy, Files, Check, FolderOpen as FolderOpenIcon,
-  MessageSquare, Send, Bot, Columns2, PanelRightClose, Network, Globe,
+  MessageSquare, Send, Bot, Columns2, PanelRightClose, Network, Globe, Box, Cpu,
+  ExternalLink, Siren, Rocket as RocketDeployIcon,
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
 
@@ -131,8 +132,23 @@ export default function IDEPage() {
   const [termH,    startResizeTerm] = useResize(200, 100, 600, 'y')
   const [chatW,    startResizeChat] = useResize(320, 200, 600, 'x')
   const [showTerm,    setShowTerm]    = useState(false)
-  const [leftPanel,   setLeftPanel]   = useState<'files'|'search'|'git'|'ports'>('files')
-  const [bottomPanel, setBottomPanel] = useState<'terminal'|'problems'>('terminal')
+  const [leftPanel,   setLeftPanel]   = useState<'files'|'search'|'git'|'ports'|'docker'|'pm2'>('files')
+  const [pm2Processes, setPm2Processes] = useState<Array<{id:number;name:string;status:string;cpu:number;memory:number;restarts:number;uptime:number}>>([])
+  const [pm2Loading, setPm2Loading] = useState(false)
+  const [pm2Logs, setPm2Logs] = useState<{name:string;logs:string}|null>(null)
+  const [pm2ActionName, setPm2ActionName] = useState<string|null>(null)
+
+  const [dockerContainers, setDockerContainers] = useState<Array<{id:string;name:string;image:string;status:string;state:string;ports:string}>>([])
+  const [dockerLoading, setDockerLoading] = useState(false)
+  const [dockerLogs, setDockerLogs] = useState<{id:string;name:string;logs:string}|null>(null)
+  const [dockerActionId, setDockerActionId] = useState<string|null>(null)
+  const [bottomPanel, setBottomPanel] = useState<'terminal'|'problems'|'logs'>('terminal')
+  const [logsCmd,     setLogsCmd]     = useState('tail -n 200 /var/log/syslog')
+  const [logsOutput,  setLogsOutput]  = useState('')
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsWatch,   setLogsWatch]   = useState(false)
+  const logsWatchRef = useRef<ReturnType<typeof setInterval>|null>(null)
+  const logsEndRef   = useRef<HTMLDivElement>(null)
   const [problems,    setProblems]    = useState<Problem[]>([])
   const markerDisposableRef = useRef<{ dispose(): void } | null>(null)
 
@@ -163,6 +179,24 @@ export default function IDEPage() {
   const [tunnelRemote, setTunnelRemote] = useState('3000')
   const [tunnelHost,   setTunnelHost]   = useState('127.0.0.1')
   const [tunnelLoading, setTunnelLoading] = useState(false)
+
+  const refreshPm2 = useCallback(async () => {
+    if (!vpsId) return
+    setPm2Loading(true)
+    const r = await ipc.pm2.list(vpsId)
+    setPm2Loading(false)
+    if (r.success) setPm2Processes(r.processes)
+    else showToast(false, r.error ?? 'PM2 não encontrado na VPS')
+  }, [vpsId])
+
+  const refreshDocker = useCallback(async () => {
+    if (!vpsId) return
+    setDockerLoading(true)
+    const r = await ipc.docker.list(vpsId)
+    setDockerLoading(false)
+    if (r.success) setDockerContainers(r.containers)
+    else showToast(false, r.error ?? 'Docker não encontrado na VPS')
+  }, [vpsId])
 
   const refreshTunnels = useCallback(async () => {
     const r = await ipc.tunnel.list()
@@ -196,7 +230,27 @@ export default function IDEPage() {
   const chatTimerRef = useRef<ReturnType<typeof setInterval>|null>(null)
   const [chatSaveAs, setChatSaveAs] = useState<{code:string;lang:string}|null>(null)
   const [chatSaveAsName, setChatSaveAsName] = useState('')
+  const [applyAllModal, setApplyAllModal] = useState<{
+    items: Array<{code:string; lang:string; name:string; selected:boolean}>
+  }|null>(null)
+  const [applyAllLoading, setApplyAllLoading] = useState(false)
+  const [cmdOutputs, setCmdOutputs] = useState<Record<string, {running:boolean; output:string; ok:boolean}>>({})
+
+  const SHELL_LANGS = new Set(['bash','sh','shell','zsh','powershell','ps1','cmd','batch'])
   const [chatImage, setChatImage] = useState<{dataUrl:string; base64:string; mime:string; filePath:string}|null>(null)
+  const [aiProviderName, setAiProviderName] = useState<string|null>(null)
+  const [agentMode, setAgentMode] = useState(false)
+  type AgentStep = { id: string; tool: string; input: string; output?: string; status: 'running'|'done'|'error' }
+  const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
+  const [agentPaused, setAgentPaused] = useState(false)
+  const agentResumeRef = useRef<{ messages: Array<{role: string; content: unknown}>; systemCtx: string } | null>(null)
+  // ToolExecutor — confirmação de ações perigosas em PROD
+  type ToolConfirmState = { toolName: string; cmdSummary: string; resolve: (ok: boolean) => void }
+  const [toolConfirm, setToolConfirm] = useState<ToolConfirmState | null>(null)
+  const [toolConfirmInput, setToolConfirmInput] = useState('')
+  type FileSnapshot = { path: string; originalContent: string; savedAt: number }
+  const agentSnapshotsRef = useRef<Map<string, FileSnapshot>>(new Map())
+  const [agentSnapshots, setAgentSnapshots] = useState<FileSnapshot[]>([])
 
   // ── IDE-02: hierarchical file tree ─────────────────────────────────
 
@@ -609,6 +663,15 @@ export default function IDEPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLocal])
 
+  // Verifica se há provedor de IA configurado (API direta — mais rápido que claude -p)
+  useEffect(() => {
+    ipc.ai.list().then(list => {
+      const active = list.find(p => p.isDefault && p.enabled && p.hasKey)
+        ?? list.find(p => p.enabled && p.hasKey)
+      setAiProviderName(active?.provider ?? null)
+    }).catch(() => {})
+  }, [])
+
   // ── file operations ───────────────────────────────────────────────────
 
   const openFile = async (entry:FileEntry, revealLine?:number) => {
@@ -915,9 +978,312 @@ export default function IDEPage() {
     }
   }
 
-  // IDE-21: enviar mensagem ao Claude via arquivo temporário na VPS
+  // Logs Viewer — executa tail na VPS e opcionalmente repete em intervalo
+  const runLogs = useCallback(async (cmd?: string) => {
+    if (!vpsId || isLocal) return
+    const command = cmd ?? logsCmd
+    setLogsLoading(true)
+    const r = await ipc.terminal.exec(vpsId, command, 10000)
+    setLogsLoading(false)
+    setLogsOutput(r.success ? (r.output || '(sem output)') : `Erro: ${r.error}`)
+    setTimeout(() => logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+  }, [vpsId, isLocal, logsCmd])
+
+  useEffect(() => {
+    if (logsWatchRef.current) { clearInterval(logsWatchRef.current); logsWatchRef.current = null }
+    if (logsWatch && vpsId && !isLocal) {
+      logsWatchRef.current = setInterval(() => runLogs(), 3000)
+    }
+    return () => { if (logsWatchRef.current) clearInterval(logsWatchRef.current) }
+  }, [logsWatch, vpsId, isLocal, runLogs])
+
+  // Extrai sugestão de nome de arquivo do texto antes de um bloco de código
+  function extractFilenameHint(textBefore: string): string {
+    if (!textBefore) return ''
+    const lines = textBefore.split('\n').filter(l => l.trim()).slice(-5).join('\n')
+    const pats = [
+      // **`path/file.ts`** ou **`path/file.ts`:**
+      /\*\*`([^`\n]+\.[a-zA-Z]{1,10})`\*?\*?:?/,
+      // `path/file.ts`: ou `path/file.ts`
+      /`([^`\s\n]+\.[a-zA-Z]{1,10})`\s*:?/,
+      // **path/file.ts** ou **path/file.ts:**
+      /\*\*([^\*\s\n`]+\.[a-zA-Z]{1,10})\*\*:?/,
+      // ### path/file.ts ou #### `path/file.ts`
+      /#{1,6}\s+\*?\*?`?([^\s`\n*]+\.[a-zA-Z]{1,10})`?\*?\*?/,
+      // Arquivo: path/file.ts | File: path/file.ts | 📄 path/file.ts
+      /(?:arquivo|file|path|caminho|📄|📁)\s*:?\s*`?([^\s`\n]+\.[a-zA-Z]{1,10})`?/i,
+      // 1. path/file.ts ou - path/file.ts (listas numeradas/bullet com caminho)
+      /^[\s\-\*\d\.]+([a-zA-Z][^\s`\n"'*]+\.[a-zA-Z]{1,10})\s*$/m,
+    ]
+    for (const p of pats) {
+      const m = lines.match(p)
+      if (m?.[1]) {
+        const name = m[1].replace(/^[./]+/, '').trim()
+        if (name.includes('/') || name.includes('.')) return name
+      }
+    }
+    return ''
+  }
+
+  // Aplica todos os arquivos do modal de revisão de alterações
+  const handleApplyAll = async () => {
+    if (!applyAllModal) return
+    const root = isLocal ? localRootRef.current : (activeDir || (vpsId ? '/root' : null))
+    if (!root) { showToast(false, 'Abra uma pasta ou arquivo antes de aplicar alterações'); return }
+    setApplyAllLoading(true)
+    let ok = 0
+    let errors = 0
+    for (const item of applyAllModal.items.filter(i => i.selected && i.name.trim())) {
+      const rel = item.name.trim().replace(/\\/g, '/')
+      const fullPath = rel.startsWith('/') ? rel : `${root}/${rel}`
+      const r = await fsWriteFile(fullPath, item.code)
+      if (r.success) {
+        ok++
+        const name = fullPath.split('/').pop() || rel
+        openFile({ name, path: fullPath, isDirectory: false, size: 0, modifiedAt: Date.now(), permissions: '' })
+        reloadDir(fullPath.split('/').slice(0, -1).join('/') || root).catch(() => {})
+      } else {
+        errors++
+        console.error('[ApplyAll]', fullPath, r.error)
+      }
+    }
+    setApplyAllLoading(false)
+    setApplyAllModal(null)
+    if (ok > 0) showToast(true, `${ok} arquivo${ok > 1 ? 's' : ''} salvo${ok > 1 ? 's' : ''}${errors > 0 ? ` (${errors} erro${errors > 1 ? 's' : ''})` : ''}`)
+    else showToast(false, errors > 0 ? 'Falha ao salvar — verifique os caminhos' : 'Nenhum arquivo selecionado com nome válido')
+  }
+
+  // ── Ferramentas do agente ────────────────────────────────────────────────
+  type AgProp = { type: string; description?: string }
+  const AGENT_TOOLS: Array<{name: string; description: string; input_schema: {type: string; properties: Record<string, AgProp>; required: string[]}}> = [
+    { name: 'read_file',       description: 'Lê o conteúdo de um arquivo do projeto.',
+      input_schema: { type: 'object', properties: { path: { type: 'string', description: 'Caminho do arquivo' } }, required: ['path'] } },
+    { name: 'write_file',      description: 'Cria ou sobrescreve um arquivo. Leia antes de escrever para não perder código existente.',
+      input_schema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string', description: 'Conteúdo completo' } }, required: ['path', 'content'] } },
+    { name: 'list_directory',  description: 'Lista arquivos e pastas de um diretório.',
+      input_schema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
+    { name: 'execute_command', description: 'Executa um comando bash na VPS. Apenas modo remoto.',
+      input_schema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } },
+    { name: 'search_files',    description: 'Busca um padrão de texto em arquivos com grep.',
+      input_schema: { type: 'object', properties: { pattern: { type: 'string' }, directory: { type: 'string', description: 'Diretório (padrão: raiz)' } }, required: ['pattern'] } },
+  ]
+
+  const executeTool = useCallback(async (
+    toolName: string,
+    toolInput: Record<string, unknown>,
+    sftpSid: string | null,
+    root: string
+  ): Promise<string> => {
+    const resolvePath = (p: string) => (p.startsWith('/') ? p : `${root}/${p}`)
+    try {
+      switch (toolName) {
+        case 'read_file': {
+          const fp = resolvePath(toolInput.path as string)
+          if (isLocal) return await ipc.local.readFile(fp)
+          if (!sftpSid) return 'Erro: sem sessão SFTP'
+          const r = await ipc.sftp.readFile(sftpSid, fp)
+          return r.success ? r.content : `Erro: ${r.error}`
+        }
+        case 'write_file': {
+          const fp = resolvePath(toolInput.path as string)
+          const content = toolInput.content as string
+          // Snapshot: lê o conteúdo original antes da primeira escrita (não sobrescreve snapshots de iters anteriores)
+          if (!agentSnapshotsRef.current.has(fp)) {
+            try {
+              let originalContent: string | null = null
+              if (isLocal) {
+                originalContent = await ipc.local.readFile(fp).catch(() => null)
+              } else if (sftpSid) {
+                const sr = await ipc.sftp.readFile(sftpSid, fp)
+                if (sr.success) originalContent = sr.content
+              }
+              if (originalContent !== null) {
+                const snap: FileSnapshot = { path: fp, originalContent, savedAt: Date.now() }
+                agentSnapshotsRef.current.set(fp, snap)
+                setAgentSnapshots(Array.from(agentSnapshotsRef.current.values()))
+              }
+            } catch { /* arquivo novo — sem snapshot */ }
+          }
+          const r = isLocal
+            ? await ipc.local.writeFile(fp, content)
+            : (sftpSid ? await ipc.sftp.writeFile(sftpSid, fp, content) : { success: false, error: 'sem SFTP' })
+          if (r.success) {
+            const name = fp.split('/').pop() || fp
+            openFile({ name, path: fp, isDirectory: false, size: 0, modifiedAt: Date.now(), permissions: '' })
+            reloadDir(fp.split('/').slice(0, -1).join('/') || root).catch(() => {})
+          }
+          return r.success ? `✓ Arquivo salvo: ${fp}` : `Erro: ${'error' in r ? r.error : 'desconhecido'}`
+        }
+        case 'list_directory': {
+          const dp = resolvePath(toolInput.path as string)
+          if (isLocal) {
+            const entries = await ipc.local.readdir(dp).catch(() => [])
+            return entries.map((e: {isDirectory: boolean; name: string}) => `${e.isDirectory ? 'DIR' : 'FILE'} ${e.name}`).join('\n')
+          }
+          if (!sftpSid) return 'Erro: sem sessão SFTP'
+          const r = await ipc.sftp.readdir(sftpSid, dp)
+          return r.success ? r.entries.map(e => `${e.isDirectory ? 'DIR' : 'FILE'} ${e.name}`).join('\n') : `Erro: ${r.error}`
+        }
+        case 'execute_command': {
+          if (isLocal || !vpsId) return '⚠️ execute_command não disponível no modo local.'
+          const cmd = toolInput.command as string
+          // Confirma comandos perigosos em modo VPS (não-local)
+          const dangerous = /docker\s+(rm|stop|restart)|pm2\s+(delete|stop|restart)|git\s+reset\s+--hard|rm\s+-rf|DROP\s+TABLE|truncate/i.test(cmd)
+          if (dangerous) {
+            const confirmed = await new Promise<boolean>(resolve => {
+              setToolConfirm({ toolName: 'execute_command', cmdSummary: cmd.slice(0, 200), resolve })
+              setToolConfirmInput('')
+            })
+            if (!confirmed) return '⚠️ Comando cancelado pelo usuário.'
+          }
+          const r = await ipc.terminal.exec(vpsId, cmd, 60000)
+          return r.success ? (r.output || '(sem output)') : `Erro: ${r.error}`
+        }
+        case 'search_files': {
+          const pattern = (toolInput.pattern as string).replace(/"/g, '\\"')
+          const dir = resolvePath((toolInput.directory as string) || '.')
+          if (isLocal || !vpsId) return '⚠️ search_files requer modo VPS.'
+          const r = await ipc.terminal.exec(vpsId, `grep -r "${pattern}" "${dir}" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.py" -l 2>&1 | head -30`, 15000)
+          return r.success ? (r.output || '(sem resultados)') : `Erro: ${r.error}`
+        }
+        default: return `Ferramenta desconhecida: ${toolName}`
+      }
+    } catch (e) { return `Erro: ${e instanceof Error ? e.message : String(e)}` }
+  }, [isLocal, vpsId, openFile, reloadDir])
+
+  const runAgentLoop = useCallback(async (
+    userMsg: string,
+    systemCtx: string,
+    resumeMessages?: Array<{role: string; content: unknown}>
+  ) => {
+    if (!aiProviderName) throw new Error('Configure um provedor de IA nas Configurações.')
+    const root = isLocal ? (localRootRef.current ?? '') : (activeDir ?? (vpsId ? '/root' : ''))
+
+    // Abre sessão SFTP uma vez para todo o loop (modo VPS)
+    let sftpSid: string | null = null
+    if (!isLocal && vpsId) {
+      const sr = await ipc.sftp.open(vpsId)
+      if (sr.success) sftpSid = sr.sessionId
+    }
+
+    const apiMessages: Array<{role: string; content: unknown}> = resumeMessages ?? [
+      ...chatMessages.map(m => ({ role: m.role, content: m.text })),
+      { role: 'user', content: userMsg },
+    ]
+
+    // Nova sessão (não resume): limpa snapshots anteriores
+    if (!resumeMessages) {
+      agentSnapshotsRef.current.clear()
+      setAgentSnapshots([])
+    }
+
+    setAgentSteps([])
+    let iterations = 0
+    const MAX = 50
+
+    try {
+      while (iterations < MAX) {
+        iterations++
+        const result = await ipc.ai.chatAgent({
+          messages: apiMessages,
+          systemPrompt: `Responda em português brasileiro. Você é um agente de código com acesso real ao projeto. Use as ferramentas para ler arquivos antes de modificar. Raiz do projeto: ${root}\n\n${systemCtx}`,
+          tools: AGENT_TOOLS,
+          maxTokens: 4096,
+        })
+
+        if (result.type === 'text') {
+          setChatMessages(m => [...m, { role: 'assistant', text: result.content }])
+          setAgentPaused(false)
+          agentResumeRef.current = null
+          break
+        }
+
+        // Mostra texto parcial do assistente antes das tool calls
+        if (result.text) {
+          setChatMessages(m => [...m, { role: 'assistant', text: result.text! }])
+        }
+
+        // Adiciona assistantMessage ao histórico da API
+        apiMessages.push(result.assistantMessage as {role: string; content: unknown})
+
+        // Executa cada ferramenta
+        const toolResults: Array<{role: string; content: unknown}> = []
+        for (const call of result.calls) {
+          const stepId = `${Date.now()}-${call.name}`
+          setAgentSteps(s => [...s, { id: stepId, tool: call.name, input: JSON.stringify(call.input, null, 2), status: 'running' }])
+
+          const output = await executeTool(call.name, call.input, sftpSid, root)
+
+          setAgentSteps(s => s.map(st => st.id === stepId ? { ...st, output, status: 'done' } : st))
+
+          if (result.format === 'anthropic') {
+            toolResults.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: call.id, content: output }] })
+          } else {
+            toolResults.push({ role: 'tool', content: output, tool_call_id: call.id } as unknown as {role: string; content: unknown})
+          }
+        }
+
+        // Para Anthropic: um único bloco tool_result com todos
+        if (result.format === 'anthropic' && toolResults.length > 0) {
+          const allResults = toolResults.flatMap(tr => (tr.content as Array<unknown>))
+          apiMessages.push({ role: 'user', content: allResults })
+        } else {
+          apiMessages.push(...toolResults)
+        }
+      }
+      if (iterations >= MAX) {
+        agentResumeRef.current = { messages: [...apiMessages], systemCtx }
+        setAgentPaused(true)
+        setChatMessages(m => [...m, { role: 'assistant', text: `⚠️ Limite de ${MAX} iterações atingido. Clique em **Continuar** para retomar sem perder o histórico.` }])
+      }
+    } finally {
+      if (sftpSid) ipc.sftp.close(sftpSid).catch(() => {})
+    }
+  }, [aiProviderName, chatMessages, isLocal, vpsId, activeDir, executeTool, AGENT_TOOLS])
+
+  const handleAgentContinue = useCallback(async () => {
+    if (!agentResumeRef.current || chatLoading) return
+    const { messages, systemCtx } = agentResumeRef.current
+    agentResumeRef.current = null
+    setAgentPaused(false)
+    setChatLoading(true)
+    setChatElapsed(0)
+    chatTimerRef.current = setInterval(() => setChatElapsed(s => s + 1), 1000)
+    try {
+      await runAgentLoop('', systemCtx, messages)
+    } finally {
+      if (chatTimerRef.current) { clearInterval(chatTimerRef.current); chatTimerRef.current = null }
+      setChatLoading(false)
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+    }
+  }, [chatLoading, runAgentLoop])
+
+  const handleRollback = useCallback(async (path: string) => {
+    const snap = agentSnapshotsRef.current.get(path)
+    if (!snap) return
+    try {
+      if (isLocal) {
+        await ipc.local.writeFile(snap.path, snap.originalContent)
+      } else if (vpsId) {
+        const sr = await ipc.sftp.open(vpsId)
+        if (sr.success) {
+          await ipc.sftp.writeFile(sr.sessionId, snap.path, snap.originalContent)
+          await ipc.sftp.close(sr.sessionId)
+        }
+      }
+      agentSnapshotsRef.current.delete(path)
+      setAgentSnapshots(Array.from(agentSnapshotsRef.current.values()))
+      const name = path.split('/').pop() || path
+      openFile({ name, path, isDirectory: false, size: 0, modifiedAt: Date.now(), permissions: '' })
+    } catch (e) {
+      alert(`Erro ao restaurar: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [isLocal, vpsId, openFile])
+
+  // IDE-21: enviar mensagem ao Claude via API direta ou fallback SSH
   const handleChatSend = async () => {
-    if (!chatVpsId || (!chatInput.trim() && !chatImage) || chatLoading) return
+    if ((!chatVpsId && !aiProviderName) || (!chatInput.trim() && !chatImage) || chatLoading) return
+    const historySnapshot = [...chatMessages]
     const userMsg = chatInput.trim()
     const pendingImage = chatImage
     setChatInput('')
@@ -962,28 +1328,58 @@ export default function IDEPage() {
         }
         const tree = await buildTree(root, '', 1)
 
-        // Arquivos-chave de documentação
-        const KEY_FILES = [
-          'CLAUDE.md','README.md','AGENTE.md',
-          'docs/TASKS.md','docs/CURRENT_STATE.md','docs/ARCHITECTURE.md',
-          'TASKS.md','CHANGELOG.md',
-        ]
-        const included: string[] = []
+        // Documentação
+        const KEY_FILES = ['CLAUDE.md','README.md','AGENTE.md','docs/TASKS.md','docs/CURRENT_STATE.md','docs/ARCHITECTURE.md','TASKS.md','CHANGELOG.md']
+        const docFiles: string[] = []
         for (const rel of KEY_FILES) {
           const fullPath = root + '/' + rel
-          if (activeFile && (activeFile.path === fullPath || activeFile.name === rel)) continue
+          if (activeFile && activeFile.path === fullPath) continue
           try {
             const content = await ipc.local.readFile(fullPath)
-            if (content) included.push(`### ${rel}\n${content.slice(0, 2500)}`)
+            if (content) docFiles.push(`### ${rel}\n${content.slice(0, 2000)}`)
           } catch { /* não existe */ }
         }
 
+        // Código-fonte — lê arquivos de texto até 80KB total
+        const CODE_EXTS = new Set(['ts','tsx','js','jsx','mjs','cjs','py','rb','go','java','cs','cpp','c','h','rs','html','css','scss','json','yaml','yml','toml','sql','graphql','sh','vue','svelte','env','example'])
+        const SKIP_NAMES = new Set(['package-lock.json','yarn.lock','pnpm-lock.yaml','bun.lockb'])
+        const totalRef = { bytes: 0 }
+        const sourceFiles: string[] = []
+
+        const collectFiles = async (dir: string, depth: number): Promise<void> => {
+          if (depth > 4 || totalRef.bytes > 80000) return
+          try {
+            const entries = await ipc.local.readdir(dir)
+            // pastas primeiro, depois arquivos — para pegar estrutura src/ antes de raiz
+            const dirs = entries.filter(e => e.isDirectory && !IGNORE.has(e.name) && !e.name.startsWith('.'))
+            const files = entries.filter(e => !e.isDirectory && !e.name.startsWith('.') && !SKIP_NAMES.has(e.name))
+            for (const e of files) {
+              if (totalRef.bytes > 80000) break
+              const ext = e.name.split('.').pop()?.toLowerCase() || ''
+              if (!CODE_EXTS.has(ext)) continue
+              if (activeFile && activeFile.path === e.path) continue
+              try {
+                const raw = await ipc.local.readFile(e.path)
+                if (!raw) continue
+                const rel = e.path.replace(root, '').replace(/^[/\\]/, '')
+                const snippet = raw.length > 6000 ? raw.slice(0, 6000) + '\n// ... [truncado]' : raw
+                sourceFiles.push(`### ${rel}\n\`\`\`${ext}\n${snippet}\n\`\`\``)
+                totalRef.bytes += snippet.length
+              } catch { /* skip */ }
+            }
+            for (const e of dirs) {
+              await collectFiles(e.path, depth + 1)
+            }
+          } catch { /* skip */ }
+        }
+        await collectFiles(root, 1)
+
         const projectName = root.split(/[\\/]/).pop() || root
         ctx = [
-          '⚠️ INSTRUÇÃO: Você está em modo offline. Use APENAS o conteúdo fornecido abaixo — não tente ler arquivos do disco.',
-          `# Projeto: ${projectName}`,
-          tree ? `## Estrutura de pastas\n\`\`\`\n${tree}\n\`\`\`` : '',
-          included.length > 0 ? `## Arquivos de documentação\n\n${included.join('\n\n---\n\n')}` : '',
+          `Responda sempre em português brasileiro. Você é um assistente de código para o projeto "${projectName}". Use APENAS o conteúdo abaixo — não tente acessar o disco.`,
+          tree ? `## Estrutura\n\`\`\`\n${tree}\n\`\`\`` : '',
+          docFiles.length > 0 ? `## Documentação\n\n${docFiles.join('\n\n---\n\n')}` : '',
+          sourceFiles.length > 0 ? `## Código-fonte (${sourceFiles.length} arquivo${sourceFiles.length > 1 ? 's' : ''})\n\n${sourceFiles.join('\n\n---\n\n')}` : '',
           '---',
           ctx,
         ].filter(Boolean).join('\n\n')
@@ -997,23 +1393,40 @@ export default function IDEPage() {
       }
 
       const prompt = `${ctx}${userMsg}${imageNote}`
-
-      // Escreve prompt via SFTP e executa claude -p
-      const ts = Date.now()
-      const tmpPrompt = `/tmp/hexagon_chat_${ts}.txt`
       let reply = ''
-      const sftp = await ipc.sftp.open(chatVpsId)
-      if (sftp.success && sftp.sessionId) {
-        await ipc.sftp.writeFile(sftp.sessionId, tmpPrompt, prompt)
-        await ipc.sftp.close(sftp.sessionId)
-        const r = await ipc.terminal.exec(
-          chatVpsId,
-          `cd /tmp && claude -p "$(cat ${tmpPrompt})" --allowedTools '' < /dev/null 2>&1; rm -f ${tmpPrompt}`,
-          120000
-        )
-        reply = r.success ? (r.output?.trim() || '(sem resposta)') : `Erro: ${r.error}`
+
+      if (aiProviderName && agentMode) {
+        // Caminho A1 — Modo Agente: Claude usa ferramentas para ler/escrever arquivos
+        await runAgentLoop(`${userMsg}${imageNote}`, ctx)
+        return  // runAgentLoop gerencia as mensagens diretamente
+      } else if (aiProviderName) {
+        // Caminho A2 — API direta (2-5s, histórico completo, sem VPS)
+        const history = historySnapshot.map(m => ({ role: m.role as 'user'|'assistant', content: m.text }))
+        reply = await ipc.ai.chat({
+          messages: [...history, { role: 'user', content: `${userMsg}${imageNote}` }],
+          systemPrompt: `Responda sempre em português brasileiro. Quando sugerir alterações em arquivos, SEMPRE prefixe cada bloco de código com o caminho exato do arquivo no formato: **\`caminho/do/arquivo.ext\`** (em negrito com backticks). Exemplo: **\`src/utils/helper.ts\`**\n\n${ctx || ''}`.trim(),
+          maxTokens: 4096,
+        })
+        if (!reply) reply = '(sem resposta)'
+      } else if (chatVpsId) {
+        // Caminho B — fallback claude -p via SSH (15-30s)
+        const ts = Date.now()
+        const tmpPrompt = `/tmp/hexagon_chat_${ts}.txt`
+        const sftp = await ipc.sftp.open(chatVpsId)
+        if (sftp.success && sftp.sessionId) {
+          await ipc.sftp.writeFile(sftp.sessionId, tmpPrompt, prompt)
+          await ipc.sftp.close(sftp.sessionId)
+          const r = await ipc.terminal.exec(
+            chatVpsId,
+            `cd /tmp && claude -p "$(cat ${tmpPrompt})" --allowedTools '' < /dev/null 2>&1; rm -f ${tmpPrompt}`,
+            120000
+          )
+          reply = r.success ? (r.output?.trim() || '(sem resposta)') : `Erro: ${r.error}`
+        } else {
+          reply = 'Erro ao conectar SFTP. Verifique a VPS selecionada.'
+        }
       } else {
-        reply = 'Erro ao conectar SFTP. Verifique a VPS selecionada.'
+        reply = 'Configure um provedor de IA em Configurações → Provedores de IA.'
       }
       setChatMessages(m => [...m, { role:'assistant', text:reply }])
     } finally {
@@ -1032,6 +1445,31 @@ export default function IDEPage() {
         <button onClick={()=>navigate(-1)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-100 shrink-0">
           <ArrowLeft size={12}/> Sair
         </button>
+        {!isLocal && vpsId && (
+          <>
+            <button
+              onClick={() => ipc.window.openIde(vpsId, displayName)}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200 shrink-0"
+              title="Abrir esta VPS em nova janela independente"
+            >
+              <ExternalLink size={11}/>
+            </button>
+            <button
+              onClick={() => ipc.window.openIncident(vpsId, displayName)}
+              className="flex items-center gap-1 text-xs text-red-700 hover:text-red-400 shrink-0"
+              title="Abrir Incident Mode"
+            >
+              <Siren size={11}/>
+            </button>
+            <button
+              onClick={() => ipc.window.openDeploy(vpsId, displayName)}
+              className="flex items-center gap-1 text-xs text-emerald-700 hover:text-emerald-400 shrink-0"
+              title="Deploy Assistant"
+            >
+              <RocketDeployIcon size={11}/>
+            </button>
+          </>
+        )}
         <div className="w-px h-3.5 bg-slate-700"/>
         <HardDrive size={12} className="text-brand-400 shrink-0"/>
         <span className="text-xs text-slate-300 font-medium shrink-0">{displayName}</span>
@@ -1094,9 +1532,9 @@ export default function IDEPage() {
             {splitMode ? <PanelRightClose size={14}/> : <Columns2 size={14}/>}
           </button>
           {/* IDE-21: botão chat Claude — disponível em ambos os modos */}
-          <button onClick={()=>setShowChat(v=>!v)} title="Chat com Claude (executa claude -p na VPS)"
+          <button onClick={()=>setShowChat(v=>!v)} title={aiProviderName ? `Chat IA — ${aiProviderName}` : 'Chat Claude via SSH (claude -p)'}
             className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${showChat?'bg-purple-600/40 text-purple-200 border border-purple-500/40':'text-purple-400 hover:text-purple-200 hover:bg-purple-900/40 border border-transparent'}`}>
-            <Bot size={13}/> Claude
+            <Bot size={13}/> IA
           </button>
         </div>
       </div>
@@ -1116,14 +1554,16 @@ export default function IDEPage() {
               { id:'search', icon:<Search size={11}/>, label:'Busca' },
               ...(!isLocal ? [{ id:'git', icon:<GitBranch size={11}/>, label:'Git', badge: totalGitChanges }] : []),
               ...(!isLocal ? [{ id:'ports', icon:<Network size={11}/>, label:'Portas', badge: tunnels.length }] : []),
+              ...(!isLocal ? [{ id:'docker', icon:<Box size={11}/>, label:'Docker', badge: dockerContainers.filter(c=>c.state==='running').length || undefined }] : []),
+              ...(!isLocal ? [{ id:'pm2', icon:<Cpu size={11}/>, label:'PM2', badge: pm2Processes.filter(p=>p.status==='online').length || undefined }] : []),
             ] as const).map(p => (
               <button key={p.id}
-                onClick={()=>{ setLeftPanel(p.id as 'files'|'search'|'git'|'ports'); if(p.id==='git'&&!gitStatus&&!gitLoading) loadGitStatus(); if(p.id==='ports') refreshTunnels() }}
+                onClick={()=>{ setLeftPanel(p.id as 'files'|'search'|'git'|'ports'|'docker'|'pm2'); if(p.id==='git'&&!gitStatus&&!gitLoading) loadGitStatus(); if(p.id==='ports') refreshTunnels(); if(p.id==='docker') refreshDocker(); if(p.id==='pm2') refreshPm2() }}
                 className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium transition-colors relative ${leftPanel===p.id?'text-slate-200 border-b-2 border-brand-500':'text-slate-500 hover:text-slate-300'}`}>
                 {p.icon} {p.label}
-                {'badge' in p && p.badge > 0 && (
+                {'badge' in p && (p.badge ?? 0) > 0 && (
                   <span className="absolute top-1 right-1 text-[9px] bg-brand-600 text-white rounded-full px-1 min-w-[14px] text-center leading-[14px]">
-                    {p.badge > 99 ? '99+' : p.badge}
+                    {(p.badge ?? 0) > 99 ? '99+' : p.badge}
                   </span>
                 )}
               </button>
@@ -1259,6 +1699,202 @@ export default function IDEPage() {
                     {searchResults.length} resultado{searchResults.length>1?'s':''} em {Object.keys(searchByFile).length} arquivo{Object.keys(searchByFile).length>1?'s':''}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* PM2 Process Manager */}
+          {leftPanel==='pm2' && (
+            <div className="flex flex-col flex-1 overflow-hidden relative">
+              {pm2Logs && (
+                <div className="absolute inset-0 z-10 flex flex-col bg-slate-950 border border-slate-700 rounded-lg m-1 overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 shrink-0">
+                    <Cpu size={11} className="text-emerald-400"/>
+                    <span className="text-xs text-slate-300 flex-1 font-mono truncate">{pm2Logs.name}</span>
+                    <button onClick={()=>setPm2Logs(null)} className="text-slate-500 hover:text-slate-300"><X size={11}/></button>
+                  </div>
+                  <pre className="flex-1 overflow-y-auto p-3 text-[10px] font-mono text-slate-300 whitespace-pre-wrap">{pm2Logs.logs || '(sem logs)'}</pre>
+                </div>
+              )}
+              <div className="px-3 py-2 border-b border-slate-800 shrink-0 flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"><Cpu size={11} className="text-emerald-400"/> PM2</p>
+                <button onClick={refreshPm2} disabled={pm2Loading}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 disabled:opacity-40">
+                  <RefreshCw size={10} className={pm2Loading?'animate-spin':''}/> Atualizar
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {pm2Loading && pm2Processes.length === 0 && (
+                  <p className="text-xs text-slate-600 px-3 py-4 text-center">Carregando...</p>
+                )}
+                {!pm2Loading && pm2Processes.length === 0 && (
+                  <p className="text-xs text-slate-600 px-3 py-4 text-center">Nenhum processo encontrado.<br/>PM2 instalado na VPS?</p>
+                )}
+                {pm2Processes.map(p => {
+                  const online = p.status === 'online'
+                  const errored = p.status === 'errored'
+                  const busy = pm2ActionName === p.name
+                  const memMb = (p.memory / 1024 / 1024).toFixed(1)
+                  const statusColor = online ? 'text-emerald-400' : errored ? 'text-red-400' : 'text-slate-500'
+                  return (
+                    <div key={p.id} className="px-3 py-2.5 border-b border-slate-800/50">
+                      <div className="flex items-start gap-2">
+                        <span className={`mt-1 shrink-0 text-[8px] ${statusColor}`}>●</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-slate-200 font-medium truncate">{p.name}</p>
+                          <div className="flex gap-2 text-[10px] text-slate-500">
+                            <span className={statusColor}>{p.status}</span>
+                            <span>CPU {p.cpu.toFixed(1)}%</span>
+                            <span>{memMb} MB</span>
+                            <span>↺ {p.restarts}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 mt-1.5 ml-4">
+                        <button disabled={busy} onClick={async()=>{
+                          setPm2ActionName(p.name)
+                          const r = await ipc.pm2.restart(vpsId!, p.name)
+                          setPm2ActionName(null)
+                          if (r.success) { showToast(true, `${p.name} reiniciado`); refreshPm2() }
+                          else showToast(false, r.error ?? 'Erro ao reiniciar')
+                        }} className="text-[10px] px-2 py-0.5 rounded bg-brand-700/40 hover:bg-brand-600/60 text-brand-300 disabled:opacity-40">
+                          {busy ? '...' : 'Restart'}
+                        </button>
+                        {online ? (
+                          <button disabled={busy} onClick={async()=>{
+                            setPm2ActionName(p.name)
+                            const r = await ipc.pm2.stop(vpsId!, p.name)
+                            setPm2ActionName(null)
+                            if (r.success) { showToast(true, `${p.name} parado`); refreshPm2() }
+                            else showToast(false, r.error ?? 'Erro ao parar')
+                          }} className="text-[10px] px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 disabled:opacity-40">
+                            Stop
+                          </button>
+                        ) : (
+                          <button disabled={busy} onClick={async()=>{
+                            setPm2ActionName(p.name)
+                            const r = await ipc.pm2.restart(vpsId!, p.name)
+                            setPm2ActionName(null)
+                            if (r.success) { showToast(true, `${p.name} iniciado`); refreshPm2() }
+                            else showToast(false, r.error ?? 'Erro ao iniciar')
+                          }} className="text-[10px] px-2 py-0.5 rounded bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 disabled:opacity-40">
+                            Start
+                          </button>
+                        )}
+                        <button onClick={async()=>{
+                          const r = await ipc.pm2.logs(vpsId!, p.name)
+                          if (r.success) setPm2Logs({ name: p.name, logs: r.logs })
+                          else showToast(false, r.error ?? 'Erro ao buscar logs')
+                        }} className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300">
+                          Logs
+                        </button>
+                        {!online && (
+                          <button disabled={busy} onClick={async()=>{
+                            if (!confirm(`Excluir processo ${p.name} do PM2?`)) return
+                            setPm2ActionName(p.name)
+                            const r = await ipc.pm2.delete(vpsId!, p.name)
+                            setPm2ActionName(null)
+                            if (r.success) { showToast(true, `${p.name} excluído`); refreshPm2() }
+                            else showToast(false, r.error ?? 'Erro ao excluir')
+                          }} className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-red-900/50 text-slate-500 hover:text-red-400 disabled:opacity-40">
+                            Excluir
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Docker Explorer */}
+          {leftPanel==='docker' && (
+            <div className="flex flex-col flex-1 overflow-hidden relative">
+              {/* logs overlay */}
+              {dockerLogs && (
+                <div className="absolute inset-0 z-10 flex flex-col bg-slate-950 border border-slate-700 rounded-lg m-1 overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 shrink-0">
+                    <Box size={11} className="text-blue-400"/>
+                    <span className="text-xs text-slate-300 flex-1 font-mono truncate">{dockerLogs.name}</span>
+                    <button onClick={()=>setDockerLogs(null)} className="text-slate-500 hover:text-slate-300"><X size={11}/></button>
+                  </div>
+                  <pre className="flex-1 overflow-y-auto p-3 text-[10px] font-mono text-slate-300 whitespace-pre-wrap">{dockerLogs.logs || '(sem logs)'}</pre>
+                </div>
+              )}
+              <div className="px-3 py-2 border-b border-slate-800 shrink-0 flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5"><Box size={11} className="text-blue-400"/> Docker</p>
+                <button onClick={refreshDocker} disabled={dockerLoading}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 disabled:opacity-40">
+                  <RefreshCw size={10} className={dockerLoading?'animate-spin':''}/> Atualizar
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {dockerLoading && dockerContainers.length === 0 && (
+                  <p className="text-xs text-slate-600 px-3 py-4 text-center">Carregando...</p>
+                )}
+                {!dockerLoading && dockerContainers.length === 0 && (
+                  <p className="text-xs text-slate-600 px-3 py-4 text-center">Nenhum container encontrado.<br/>Docker instalado na VPS?</p>
+                )}
+                {dockerContainers.map(c => {
+                  const running = c.state === 'running'
+                  const busy = dockerActionId === c.id
+                  return (
+                    <div key={c.id} className="px-3 py-2.5 border-b border-slate-800/50">
+                      <div className="flex items-start gap-2">
+                        <span className={`mt-1 shrink-0 text-[8px] ${running ? 'text-emerald-400' : 'text-slate-600'}`}>●</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-slate-200 font-medium truncate">{c.name}</p>
+                          <p className="text-[10px] text-slate-500 truncate font-mono">{c.image}</p>
+                          <p className="text-[10px] text-slate-600 truncate">{c.status}</p>
+                          {c.ports && <p className="text-[10px] text-brand-400/70 truncate font-mono">{c.ports}</p>}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 mt-1.5 ml-4">
+                        {running ? (
+                          <button disabled={busy} onClick={async()=>{
+                            setDockerActionId(c.id)
+                            const r = await ipc.docker.stop(vpsId!, c.id)
+                            setDockerActionId(null)
+                            if (r.success) { showToast(true, `${c.name} parado`); refreshDocker() }
+                            else showToast(false, r.error ?? 'Erro ao parar')
+                          }} className="text-[10px] px-2 py-0.5 rounded bg-red-900/40 hover:bg-red-800/60 text-red-300 disabled:opacity-40">
+                            {busy ? '...' : 'Stop'}
+                          </button>
+                        ) : (
+                          <button disabled={busy} onClick={async()=>{
+                            setDockerActionId(c.id)
+                            const r = await ipc.docker.start(vpsId!, c.id)
+                            setDockerActionId(null)
+                            if (r.success) { showToast(true, `${c.name} iniciado`); refreshDocker() }
+                            else showToast(false, r.error ?? 'Erro ao iniciar')
+                          }} className="text-[10px] px-2 py-0.5 rounded bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 disabled:opacity-40">
+                            {busy ? '...' : 'Start'}
+                          </button>
+                        )}
+                        <button onClick={async()=>{
+                          const r = await ipc.docker.logs(vpsId!, c.id)
+                          if (r.success) setDockerLogs({ id: c.id, name: c.name, logs: r.logs })
+                          else showToast(false, r.error ?? 'Erro ao buscar logs')
+                        }} className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300">
+                          Logs
+                        </button>
+                        {!running && (
+                          <button disabled={busy} onClick={async()=>{
+                            if (!confirm(`Remover container ${c.name}?`)) return
+                            setDockerActionId(c.id)
+                            const r = await ipc.docker.remove(vpsId!, c.id)
+                            setDockerActionId(null)
+                            if (r.success) { showToast(true, `${c.name} removido`); refreshDocker() }
+                            else showToast(false, r.error ?? 'Erro ao remover')
+                          }} className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-red-900/50 text-slate-500 hover:text-red-400 disabled:opacity-40">
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -1544,6 +2180,13 @@ export default function IDEPage() {
                     </span>
                   )}
                 </button>
+                {!isLocal && (
+                  <button onClick={()=>{ setBottomPanel('logs'); if(!logsOutput) runLogs() }}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium shrink-0 border-b-2 transition-colors ${bottomPanel==='logs'?'text-slate-200 border-brand-500':'text-slate-500 border-transparent hover:text-slate-300'}`}>
+                    <FileText size={10}/> Logs
+                    {logsWatch && <span className="text-[8px] text-emerald-400 animate-pulse">●</span>}
+                  </button>
+                )}
                 {/* terminal tabs — só no modo terminal */}
                 {bottomPanel==='terminal' && (
                   <>
@@ -1615,6 +2258,51 @@ export default function IDEPage() {
                   )}
                 </div>
               )}
+
+              {/* painel de logs */}
+              {bottomPanel==='logs' && (
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  {/* toolbar */}
+                  <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-slate-800 shrink-0 flex-wrap gap-y-1">
+                    <input
+                      value={logsCmd} onChange={e=>setLogsCmd(e.target.value)}
+                      onKeyDown={e=>{ if(e.key==='Enter') runLogs() }}
+                      className="flex-1 min-w-0 text-[10px] font-mono bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-slate-300 focus:outline-none focus:border-brand-500"
+                      placeholder="tail -n 200 /var/log/syslog"
+                    />
+                    <button onClick={()=>runLogs()} disabled={logsLoading}
+                      className="text-[10px] px-2 py-0.5 rounded bg-brand-600/30 hover:bg-brand-600/50 text-brand-300 disabled:opacity-40 flex items-center gap-1 shrink-0">
+                      {logsLoading ? <><RefreshCw size={9} className="animate-spin"/> ...</> : '▶ Executar'}
+                    </button>
+                    <button onClick={()=>{ setLogsWatch(v=>!v); if(!logsWatch) runLogs() }}
+                      className={`text-[10px] px-2 py-0.5 rounded shrink-0 flex items-center gap-1 transition-colors ${logsWatch?'bg-emerald-700/40 text-emerald-300':'bg-slate-700 hover:bg-slate-600 text-slate-400'}`}>
+                      {logsWatch ? '⏹ Watch ON' : '▶ Watch'}
+                    </button>
+                    <button onClick={()=>setLogsOutput('')}
+                      className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-500 shrink-0">Limpar</button>
+                  </div>
+                  {/* quick presets */}
+                  <div className="flex gap-1 px-2 py-1 border-b border-slate-800/50 shrink-0 overflow-x-auto">
+                    {[
+                      ['syslog', 'tail -n 200 /var/log/syslog'],
+                      ['nginx err', 'tail -n 200 /var/log/nginx/error.log'],
+                      ['nginx acc', 'tail -n 200 /var/log/nginx/access.log'],
+                      ['PM2 all', 'pm2 logs --lines 100 --nostream --no-color 2>&1'],
+                      ['journald', 'journalctl -n 150 --no-pager 2>&1'],
+                    ].map(([label, cmd]) => (
+                      <button key={label} onClick={()=>{ setLogsCmd(cmd); runLogs(cmd) }}
+                        className="text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 shrink-0 whitespace-nowrap">
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* output */}
+                  <pre className="flex-1 overflow-y-auto p-2 text-[10px] font-mono text-slate-300 whitespace-pre-wrap leading-relaxed">
+                    {logsOutput || <span className="text-slate-700">Execute um comando para ver os logs</span>}
+                    <div ref={logsEndRef}/>
+                  </pre>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1629,8 +2317,19 @@ export default function IDEPage() {
               <div className="flex flex-col border-b border-slate-800 shrink-0">
                 <div className="flex items-center gap-2 px-3 py-2">
                   <Bot size={13} className="text-purple-400"/>
-                  <span className="text-xs font-semibold text-slate-300 flex-1">Claude</span>
-                  <span className="text-[10px] text-slate-600">claude -p</span>
+                  <span className="text-xs font-semibold text-slate-300 flex-1">Chat IA</span>
+                  <span className="text-[10px] text-slate-600">
+                    {aiProviderName
+                      ? ({anthropic:'Anthropic',deepseek:'DeepSeek',openai:'OpenAI',gemini:'Gemini',groq:'Groq',mistral:'Mistral',xai:'xAI Grok'} as Record<string,string>)[aiProviderName] ?? aiProviderName
+                      : 'claude -p (SSH)'}
+                  </span>
+                  {aiProviderName && aiProviderName !== 'gemini' && (
+                    <button onClick={()=>setAgentMode(v=>!v)}
+                      title={agentMode ? 'Modo Agente ON — Claude lê/escreve arquivos diretamente' : 'Ativar Modo Agente'}
+                      className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${agentMode ? 'bg-emerald-700/40 text-emerald-300 border border-emerald-600/40' : 'text-slate-600 hover:text-slate-400'}`}>
+                      🤖 {agentMode ? 'Agente' : 'Agente'}
+                    </button>
+                  )}
                   <button onClick={()=>setChatMessages([])} className="text-slate-700 hover:text-slate-400 text-[10px]" title="Limpar histórico">✕</button>
                 </div>
                 {/* seletor de VPS — sempre visível para escolher onde o Claude roda */}
@@ -1651,10 +2350,65 @@ export default function IDEPage() {
               </div>
               {/* messages */}
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                {chatMessages.length === 0 && (
+                {/* Snapshots — rollback de arquivos modificados pelo agente */}
+                {agentSnapshots.length > 0 && (
+                  <div className="rounded-lg border border-orange-800/40 bg-orange-950/20 overflow-hidden mb-2">
+                    <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-orange-800/30">
+                      <span className="text-[10px] text-orange-400 font-medium">📦 Snapshots — {agentSnapshots.length} arquivo{agentSnapshots.length > 1 ? 's' : ''} modificado{agentSnapshots.length > 1 ? 's' : ''}</span>
+                      <button
+                        onClick={() => { agentSnapshotsRef.current.clear(); setAgentSnapshots([]) }}
+                        className="text-[9px] text-slate-600 hover:text-slate-400"
+                        title="Descartar todos os snapshots"
+                      >✕ descartar</button>
+                    </div>
+                    <div className="divide-y divide-orange-900/30">
+                      {agentSnapshots.map(snap => (
+                        <div key={snap.path} className="flex items-center justify-between px-2.5 py-1.5 gap-2">
+                          <span
+                            className="text-[10px] text-slate-300 font-mono truncate flex-1 cursor-pointer hover:text-orange-300"
+                            title={snap.path}
+                            onClick={() => openFile({ name: snap.path.split('/').pop() || snap.path, path: snap.path, isDirectory: false, size: 0, modifiedAt: snap.savedAt, permissions: '' })}
+                          >
+                            {snap.path.split('/').slice(-2).join('/')}
+                          </span>
+                          <button
+                            onClick={() => handleRollback(snap.path)}
+                            className="text-[10px] bg-orange-800/40 hover:bg-orange-700/60 text-orange-300 border border-orange-700/40 rounded px-2 py-0.5 shrink-0 transition-colors"
+                            title={`Restaurar versão anterior de ${snap.path}`}
+                          >
+                            ↩ Restaurar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Agent tool call steps */}
+                {agentSteps.length > 0 && (
+                  <div className="space-y-1 mb-2">
+                    {agentSteps.map(step => (
+                      <div key={step.id} className={`rounded-lg border text-[10px] font-mono overflow-hidden ${step.status==='running'?'border-yellow-700/40 bg-yellow-900/10':step.status==='error'?'border-red-700/40 bg-red-900/10':'border-slate-700 bg-slate-800/50'}`}>
+                        <div className="flex items-center gap-1.5 px-2 py-1">
+                          <span className={step.status==='running'?'animate-pulse text-yellow-400':step.status==='error'?'text-red-400':'text-emerald-400'}>{step.status==='running'?'⟳':step.status==='error'?'✗':'✓'}</span>
+                          <span className="text-slate-300">{step.tool}</span>
+                          <span className="text-slate-600 truncate flex-1">{Object.values(JSON.parse(step.input))[0] as string}</span>
+                        </div>
+                        {step.output && (
+                          <pre className="px-2 pb-1.5 text-slate-500 whitespace-pre-wrap max-h-24 overflow-y-auto text-[9px]">{step.output.slice(0, 500)}{step.output.length > 500 ? '…' : ''}</pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {chatMessages.length === 0 && agentSteps.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-700 text-xs text-center px-4">
                     <Bot size={24}/>
-                    <p>Pergunte ao Claude sobre o arquivo aberto. O contexto do arquivo é enviado automaticamente.</p>
+                    <p>{agentMode
+                      ? '🤖 Modo Agente ativo. A IA lê, escreve e executa arquivos diretamente.'
+                      : aiProviderName
+                        ? 'Chat via API direta. O contexto do arquivo é enviado automaticamente.'
+                        : 'Chat via claude -p (SSH). Configure um provedor em Configurações para respostas mais rápidas.'
+                    }</p>
                   </div>
                 )}
                 {chatMessages.map((m, i) => (
@@ -1676,11 +2430,40 @@ export default function IDEPage() {
                     ) : (
                       <div className="flex flex-col gap-2 max-w-full w-full">
                         {/* Renderiza blocos de código com botões, texto normal como parágrafo */}
+                        {(() => {
+                          const msgParts = m.text.split(/(```[\s\S]*?```)/g)
+                          const codeCount = msgParts.filter(p => /^```[\s\S]*?```$/.test(p)).length
+                          if (codeCount >= 2) {
+                            const items = msgParts
+                              .map((p, idx) => ({ p, idx }))
+                              .filter(({ p }) => /^```[\s\S]*?```$/.test(p))
+                              .map(({ p, idx }) => {
+                                const cm = p.match(/^```(\w*)\n?([\s\S]*?)```$/)
+                                const lang = cm?.[1] || ''
+                                const code = cm?.[2] ?? p
+                                const hint = extractFilenameHint(msgParts[idx - 1] || '')
+                                return { code, lang, name: hint, selected: true }
+                              })
+                            return (
+                              <button key="apply-all"
+                                onClick={() => setApplyAllModal({ items })}
+                                className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg bg-purple-700/20 border border-purple-600/40 text-purple-300 text-xs font-medium hover:bg-purple-700/30 transition-colors">
+                                <FilePlus size={13}/>
+                                Revisar e aplicar {codeCount} alterações…
+                              </button>
+                            )
+                          }
+                          return null
+                        })()}
                         {m.text.split(/(```[\s\S]*?```)/g).map((part, pi) => {
                           const codeMatch = part.match(/^```(\w*)\n?([\s\S]*?)```$/)
                           if (codeMatch) {
                             const lang = codeMatch[1] || 'código'
                             const code = codeMatch[2]
+                            const cmdKey = `${i}-${pi}`
+                            const cmdState = cmdOutputs[cmdKey]
+                            const isShell = SHELL_LANGS.has(lang.toLowerCase())
+                            const canExec = isShell && chatVpsId && !isLocal
                             return (
                               <div key={pi} className="rounded-lg border border-slate-700 overflow-hidden">
                                 {/* header do bloco */}
@@ -1692,7 +2475,23 @@ export default function IDEPage() {
                                       className="text-[10px] px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
                                       Copiar
                                     </button>
-                                    {activeFile ? (
+                                    {canExec && (
+                                      <button
+                                        disabled={cmdState?.running}
+                                        onClick={async () => {
+                                          setCmdOutputs(o => ({...o, [cmdKey]: {running:true, output:'', ok:true}}))
+                                          const r = await ipc.terminal.exec(chatVpsId, code, 60000)
+                                          setCmdOutputs(o => ({...o, [cmdKey]: {
+                                            running: false,
+                                            output: (r.output || r.error || '(sem output)').slice(0, 3000),
+                                            ok: r.success,
+                                          }}))
+                                        }}
+                                        className="text-[10px] px-2 py-0.5 rounded bg-emerald-700 hover:bg-emerald-600 text-white transition-colors disabled:opacity-50 flex items-center gap-1">
+                                        {cmdState?.running ? '⟳ Executando…' : '▶ Executar na VPS'}
+                                      </button>
+                                    )}
+                                    {activeFile && (
                                       <button
                                         onClick={() => {
                                           setOpenFiles(f => f.map(fl => fl.path===activeTab ? {...fl, content:code} : fl))
@@ -1700,19 +2499,35 @@ export default function IDEPage() {
                                         }}
                                         className="text-[10px] px-2 py-0.5 rounded bg-purple-700 hover:bg-purple-600 text-white transition-colors"
                                         title={`Substituir conteúdo de ${activeFile.name}`}>
-                                        ▶ Aplicar em {activeFile.name}
-                                      </button>
-                                    ) : (
-                                      <button
-                                        onClick={() => { setChatSaveAs({code, lang}); setChatSaveAsName('') }}
-                                        className="text-[10px] px-2 py-0.5 rounded bg-purple-700 hover:bg-purple-600 text-white transition-colors"
-                                        title="Salvar como novo arquivo">
-                                        ▶ Salvar como…
+                                        ▶ {activeFile.name}
                                       </button>
                                     )}
+                                    <button
+                                      onClick={() => { setChatSaveAs({code, lang}); setChatSaveAsName('') }}
+                                      className="text-[10px] px-2 py-0.5 rounded bg-slate-600 hover:bg-slate-500 text-slate-200 transition-colors"
+                                      title="Salvar como novo arquivo">
+                                      Salvar como…
+                                    </button>
                                   </div>
                                 </div>
                                 <pre className="text-[11px] font-mono text-slate-300 p-3 overflow-x-auto bg-slate-900/80 whitespace-pre">{code}</pre>
+                                {cmdState && !cmdState.running && cmdState.output && (
+                                  <div className={`border-t ${cmdState.ok ? 'border-emerald-900/50 bg-emerald-950/30' : 'border-red-900/50 bg-red-950/30'}`}>
+                                    <div className="flex items-center justify-between px-3 py-1">
+                                      <span className={`text-[10px] font-mono ${cmdState.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {cmdState.ok ? '✓ Output' : '✗ Erro'}
+                                      </span>
+                                      <button onClick={() => setCmdOutputs(o => {const n={...o}; delete n[cmdKey]; return n})}
+                                        className="text-[10px] text-slate-600 hover:text-slate-400">limpar</button>
+                                    </div>
+                                    <pre className="text-[11px] font-mono px-3 pb-3 overflow-x-auto whitespace-pre text-slate-300 max-h-48 overflow-y-auto">{cmdState.output}</pre>
+                                  </div>
+                                )}
+                                {cmdState?.running && (
+                                  <div className="px-3 py-2 border-t border-slate-700 text-[10px] text-emerald-400 font-mono animate-pulse">
+                                    ⟳ Executando na VPS…
+                                  </div>
+                                )}
                               </div>
                             )
                           }
@@ -1732,6 +2547,17 @@ export default function IDEPage() {
                     <Loader2 size={12} className="animate-spin text-purple-400"/>
                     <span>Claude pensando… <span className="text-slate-600">{chatElapsed}s</span></span>
                     <span className="text-slate-700 text-[10px]">(pode levar 15-30s)</span>
+                  </div>
+                )}
+                {agentPaused && !chatLoading && (
+                  <div className="flex items-center justify-between bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2">
+                    <span className="text-xs text-amber-400">Agente pausado — limite de 50 iterações atingido</span>
+                    <button
+                      onClick={handleAgentContinue}
+                      className="text-xs bg-amber-700/40 hover:bg-amber-700/60 text-amber-300 border border-amber-600/40 rounded px-2.5 py-1 transition-colors"
+                    >
+                      ▶ Continuar
+                    </button>
                   </div>
                 )}
                 <div ref={chatEndRef}/>
@@ -1787,6 +2613,54 @@ export default function IDEPage() {
                     <button onClick={()=>setChatSaveAs(null)} className="text-[11px] px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">
                       Cancelar
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* modal: revisar e aplicar múltiplas alterações */}
+              {applyAllModal && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-4">
+                  <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-h-full flex flex-col shadow-2xl overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 shrink-0">
+                      <FilePlus size={14} className="text-purple-400"/>
+                      <span className="text-sm font-semibold text-slate-100 flex-1">
+                        Revisar alterações — {applyAllModal.items.filter(i=>i.selected).length} arquivo(s)
+                      </span>
+                      <button onClick={()=>setApplyAllModal(null)} className="text-slate-500 hover:text-slate-300 text-xs">✕</button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
+                      {applyAllModal.items.map((item, idx) => (
+                        <div key={idx} className={`flex items-start gap-2 p-3 rounded-lg border transition-colors ${item.selected ? 'bg-slate-800 border-slate-700' : 'bg-slate-900 border-slate-800 opacity-50'}`}>
+                          <input type="checkbox" checked={item.selected}
+                            onChange={e => setApplyAllModal(prev => prev ? {
+                              items: prev.items.map((it,i) => i===idx ? {...it, selected: e.target.checked} : it)
+                            } : null)}
+                            className="mt-1.5 shrink-0 accent-purple-500"/>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[10px] text-slate-500 font-mono mb-1 block">{item.lang || 'código'} · {item.code.split('\n').length} linhas</span>
+                            <input type="text" value={item.name}
+                              onChange={e => setApplyAllModal(prev => prev ? {
+                                items: prev.items.map((it,i) => i===idx ? {...it, name: e.target.value} : it)
+                              } : null)}
+                              placeholder="caminho/do/arquivo.ts"
+                              className="w-full text-xs bg-slate-950 border border-slate-600 rounded px-2 py-1 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 font-mono"/>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 px-4 py-3 border-t border-slate-800 shrink-0">
+                      <button onClick={()=>setApplyAllModal(null)}
+                        className="flex-1 text-xs py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors">
+                        Cancelar
+                      </button>
+                      <button onClick={handleApplyAll} disabled={applyAllLoading || !applyAllModal.items.some(i=>i.selected && i.name.trim())}
+                        className="flex-1 text-xs py-2 rounded-lg bg-purple-700 hover:bg-purple-600 text-white font-medium transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40">
+                        {applyAllLoading
+                          ? <><span className="animate-spin">⟳</span> Aplicando…</>
+                          : <>✓ Aplicar {applyAllModal.items.filter(i=>i.selected && i.name.trim()).length} arquivo(s)</>
+                        }
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1893,6 +2767,53 @@ export default function IDEPage() {
             onClick={()=>{handleDelete(ctxMenu.entry);setCtxMenu(null)}}>
             <Trash2 size={11}/> Excluir
           </button>
+        </div>
+      )}
+
+      {/* ═══ MODAL — ToolExecutor: confirmação de comando perigoso ═══ */}
+      {toolConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200]">
+          <div className="bg-slate-900 border border-red-800/60 rounded-2xl p-6 max-w-md w-full shadow-2xl mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <ShieldAlert size={18} className="text-red-400 shrink-0"/>
+              <h3 className="text-sm font-bold text-slate-100">Comando de alto risco detectado</h3>
+            </div>
+            <p className="text-xs text-slate-400 mb-2">O agente IA quer executar:</p>
+            <code className="block text-xs font-mono bg-slate-800 text-red-300 px-3 py-2 rounded-lg mb-4 break-all">
+              {toolConfirm.cmdSummary}
+            </code>
+            <p className="text-xs text-slate-400 mb-1">Digite <span className="text-red-400 font-bold">CONFIRMO</span> para autorizar:</p>
+            <input
+              autoFocus
+              value={toolConfirmInput}
+              onChange={e => setToolConfirmInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && toolConfirmInput === 'CONFIRMO') {
+                  toolConfirm.resolve(true); setToolConfirm(null); setToolConfirmInput('')
+                }
+                if (e.key === 'Escape') {
+                  toolConfirm.resolve(false); setToolConfirm(null); setToolConfirmInput('')
+                }
+              }}
+              placeholder="CONFIRMO"
+              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-red-500 mb-4 font-mono"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { toolConfirm.resolve(false); setToolConfirm(null); setToolConfirmInput('') }}
+                className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => { toolConfirm.resolve(true); setToolConfirm(null); setToolConfirmInput('') }}
+                disabled={toolConfirmInput !== 'CONFIRMO'}
+                className="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                Executar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

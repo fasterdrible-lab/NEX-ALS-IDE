@@ -1,17 +1,17 @@
 # CURRENT_STATE.md — HEXAGON IDE
 
-**Data:** 2026-05-31
-**Versão:** 1.5.0
-**Repositório:** https://github.com/fasterdrible-lab/HEXAGON-IDE.git
+**Data:** 2026-06-01
+**Versão:** 3.3.0
+**Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**HEXAGON IDE 1.5.0 — backlog zerado.** Todas as features P0, P1, P2, P3 e de app foram implementadas. `pnpm dev` inicia Vite + Electron sem erros. `pnpm package:win` gera instalador NSIS + portable.
+**HEXAGON IDE 3.3.0** — IDE completo com **HEXAGON AI HUB** (6 provedores, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), Incident Mode (4 painéis + diagnóstico IA automático), Deploy Assistant (plano IA + aprovação + rollback + smoke test), agente IA autônomo (50 iter + Continuar + Snapshot/Rollback), multi-monitor, fingerprint SSH, e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
-- **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat Claude; badge vermelho "Produção" na top bar.
-- **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat Claude com seletor de VPS e contexto automático do projeto.
+- **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat IA (API direta ou claude -p); badge vermelho "Produção" na top bar.
+- **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
 
 ## Funcionalidades do app base — todas concluídas
 
@@ -84,19 +84,46 @@
 | Packaging | electron-builder NSIS | Installer + portable Windows |
 | Auto-update | electron-updater | GitHub Releases |
 
+## Funcionalidades completas (v1.6.0 → v3.3.0)
+
+### App base e IDE
+- [x] Histórico de Lançamentos, Logs Viewer, PM2 Manager, Analisador de Disco, Docker Explorer
+- [x] Monitor de VPS — CPU/RAM/Disco/Uptime; auto-refresh 30s
+- [x] Agente IA — 50 iter, Snapshot/Rollback, botão Continuar, ferramentas: read/write/exec/search/list
+- [x] Fingerprint SSH — SHA-256, rejeita se mudar, badge + botão Limpar
+- [x] Multi-monitor — múltiplas janelas Electron independentes por VPS
+
+### HEXAGON AI HUB (v3.0.0)
+- [x] 6 provedores: Anthropic, OpenAI-compat (OpenAI/DeepSeek/Groq/Mistral/xAI), Gemini, OpenRouter, Ollama
+- [x] BaseProvider + streaming SSE + AbortController
+- [x] ProviderManager, ModelRegistry (cache 24h, listModels dinâmico)
+- [x] ConversationManager — conversas persistidas no SQLite
+- [x] ContextManager — 11 tipos de contexto, prioridade de corte
+- [x] PromptBuilder — 4 modos: chat, agent, sysadmin, deploy, incident
+- [x] ToolExecutor — tiers: read/write/exec_safe/exec_dangerous; log em SQLite
+- [x] AIHubPage — streaming, histórico, seletor provider+modelo, painel Contexto+Memória
+- [x] ProjectMemory — CRUD de blocos de contexto por VPS/projeto
+- [x] Context Selector — checkboxes: logs, docker, pm2, vps stats, memória
+- [x] ToolExecutor confirmação — modal "CONFIRMO" para comandos destrutivos
+
+### Ferramentas avançadas
+- [x] Incident Mode (v3.1.0) — 4 painéis (IA+Logs+Docker/PM2+Terminal); diagnóstico automático
+- [x] Deploy Assistant (v3.2.0) — plano IA, aprovação, execução passo a passo, rollback automático, smoke test
+
 ## Limitações conhecidas
 
 1. **Sem autenticação interna** — app local, single-user
 2. **SSH key privada** — usuário configura no sistema; app não armazena
 3. **LSP** — requer `typescript-language-server` + WebSocket wrapper na VPS; configuração manual
-4. **DAP** — requer `node --inspect` na VPS + túnel 9229; sem breakpoints no Monaco (UI é o Chrome DevTools)
-5. **Chat · imagem** — `claude -p` não processa imagens como visão real; colar texto do erro é mais confiável
-6. **Chat · velocidade** — `claude -p` via SSH tem overhead de startup (~15-30s); para respostas instantâneas precisaria de API Key Anthropic
+4. **DAP** — requer `node --inspect` na VPS + túnel 9229; sem breakpoints no Monaco
+5. **Chat multimodal** — Anthropic e Gemini suportam; outros providers recebem base64 no texto
+6. **Fingerprint SSH** — SHA-256 da chave bruta; não usa CA/known_hosts do sistema
 
 ## Próximo passo recomendado
 
-Backlog zerado. Próximas iniciativas sugeridas:
-- Suporte a múltiplas contas (workspace multi-VPS simultâneo)
-- Integração com Anthropic API (chat mais rápido + multimodal real)
-- Histórico de lançamentos com filtros
-- Notificação visual ao abrir VS Code Remote
+Backlog zerado (v3.3.0). Possíveis evoluções:
+- Autenticação interna multi-usuário
+- Testes E2E com Playwright
+- Notificações de sistema (erros do agente, alertas de disco)
+- Suporte a WebSocket LSP para mais linguagens
+- Notificações de sistema (erros do agente, alertas de disco)

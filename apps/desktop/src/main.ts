@@ -17,6 +17,17 @@ function setDatabasePath(): void {
   process.env['DATABASE_URL'] = `file:${dbPath}`
 }
 
+function getRendererIndexPath(): string {
+  return path.join(process.resourcesPath, 'renderer', 'index.html')
+}
+
+function applyWindowDefaults(win: BrowserWindow): void {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+}
+
 function createWindow(): void {
   const rendererUrl = process.env['ELECTRON_RENDERER_URL']
 
@@ -36,30 +47,119 @@ function createWindow(): void {
     backgroundColor: '#0f172a',
   })
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show()
-  })
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
-    return { action: 'deny' }
-  })
+  mainWindow.once('ready-to-show', () => { mainWindow?.show() })
+  applyWindowDefaults(mainWindow)
 
   if (rendererUrl) {
     mainWindow.loadURL(rendererUrl)
     mainWindow.webContents.openDevTools()
   } else if (!app.isPackaged) {
-    // dev sem ELECTRON_RENDERER_URL — Vite roda separado em localhost:5173
     mainWindow.loadURL('http://localhost:5173')
     mainWindow.webContents.openDevTools()
   } else {
-    const indexPath = path.join(process.resourcesPath, 'renderer', 'index.html')
-    mainWindow.loadFile(indexPath)
+    mainWindow.loadFile(getRendererIndexPath())
   }
 
-  mainWindow.on('closed', () => {
-    mainWindow = null
+  mainWindow.on('closed', () => { mainWindow = null })
+}
+
+function createDeployWindow(vpsId: string, vpsName: string): void {
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+  const encodedName = encodeURIComponent(vpsName)
+  const hashPath = `/deploy/${vpsId}/${encodedName}`
+
+  const win = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 900,
+    minHeight: 600,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+    title: `🚀 Deploy Assistant — ${vpsName}`,
+    show: false,
+    backgroundColor: '#0f172a',
   })
+
+  win.once('ready-to-show', () => win.show())
+  applyWindowDefaults(win)
+
+  if (rendererUrl) {
+    win.loadURL(`${rendererUrl}/#${hashPath}`)
+  } else if (!app.isPackaged) {
+    win.loadURL(`http://localhost:5173/#${hashPath}`)
+  } else {
+    win.loadFile(getRendererIndexPath(), { hash: hashPath })
+  }
+}
+
+function createIncidentWindow(vpsId: string, vpsName: string): void {
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+  const encodedName = encodeURIComponent(vpsName)
+  const hashPath = `/incident/${vpsId}/${encodedName}`
+
+  const win = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 1100,
+    minHeight: 700,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+    title: `🚨 INCIDENT MODE — ${vpsName}`,
+    show: false,
+    backgroundColor: '#0f172a',
+  })
+
+  win.once('ready-to-show', () => win.show())
+  applyWindowDefaults(win)
+
+  if (rendererUrl) {
+    win.loadURL(`${rendererUrl}/#${hashPath}`)
+  } else if (!app.isPackaged) {
+    win.loadURL(`http://localhost:5173/#${hashPath}`)
+  } else {
+    win.loadFile(getRendererIndexPath(), { hash: hashPath })
+  }
+}
+
+function createIdeWindow(vpsId: string, vpsName: string): void {
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL']
+  const encodedName = encodeURIComponent(vpsName)
+  const hashPath = `/ide/${vpsId}/${encodedName}`
+
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 960,
+    minHeight: 640,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+    title: `HEXAGON IDE — ${vpsName}`,
+    show: false,
+    backgroundColor: '#0f172a',
+  })
+
+  win.once('ready-to-show', () => win.show())
+  applyWindowDefaults(win)
+
+  if (rendererUrl) {
+    win.loadURL(`${rendererUrl}/#${hashPath}`)
+  } else if (!app.isPackaged) {
+    win.loadURL(`http://localhost:5173/#${hashPath}`)
+  } else {
+    win.loadFile(getRendererIndexPath(), { hash: hashPath })
+  }
 }
 
 app.whenReady().then(async () => {
@@ -67,6 +167,21 @@ app.whenReady().then(async () => {
   await initializeDatabase()
   createWindow()
   setupIpcHandlers(ipcMain, mainWindow ?? undefined)
+
+  ipcMain.handle('window:openIde', (_, data: { vpsId: string; vpsName: string }) => {
+    createIdeWindow(data.vpsId, data.vpsName)
+    return { success: true }
+  })
+
+  ipcMain.handle('window:openIncident', (_, data: { vpsId: string; vpsName: string }) => {
+    createIncidentWindow(data.vpsId, data.vpsName)
+    return { success: true }
+  })
+
+  ipcMain.handle('window:openDeploy', (_, data: { vpsId: string; vpsName: string }) => {
+    createDeployWindow(data.vpsId, data.vpsName)
+    return { success: true }
+  })
 
   // Auto-update: verifica silenciosamente após iniciar (só em produção)
   if (app.isPackaged) {

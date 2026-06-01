@@ -1,5 +1,6 @@
-import type { IpcMain, BrowserWindow } from 'electron'
-import { dialog, clipboard, nativeImage } from 'electron'
+import { getPrismaClient } from '@cwm/db'
+import type { IpcMain } from 'electron'
+import { BrowserWindow, dialog, clipboard, nativeImage } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -15,6 +16,8 @@ import {
   SftpSession,
   GitService,
   TunnelService,
+  AiService,
+  ProjectMemoryService,
 } from '@cwm/core'
 
 function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
@@ -34,6 +37,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
   const terminal = new TerminalService()
   const terminalSessions = new Map<string, TerminalSession>()
   const tunnelSvc = new TunnelService()
+  const aiSvc = new AiService()
+  const memorySvc = new ProjectMemoryService()
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
 
@@ -43,6 +48,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
   ipcMain.handle('vps:update', (_, data) => wrapHandler(() => vps.update(data.id, data)))
   ipcMain.handle('vps:delete', (_, id: string) => wrapHandler(() => vps.delete(id)))
   ipcMain.handle('vps:test', (_, id: string) => wrapHandler(() => vps.testConnection(id)))
+  ipcMain.handle('vps:clearFingerprint', (_, id: string) => wrapHandler(() => vps.clearFingerprint(id)))
   ipcMain.handle('vps:setupRemoteProject', (_, data: { id: string; remotePath: string; gitRepo?: string }) =>
     wrapHandler(() => vps.setupRemoteProject(data.id, data.remotePath, data.gitRepo))
   )
@@ -391,6 +397,247 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
         try { await accounts.create(a); imported.accounts++ } catch {}
       }
       return { success: true, imported }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // ── Histórico de lançamentos ──────────────────────────────────────────────
+  ipcMain.handle('history:list', async (_, filters?: { vpsId?: string; projectId?: string; success?: boolean; limit?: number }) => {
+    try {
+      const db = getPrismaClient()
+      const where: Record<string, unknown> = {}
+      if (filters?.projectId) where.projectId = filters.projectId
+      if (filters?.success !== undefined) where.success = filters.success
+      if (filters?.vpsId) where.project = { vpsServerId: filters.vpsId }
+      const history = await db.launchHistory.findMany({
+        where,
+        include: { project: { include: { vpsServer: true } } },
+        orderBy: { launchedAt: 'desc' },
+        take: filters?.limit ?? 200,
+      })
+      return { success: true, history }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err), history: [] }
+    }
+  })
+
+  // ── PM2 Process Manager — via SSH exec ───────────────────────────────────
+  ipcMain.handle('pm2:list', async (_, vpsId: string) => {
+    try {
+      const out = await terminal.exec(vpsId, `pm2 jlist 2>/dev/null || echo '[]'`, 15000)
+      const json = out.trim().replace(/\x1B\[[0-9;]*m/g, '') // strip ANSI
+      const raw = JSON.parse(json) as Array<Record<string, unknown>>
+      const processes = raw.map(p => {
+        const env = (p.pm2_env ?? {}) as Record<string, unknown>
+        const monit = (p.monit ?? {}) as Record<string, unknown>
+        return {
+          id: p.pm_id ?? 0,
+          name: p.name ?? '',
+          status: env.status ?? 'unknown',
+          cpu: typeof monit.cpu === 'number' ? monit.cpu : 0,
+          memory: typeof monit.memory === 'number' ? monit.memory : 0,
+          restarts: typeof env.restart_time === 'number' ? env.restart_time : 0,
+          uptime: typeof env.pm_uptime === 'number' ? Date.now() - env.pm_uptime : 0,
+        }
+      })
+      return { success: true, processes }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err), processes: [] }
+    }
+  })
+  ipcMain.handle('pm2:restart', async (_, { vpsId, name }: { vpsId: string; name: string }) => {
+    try { const out = await terminal.exec(vpsId, `pm2 restart ${name} --no-color 2>&1`, 30000); return { success: true, output: out } }
+    catch (err) { return { success: false, error: err instanceof Error ? err.message : String(err) } }
+  })
+  ipcMain.handle('pm2:stop', async (_, { vpsId, name }: { vpsId: string; name: string }) => {
+    try { const out = await terminal.exec(vpsId, `pm2 stop ${name} --no-color 2>&1`, 15000); return { success: true, output: out } }
+    catch (err) { return { success: false, error: err instanceof Error ? err.message : String(err) } }
+  })
+  ipcMain.handle('pm2:logs', async (_, { vpsId, name }: { vpsId: string; name: string }) => {
+    try {
+      const out = await terminal.exec(vpsId, `pm2 logs ${name} --lines 120 --nostream --no-color 2>&1`, 15000)
+      return { success: true, logs: out.replace(/\x1B\[[0-9;]*m/g, '') }
+    } catch (err) { return { success: false, error: err instanceof Error ? err.message : String(err), logs: '' } }
+  })
+  ipcMain.handle('pm2:delete', async (_, { vpsId, name }: { vpsId: string; name: string }) => {
+    try { await terminal.exec(vpsId, `pm2 delete ${name} --no-color 2>&1`, 15000); return { success: true } }
+    catch (err) { return { success: false, error: err instanceof Error ? err.message : String(err) } }
+  })
+
+  // ── Docker Explorer — lista/start/stop/logs/remove via SSH exec ──────────
+  const DOCKER_FMT = `'{"id":"{{.ID}}","name":"{{.Names}}","image":"{{.Image}}","status":"{{.Status}}","state":"{{.State}}","ports":"{{.Ports}}"}'`
+  ipcMain.handle('docker:list', async (_, vpsId: string) => {
+    try {
+      const out = await terminal.exec(vpsId, `docker ps -a --format ${DOCKER_FMT} 2>&1`, 15000)
+      const containers = out.split('\n')
+        .filter(l => l.trim().startsWith('{'))
+        .map(l => { try { return JSON.parse(l) } catch { return null } })
+        .filter(Boolean)
+      return { success: true, containers }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err), containers: [] }
+    }
+  })
+  ipcMain.handle('docker:start', async (_, { vpsId, id }: { vpsId: string; id: string }) => {
+    try { await terminal.exec(vpsId, `docker start ${id}`, 15000); return { success: true } }
+    catch (err) { return { success: false, error: err instanceof Error ? err.message : String(err) } }
+  })
+  ipcMain.handle('docker:stop', async (_, { vpsId, id }: { vpsId: string; id: string }) => {
+    try { await terminal.exec(vpsId, `docker stop ${id}`, 30000); return { success: true } }
+    catch (err) { return { success: false, error: err instanceof Error ? err.message : String(err) } }
+  })
+  ipcMain.handle('docker:logs', async (_, { vpsId, id }: { vpsId: string; id: string }) => {
+    try {
+      const out = await terminal.exec(vpsId, `docker logs --tail 150 --timestamps ${id} 2>&1`, 15000)
+      return { success: true, logs: out }
+    } catch (err) { return { success: false, error: err instanceof Error ? err.message : String(err), logs: '' } }
+  })
+  ipcMain.handle('docker:remove', async (_, { vpsId, id }: { vpsId: string; id: string }) => {
+    try { await terminal.exec(vpsId, `docker rm ${id}`, 15000); return { success: true } }
+    catch (err) { return { success: false, error: err instanceof Error ? err.message : String(err) } }
+  })
+
+  // ── Provedores de IA — HEXAGON AI HUB ────────────────────────────────────
+  ipcMain.handle('ai:chatAgent',  (_, data) => wrapHandler(() => aiSvc.chatAgent(data)))
+  ipcMain.handle('ai:list',       () => wrapHandler(() => aiSvc.listProviders()))
+  ipcMain.handle('ai:save',       (_, data) => wrapHandler(() => aiSvc.saveProvider(data)))
+  ipcMain.handle('ai:delete',     (_, provider: string) => wrapHandler(() => aiSvc.deleteProvider(provider)))
+  ipcMain.handle('ai:test',       (_, provider: string) => wrapHandler(() => aiSvc.testProvider(provider)))
+  ipcMain.handle('ai:chat',       (_, data) => wrapHandler(() => aiSvc.chat(data)))
+  ipcMain.handle('ai:models',     (_, provider: string) => wrapHandler(() => aiSvc.getModels(provider)))
+  ipcMain.handle('ai:chatCtx',    (_, data) => wrapHandler(() => aiSvc.chatWithContext(data)))
+
+  // Streaming — ai:stream:start / ai:stream:cancel
+  ipcMain.handle('ai:stream:start', (event, data) =>
+    wrapHandler(async () => {
+      const targetWin = BrowserWindow.fromWebContents(event.sender)
+      const session = await aiSvc.startStream(data, chunk => {
+        try { targetWin?.webContents.send('ai:stream:chunk', chunk) } catch { /* janela fechada */ }
+      })
+      return { streamId: session.streamId }
+    })
+  )
+  ipcMain.handle('ai:stream:cancel', (_, streamId: string) => {
+    aiSvc.cancelStream(streamId)
+    return { success: true }
+  })
+
+  // Conversas persistidas
+  ipcMain.handle('ai:conv:list',        ()             => wrapHandler(() => aiSvc.conversations.list()))
+  ipcMain.handle('ai:conv:get',         (_, id)        => wrapHandler(() => aiSvc.conversations.get(id)))
+  ipcMain.handle('ai:conv:create',      (_, data)      => wrapHandler(() => aiSvc.conversations.create(data)))
+  ipcMain.handle('ai:conv:updateTitle', (_, data: {id:string;title:string}) => wrapHandler(() => aiSvc.conversations.updateTitle(data.id, data.title)))
+  ipcMain.handle('ai:conv:pin',         (_, id)        => wrapHandler(() => aiSvc.conversations.togglePin(id)))
+  ipcMain.handle('ai:conv:delete',      (_, id)        => wrapHandler(() => aiSvc.conversations.delete(id)))
+  ipcMain.handle('ai:conv:messages',    (_, data: {id:string;limit?:number}) => wrapHandler(() => aiSvc.conversations.getMessages(data.id, data.limit)))
+  ipcMain.handle('ai:conv:addMsg',      (_, data)      => wrapHandler(() => aiSvc.conversations.addMessage(data)))
+
+  // Memória do projeto
+  ipcMain.handle('memory:list',   (_, data: { vpsId?: string | null; projectId?: string | null }) =>
+    wrapHandler(() => memorySvc.list(data?.vpsId, data?.projectId)))
+  ipcMain.handle('memory:save',   (_, data) => wrapHandler(() => memorySvc.save(data)))
+  ipcMain.handle('memory:delete', (_, id: string) => wrapHandler(() => memorySvc.delete(id)))
+  ipcMain.handle('memory:build',  (_, data: { vpsId?: string | null; projectId?: string | null }) =>
+    wrapHandler(() => memorySvc.buildBlock(data?.vpsId, data?.projectId)))
+
+  // ToolExecutor — confirmação de ação perigosa (main → renderer → main)
+  ipcMain.handle('tool:confirmRequest', () => undefined) // placeholder; respondido via tool:confirmResponse
+  ipcMain.handle('tool:confirmResponse', (_, data: { confirmed: boolean }) => {
+    // O renderer responde para o main via este canal; o resultado é tratado no setupToolConfirm abaixo
+    return data
+  })
+
+  // ── Monitor — Análise de uso de disco por diretório ──────────────────────
+  ipcMain.handle('monitor:diskUsage', async (_, vpsId: string) => {
+    const cmd = [
+      'echo "=TOP="',
+      'du -sh /* 2>/dev/null | sort -rh | head -20',
+      'echo "=DOCKER="',
+      'docker system df 2>/dev/null || echo "N/A"',
+      'echo "=PM2LOGS="',
+      'du -sh ~/.pm2/logs/ 2>/dev/null || echo "N/A"',
+      'echo "=VARLOG="',
+      'du -sh /var/log/* 2>/dev/null | sort -rh | head -10',
+    ].join('; ')
+    try {
+      const out = await terminal.exec(vpsId, cmd, 30000)
+      const sections: Record<string, string> = {}
+      let current = 'raw'
+      const lines: Record<string, string[]> = { raw: [] }
+      for (const line of out.split('\n')) {
+        const trimmed = line.trim()
+        if (trimmed === '=TOP=')      { current = 'top';     lines.top     = [] }
+        else if (trimmed === '=DOCKER=')   { current = 'docker';  lines.docker  = [] }
+        else if (trimmed === '=PM2LOGS=')  { current = 'pm2logs'; lines.pm2logs = [] }
+        else if (trimmed === '=VARLOG=')   { current = 'varlog';  lines.varlog  = [] }
+        else if (trimmed && lines[current]) lines[current].push(trimmed)
+      }
+      return {
+        success: true,
+        top:     (lines.top     || []).join('\n'),
+        docker:  (lines.docker  || []).join('\n'),
+        pm2logs: (lines.pm2logs || []).join('\n'),
+        varlog:  (lines.varlog  || []).join('\n'),
+      }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  // ── Monitor — CPU / RAM / Disco / Uptime via SSH ──────────────────────────
+  ipcMain.handle('monitor:getStats', async (_, vpsId: string) => {
+    const cmd = [
+      'echo "LOAD:$(cat /proc/loadavg 2>/dev/null || echo 0 0 0)"',
+      'echo "CORES:$(nproc 2>/dev/null || grep -c processor /proc/cpuinfo 2>/dev/null || echo 1)"',
+      'echo "MEM:$(free -m 2>/dev/null | awk \'NR==2{print $2,$3,$4}\' || echo 0 0 0)"',
+      'echo "DISK:$(df -h / 2>/dev/null | awk \'NR==2{print $2,$3,$4,$5}\' || echo ? ? ? 0%)"',
+      'echo "UPTIME:$(uptime 2>/dev/null | sed \'s/.*up //\' | sed \'s/, *[0-9]* user.*//\'|| echo -)"',
+    ].join('; ')
+    try {
+      const output = await terminal.exec(vpsId, cmd, 15000)
+      const lines: Record<string, string> = {}
+      for (const line of output.split('\n')) {
+        const idx = line.indexOf(':')
+        if (idx !== -1) lines[line.slice(0, idx).trim()] = line.slice(idx + 1).trim()
+      }
+      const loadParts = (lines['LOAD'] || '0 0 0').split(' ')
+      const load1 = parseFloat(loadParts[0]) || 0
+      const load5 = parseFloat(loadParts[1]) || 0
+      const load15 = parseFloat(loadParts[2]) || 0
+      const cores = Math.max(1, parseInt(lines['CORES'] || '1') || 1)
+      const memParts = (lines['MEM'] || '0 0 0').split(' ')
+      const totalMb = parseInt(memParts[0]) || 0
+      const usedMb = parseInt(memParts[1]) || 0
+      const diskParts = (lines['DISK'] || '? ? ? 0%').split(' ')
+      return {
+        success: true,
+        stats: {
+          vpsId,
+          online: true,
+          cpu: {
+            loadAvg1: load1,
+            loadAvg5: load5,
+            loadAvg15: load15,
+            cores,
+            usagePercent: Math.min(100, Math.round((load1 / cores) * 100)),
+          },
+          ram: {
+            totalMb,
+            usedMb,
+            freeMb: parseInt(memParts[2]) || 0,
+            usagePercent: totalMb > 0 ? Math.round((usedMb / totalMb) * 100) : 0,
+          },
+          disk: {
+            total: diskParts[0] || '?',
+            used: diskParts[1] || '?',
+            available: diskParts[2] || '?',
+            usagePercent: parseInt((diskParts[3] || '0%').replace('%', '')) || 0,
+          },
+          uptime: lines['UPTIME'] || '-',
+          fetchedAt: Date.now(),
+        },
+      }
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }

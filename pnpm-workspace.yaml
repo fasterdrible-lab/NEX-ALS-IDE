@@ -7,5 +7,6 @@ allowBuilds:
   cpu-features: true
   electron: true
   esbuild: true
+  keytar: set this to true or false
   prisma: true
   ssh2: true

@@ -5,6 +5,7 @@ import type {
   Settings, SettingsInput,
   TestConnectionResult, DiagnosticResults, ClaudeCheckResult,
   GitStatus, GitCommit,
+  AiProviderConfig, AiChatInput,
 } from '@cwm/config'
 
 export type { GitStatus, GitCommit }
@@ -47,6 +48,7 @@ export const ipc = {
     update: (data: Partial<VpsServerInput> & { id: string }) => invoke<VpsServer>('vps:update', data),
     delete: (id: string) => invoke<void>('vps:delete', id),
     test: (id: string) => invoke<TestConnectionResult>('vps:test', id),
+    clearFingerprint: (id: string) => invoke<void>('vps:clearFingerprint', id),
     setupRemoteProject: (id: string, remotePath: string, gitRepo?: string) =>
       invoke<{ success: boolean; message: string }>('vps:setupRemoteProject', { id, remotePath, gitRepo }),
   },
@@ -148,6 +150,105 @@ export const ipc = {
       invoke<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>('config:export'),
     import: () =>
       invoke<{ success: boolean; imported?: { vps: number; projects: number; accounts: number }; canceled?: boolean; error?: string }>('config:import'),
+  },
+  history: {
+    list: (filters?: { vpsId?: string; projectId?: string; success?: boolean; limit?: number }) =>
+      invoke<{ success: boolean; history: Array<{
+        id: string; projectId: string; launchedAt: string; success: boolean; errorMsg?: string;
+        project: { id: string; name: string; vpsServer: { id: string; name: string; host: string } }
+      }>; error?: string }>('history:list', filters),
+  },
+  pm2: {
+    list: (vpsId: string) =>
+      invoke<{ success: boolean; processes: Array<{id:number;name:string;status:string;cpu:number;memory:number;restarts:number;uptime:number}>; error?: string }>('pm2:list', vpsId),
+    restart: (vpsId: string, name: string) => invoke<{ success: boolean; output?: string; error?: string }>('pm2:restart', { vpsId, name }),
+    stop: (vpsId: string, name: string) => invoke<{ success: boolean; output?: string; error?: string }>('pm2:stop', { vpsId, name }),
+    logs: (vpsId: string, name: string) => invoke<{ success: boolean; logs: string; error?: string }>('pm2:logs', { vpsId, name }),
+    delete: (vpsId: string, name: string) => invoke<{ success: boolean; error?: string }>('pm2:delete', { vpsId, name }),
+  },
+  monitor: {
+    getStats: (vpsId: string) =>
+      invoke<{ success: boolean; stats?: unknown; error?: string }>('monitor:getStats', vpsId),
+    diskUsage: (vpsId: string) =>
+      invoke<{ success: boolean; top?: string; docker?: string; pm2logs?: string; varlog?: string; error?: string }>('monitor:diskUsage', vpsId),
+  },
+  docker: {
+    list: (vpsId: string) =>
+      invoke<{ success: boolean; containers: Array<{id:string;name:string;image:string;status:string;state:string;ports:string}>; error?: string }>('docker:list', vpsId),
+    start: (vpsId: string, id: string) => invoke<{ success: boolean; error?: string }>('docker:start', { vpsId, id }),
+    stop: (vpsId: string, id: string) => invoke<{ success: boolean; error?: string }>('docker:stop', { vpsId, id }),
+    logs: (vpsId: string, id: string) => invoke<{ success: boolean; logs: string; error?: string }>('docker:logs', { vpsId, id }),
+    remove: (vpsId: string, id: string) => invoke<{ success: boolean; error?: string }>('docker:remove', { vpsId, id }),
+  },
+  ai: {
+    list: () => invoke<AiProviderConfig[]>('ai:list'),
+    save: (data: { provider: string; apiKey: string; model: string; enabled: boolean; isDefault: boolean }) =>
+      invoke<{ provider: string }>('ai:save', data),
+    delete: (provider: string) => invoke<void>('ai:delete', provider),
+    test: (provider: string) => invoke<{ success: boolean; message: string }>('ai:test', provider),
+    chat: (data: AiChatInput) => invoke<string>('ai:chat', data),
+    models: (provider: string) => invoke<Array<{id:string;name:string;contextWindow:number;supportsTools:boolean;supportsVision:boolean}>>('ai:models', provider),
+    chatCtx: (data: {
+      message: string
+      mode?: string
+      provider?: string
+      context?: Record<string, unknown>
+      projectRoot?: string
+      vpsName?: string
+      isProduction?: boolean
+      conversationId?: string
+      maxTokens?: number
+      history?: Array<{role:string;content:string}>
+    }) => invoke<string>('ai:chatCtx', data),
+    stream: {
+      start: (data: unknown) => invoke<{ streamId: string }>('ai:stream:start', data),
+      cancel: (streamId: string) => invoke<{ success: boolean }>('ai:stream:cancel', streamId),
+      onChunk: (cb: (chunk: { type: string; delta?: string; streamId: string }) => void) =>
+        window.electron.on('ai:stream:chunk', cb as (...args: unknown[]) => void),
+    },
+    conv: {
+      list: () => invoke<Array<{id:string;title:string;provider:string;model:string;isPinned:boolean;totalTokens:number;createdAt:string;updatedAt:string}>>('ai:conv:list'),
+      get: (id: string) => invoke<{id:string;title:string;provider:string;model:string} | null>('ai:conv:get', id),
+      create: (data: {provider:string;model:string;title?:string;vpsId?:string}) => invoke<{id:string;title:string}>('ai:conv:create', data),
+      updateTitle: (id: string, title: string) => invoke<void>('ai:conv:updateTitle', { id, title }),
+      pin: (id: string) => invoke<void>('ai:conv:pin', id),
+      delete: (id: string) => invoke<void>('ai:conv:delete', id),
+      messages: (id: string, limit?: number) => invoke<Array<{id:string;role:string;content:string;createdAt:string}>>('ai:conv:messages', { id, limit }),
+      addMsg: (data: {conversationId:string;role:string;content:string}) => invoke<{id:string}>('ai:conv:addMsg', data),
+    },
+    chatAgent: (data: {
+      provider?: string
+      messages: Array<{role: string; content: unknown}>
+      systemPrompt?: string
+      tools: Array<{name: string; description: string; input_schema: {type: string; properties: Record<string, {type: string; description?: string}>; required: string[]}}>
+      maxTokens?: number
+    }) => invoke<
+      | { type: 'text'; content: string }
+      | { type: 'tool_use'; calls: Array<{id: string; name: string; input: Record<string, unknown>}>; text?: string; assistantMessage: unknown; format: 'anthropic' | 'openai' }
+    >('ai:chatAgent', data),
+  },
+  memory: {
+    list: (data?: { vpsId?: string | null; projectId?: string | null }) =>
+      invoke<Array<{ id: string; vpsId: string | null; projectId: string | null; key: string; value: string; updatedAt: string }>>('memory:list', data ?? {}),
+    save: (data: { vpsId?: string | null; projectId?: string | null; key: string; value: string }) =>
+      invoke<{ id: string; key: string; value: string }>('memory:save', data),
+    delete: (id: string) => invoke<void>('memory:delete', id),
+    build: (data?: { vpsId?: string | null; projectId?: string | null }) =>
+      invoke<string>('memory:build', data ?? {}),
+  },
+  tool: {
+    onConfirmRequest: (cb: (data: { toolName: string; summary: string; requestId: string }) => void) =>
+      window.electron.on('tool:confirmRequest', cb as (...args: unknown[]) => void),
+    confirmResponse: (data: { requestId: string; confirmed: boolean }) =>
+      invoke<void>('tool:confirmResponse', data),
+  },
+  window: {
+    openIde: (vpsId: string, vpsName: string) =>
+      invoke<{ success: boolean }>('window:openIde', { vpsId, vpsName }),
+    openIncident: (vpsId: string, vpsName: string) =>
+      invoke<{ success: boolean }>('window:openIncident', { vpsId, vpsName }),
+    openDeploy: (vpsId: string, vpsName: string) =>
+      invoke<{ success: boolean }>('window:openDeploy', { vpsId, vpsName }),
   },
   local: {
     openFolder: () =>

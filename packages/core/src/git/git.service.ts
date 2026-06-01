@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Client as SshClient, type ConnectConfig } from 'ssh2'
 import { getPrismaClient } from '@cwm/db'
 import { decryptPassword, type GitStatus, type GitFileStatus, type GitCommit } from '@cwm/config'
+import { buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
 
 export class GitService {
   private get db() { return getPrismaClient() }
@@ -40,10 +41,12 @@ export class GitService {
         })
       })
 
+      const { hostVerifier, wasMismatch } = buildHostVerifier(vps.id, vps.sshHostFingerprint ?? null)
       conn.on('error', (err) => {
         const m = err.message || ''
         reject(new Error(
-          m.includes('ECONNREFUSED') ? 'Conexão recusada — verifique a porta SSH'
+          wasMismatch() ? FINGERPRINT_MISMATCH_MSG
+          : m.includes('ECONNREFUSED') ? 'Conexão recusada — verifique a porta SSH'
           : m.includes('ETIMEDOUT') ? 'Timeout — VPS não respondeu'
           : m.toLowerCase().includes('auth') ? 'Autenticação falhou'
           : m
@@ -52,7 +55,7 @@ export class GitService {
 
       const config: ConnectConfig = {
         host: vps.host, port: vps.port, username: vps.username,
-        readyTimeout: 10000, hostVerifier: () => true,
+        readyTimeout: 10000, hostVerifier,
       }
       if (privateKey) config.privateKey = privateKey
       else if (password) config.password = password

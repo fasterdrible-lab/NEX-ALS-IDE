@@ -1,11 +1,12 @@
 {
-  "name": "claude-workspace-manager",
-  "version": "1.5.0",
+  "name": "hexagon-ide",
+  "version": "3.3.0",
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.js",
     "dev:inner": "concurrently -n WEB,DESKTOP -c cyan,yellow \"pnpm --filter web dev\" \"wait-on http://localhost:5173 && pnpm --filter desktop dev\"",
-    "build": "pnpm --filter web build && pnpm --filter desktop build",
+    "build:pkgs": "pnpm --filter @cwm/config build && pnpm --filter @cwm/db build && pnpm --filter @cwm/core build",
+    "build": "pnpm run build:pkgs && pnpm --filter web build && pnpm --filter desktop build",
     "package:win": "pnpm build && pnpm --filter @cwm/desktop package:win",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",

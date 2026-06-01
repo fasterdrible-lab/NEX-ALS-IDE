@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Server, Plus, Trash2, Pencil, Wifi, WifiOff, X, Loader2, KeyRound } from 'lucide-react'
+import { Server, Plus, Trash2, Pencil, Wifi, WifiOff, X, Loader2, KeyRound, ShieldCheck, ShieldOff } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import type { VpsServer, VpsServerInput, TestConnectionResult } from '@cwm/config'
 
@@ -53,6 +53,16 @@ export default function VpsList() {
     reload()
   }
 
+  const handleClearFingerprint = async (id: string, name: string) => {
+    if (!confirm(`Limpar fingerprint de "${name}"?\n\nNa próxima conexão, o novo fingerprint será aceito e armazenado automaticamente.`)) return
+    try {
+      await ipc.vps.clearFingerprint(id)
+      await reload()
+    } catch (e) {
+      alert(`Erro ao limpar fingerprint: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
   const handleTest = async (id: string) => {
     setTestResults(r => ({ ...r, [id]: { testing: true, success: false, message: 'Testando...' } }))
     try {
@@ -103,6 +113,10 @@ export default function VpsList() {
                         : <span className="badge-red"><WifiOff size={10} /> Falhou</span>
                     )}
                     {test?.testing && <span className="badge-gray"><Loader2 size={10} className="animate-spin" /> Testando</span>}
+                    {vps.sshHostFingerprint
+                      ? <span className="badge-green" title={vps.sshHostFingerprint}><ShieldCheck size={10} /> Host verificado</span>
+                      : <span className="badge-gray"><ShieldOff size={10} /> Sem fingerprint</span>
+                    }
                   </div>
                   <p className="text-sm text-slate-400 mt-0.5">{vps.username}@{vps.host}:{vps.port}</p>
                   {test && !test.success && !test.testing && (
@@ -113,6 +127,15 @@ export default function VpsList() {
                   <button onClick={() => handleTest(vps.id)} className="btn-secondary text-xs py-1.5 px-3" disabled={test?.testing}>
                     <Wifi size={13} /> Testar
                   </button>
+                  {vps.sshHostFingerprint && (
+                    <button
+                      onClick={() => handleClearFingerprint(vps.id, vps.name)}
+                      className="btn-ghost p-2 text-amber-400 hover:text-amber-300"
+                      title="Limpar fingerprint armazenado"
+                    >
+                      <ShieldOff size={14} />
+                    </button>
+                  )}
                   <button onClick={() => openEdit(vps)} className="btn-ghost p-2">
                     <Pencil size={14} />
                   </button>

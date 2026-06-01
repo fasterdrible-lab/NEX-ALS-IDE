@@ -1,21 +1,23 @@
-import { Outlet, NavLink } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Server, FolderOpen, User, Rocket,
-  Settings, Activity, BotMessageSquare, BookOpen,
+  LayoutDashboard, Server, FolderOpen, Rocket,
+  Settings, Activity, BotMessageSquare, BookOpen, BarChart3, History, Sparkles,
 } from 'lucide-react'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/vps', label: 'VPS', icon: Server },
   { to: '/projects', label: 'Projetos', icon: FolderOpen },
-  { to: '/accounts', label: 'Contas Claude', icon: User },
   { to: '/launcher', label: 'Lançador', icon: Rocket },
+  { to: '/monitor', label: 'Monitor', icon: BarChart3 },
+  { to: '/history', label: 'Histórico', icon: History },
   { to: '/settings', label: 'Configurações', icon: Settings },
   { to: '/diagnostics', label: 'Diagnóstico', icon: Activity },
   { to: '/help', label: 'Manual', icon: BookOpen },
 ]
 
 export default function Layout() {
+  const navigate = useNavigate()
   return (
     <div className="flex h-full">
       <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
@@ -27,7 +29,18 @@ export default function Layout() {
           </div>
         </div>
 
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+        {/* AI HUB — destaque */}
+        <div className="px-2 pt-2">
+          <button
+            onClick={() => navigate('/ai-hub')}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-purple-900/30 border border-purple-700/40 text-purple-300 hover:bg-purple-900/60 transition-colors"
+          >
+            <Sparkles size={15} className="shrink-0"/>
+            AI HUB
+          </button>
+        </div>
+
+        <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto">
           {navItems.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
@@ -48,7 +61,7 @@ export default function Layout() {
         </nav>
 
         <div className="px-4 py-3 border-t border-slate-800">
-          <p className="text-xs text-slate-600">v1.5.0</p>
+          <p className="text-xs text-slate-600">v3.0.0</p>
           <p className="text-xs text-slate-700 mt-0.5">HEXAGON TECNOLOGIA</p>
         </div>
       </aside>

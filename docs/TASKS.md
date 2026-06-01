@@ -2,7 +2,37 @@
 
 ## Em andamento
 
-*(nenhuma — backlog zerado)*
+*(nenhuma)*
+
+## Concluídas recentemente (v1.6.0 → v3.3.0)
+
+- [x] **AI Hub UI Completo v3.3.0** — Project Memory CRUD, Context Selector, ToolExecutor confirmação CONFIRMO — 2026-06-01
+- [x] **Deploy Assistant v3.2.0** — plano IA em JSON/markdown; tiers risco; confirmação modal para high; rollback automático; smoke test HTTP — 2026-06-01
+- [x] **Incident Mode v3.1.0** — janela 4-painéis (Diagnóstico IA + Logs + Docker/PM2 + Terminal); diagnóstico automático com streaming; botão Siren no Launcher e IDEPage — 2026-06-01
+- [x] **HEXAGON AI HUB v3.0.0** — BaseProvider, 6 providers (Anthropic/OpenAI/Gemini/DeepSeek/OpenRouter/Ollama), KeyStore, ProviderManager, ModelRegistry, ResponseStreamer, ContextManager, PromptBuilder, ConversationManager, ToolExecutor, AIHubPage com streaming — 2026-06-01
+
+- [x] **Multi-monitor** (v2.8.0) — createIdeWindow; HashRouter hash nav; botão ExternalLink no Launcher e IDEPage top bar; janelas totalmente independentes — 2026-06-01
+- [x] **Snapshot/Rollback** (v2.7.0) — snapshot antes de write_file; painel 📦 Snapshots com ↩ Restaurar por arquivo; limpo em nova sessão; preservado no Continuar — 2026-06-01
+- [x] **Limite agente 50 iter + botão Continuar** (v2.6.0) — MAX 15→50; agentResumeRef preserva histórico; banner âmbar + botão Continuar; SFTP reaberto automaticamente — 2026-06-01
+- [x] **Verificação de fingerprint SSH** (v2.5.0) — armazena na 1ª conexão; rejeita se mudar; badge ShieldCheck/ShieldOff + botão Limpar; todos os serviços SSH — 2026-06-01
+- [x] **Analisador de Disco** (v2.4.0) — botão por VPS no Monitor; modal com dirs / Docker / PM2 logs / /var/log; cores por tamanho — 2026-06-01
+- [x] **Modo Agente IA** (v2.3.0) — tool use; agentic loop 15 iter; read/write/exec/search; display inline; Anthropic + OpenAI-compat — 2026-05-31
+- [x] **Manual de Uso** (v2.3.0) — Help.tsx reescrito com todas as features v1.5→v2.4 — 2026-05-31
+- [x] **Histórico de lançamentos** (v2.2.0) — página /history; filtros VPS/projeto/status; taxa de sucesso — 2026-05-31
+- [x] **Logs Viewer** (v2.1.0) — aba Logs no IDE; presets; Watch 3s — 2026-05-31
+- [x] **PM2 / Process Manager** (v2.0.0) — aba PM2; Restart/Stop/Logs; CPU%, RAM — 2026-05-31
+- [x] **Docker Explorer** (v1.9.0) — aba Docker; Start/Stop/Logs/Remover; badge — 2026-05-31
+- [x] **Chat IA direto** (v1.8.0) — ai:chat API direta; fallback SSH; histórico completo — 2026-05-31
+- [x] **Provedores de IA** (v1.7.0) — 7 providers; AiService; Settings UI; AES-256 — 2026-05-31
+- [x] **Monitor de VPS** (v1.6.0) — CPU/RAM/Disco/Uptime; auto-refresh 30s — 2026-05-31
+
+## Próximas tarefas sugeridas — AI HUB v2
+
+- [x] **Incident Mode** — entregue em v3.1.0
+- [x] **Deploy Assistant** — entregue em v3.2.0
+- [x] **Project Memory UI** — entregue em v3.3.0
+- [x] **Context Selector UI** — entregue em v3.3.0
+- [x] **ToolExecutor confirmação UI** — entregue em v3.3.0
 
 ---
 

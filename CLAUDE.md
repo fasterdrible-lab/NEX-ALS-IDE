@@ -19,7 +19,7 @@ Duas camadas de uso:
 - **Gerenciador de ambientes** — abre VS Code Remote SSH na conta e VPS correta, evitando conflitos de autenticação entre contas Claude.
 - **IDE integrado (HEXAGON IDE)** — editor de código com Monaco Editor, explorer SFTP hierárquico, terminal SSH xterm.js, Git integrado, busca em arquivos, painel de problemas e múltiplas abas de terminal, tudo rodando diretamente na VPS via SSH/SFTP.
 
-**Repositório:** [github.com/fasterdrible-lab/HEXAGON-IDE](https://github.com/fasterdrible-lab/HEXAGON-IDE)
+**Repositório:** [github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER](https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER)
 
 ## Stack
 
@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`1.5.0` — HEXAGON IDE: backlog zerado. Split editor, LSP, port forwarding, DAP, packaging, testes
+`3.3.0` — HEXAGON AI HUB: 6 provedores IA, streaming SSE, Incident Mode, Deploy Assistant, Context Selector, Project Memory, ToolExecutor confirmação
 
 ## Regras de desenvolvimento
 
@@ -51,7 +51,7 @@ Duas camadas de uso:
 9. Toda mudança de arquitetura atualiza `docs/ARCHITECTURE.md`.
 10. Próximas etapas registradas em `docs/TASKS.md`.
 11. Versão sincronizada nos 3 `package.json`: raiz, `apps/desktop`, `apps/web`.
-12. Remote git aponta para `https://github.com/fasterdrible-lab/HEXAGON-IDE.git`.
+12. Remote git aponta para `https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git`.
 
 ## Regras de segurança
 

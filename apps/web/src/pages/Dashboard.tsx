@@ -1,18 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { type LucideIcon, Server, FolderOpen, User, Rocket, ArrowRight, Plus } from 'lucide-react'
+import { type LucideIcon, Server, FolderOpen, Rocket, ArrowRight, Plus } from 'lucide-react'
 import { ipc } from '../lib/ipc'
-import type { VpsServer, Project, ClaudeAccount } from '@cwm/config'
+import type { VpsServer, Project } from '@cwm/config'
 
 export default function Dashboard() {
   const [vps, setVps] = useState<VpsServer[]>([])
   const [projects, setProjects] = useState<Project[]>([])
-  const [accounts, setAccounts] = useState<ClaudeAccount[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([ipc.vps.list(), ipc.projects.list(), ipc.accounts.list()])
-      .then(([v, p, a]) => { setVps(v); setProjects(p); setAccounts(a) })
+    Promise.all([ipc.vps.list(), ipc.projects.list()])
+      .then(([v, p]) => { setVps(v); setProjects(p) })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
@@ -25,7 +24,7 @@ export default function Dashboard() {
     )
   }
 
-  const isEmpty = vps.length === 0 && projects.length === 0 && accounts.length === 0
+  const isEmpty = vps.length === 0 && projects.length === 0
 
   return (
     <div className="p-8">
@@ -38,7 +37,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-3 gap-4 mb-8">
         <StatCard icon={Server} label="VPS cadastradas" value={vps.length} color="blue" />
         <StatCard icon={FolderOpen} label="Projetos" value={projects.length} color="purple" />
-        <StatCard icon={User} label="Contas Claude" value={accounts.length} color="green" />
+        <StatCard icon={Rocket} label="Lançamentos" value={0} color="green" />
       </div>
 
       {isEmpty && (

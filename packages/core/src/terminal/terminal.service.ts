@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { Client as SshClient, type ConnectConfig, type ClientChannel } from 'ssh2'
 import { getPrismaClient } from '@cwm/db'
 import { decryptPassword } from '@cwm/config'
+import { buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
 
 export class TerminalSession extends EventEmitter {
   readonly sessionId: string
@@ -68,10 +69,14 @@ export class TerminalService {
           stream.on('close', () => { clearTimeout(timer); conn.end(); resolve(out) })
         })
       })
-      conn.on('error', (err) => { clearTimeout(timer); reject(err) })
+      const { hostVerifier, wasMismatch } = buildHostVerifier(vps.id, vps.sshHostFingerprint ?? null)
+      conn.on('error', (err) => {
+        clearTimeout(timer)
+        reject(new Error(wasMismatch() ? FINGERPRINT_MISMATCH_MSG : err.message))
+      })
       const config: ConnectConfig = {
         host: vps.host, port: vps.port, username: vps.username,
-        readyTimeout: 10000, hostVerifier: () => true,
+        readyTimeout: 10000, hostVerifier,
       }
       if (privateKey) {
         config.privateKey = privateKey
@@ -103,10 +108,12 @@ export class TerminalService {
         })
       })
 
+      const { hostVerifier, wasMismatch } = buildHostVerifier(vps.id, vps.sshHostFingerprint ?? null)
       conn.on('error', (err) => {
         const msg = err.message || ''
         reject(new Error(
-          msg.includes('ECONNREFUSED') ? 'Conexão recusada — verifique a porta SSH'
+          wasMismatch() ? FINGERPRINT_MISMATCH_MSG
+          : msg.includes('ECONNREFUSED') ? 'Conexão recusada — verifique a porta SSH'
           : msg.includes('ETIMEDOUT') ? 'Timeout — VPS não respondeu'
           : msg.toLowerCase().includes('auth') ? 'Autenticação falhou — verifique usuário/chave/senha SSH'
           : msg
@@ -115,7 +122,7 @@ export class TerminalService {
 
       const config: ConnectConfig = {
         host: vps.host, port: vps.port, username: vps.username,
-        readyTimeout: 15000, hostVerifier: () => true,
+        readyTimeout: 15000, hostVerifier,
       }
       if (privateKey) {
         config.privateKey = privateKey

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Client as SshClient, type SFTPWrapper, type ConnectConfig } from 'ssh2'
 import { getPrismaClient } from '@cwm/db'
 import { decryptPassword } from '@cwm/config'
+import { buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
 
 export interface FileEntry {
   name: string
@@ -153,10 +154,12 @@ export class SftpService {
         })
       })
 
+      const { hostVerifier, wasMismatch } = buildHostVerifier(vps.id, vps.sshHostFingerprint ?? null)
       conn.on('error', (err) => {
         const msg = err.message || ''
         reject(new Error(
-          msg.includes('ECONNREFUSED') ? 'Conexão recusada — verifique a porta SSH'
+          wasMismatch() ? FINGERPRINT_MISMATCH_MSG
+          : msg.includes('ECONNREFUSED') ? 'Conexão recusada — verifique a porta SSH'
           : msg.includes('ETIMEDOUT') ? 'Timeout — VPS não respondeu'
           : msg.toLowerCase().includes('auth') ? 'Autenticação falhou — verifique usuário/chave/senha'
           : msg
@@ -168,7 +171,7 @@ export class SftpService {
         port: vps.port,
         username: vps.username,
         readyTimeout: 15000,
-        hostVerifier: () => true,
+        hostVerifier,
       }
 
       if (privateKey) {

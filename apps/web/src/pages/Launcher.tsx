@@ -4,6 +4,7 @@ import {
   Rocket, Terminal, FolderOpen, Server,
   Loader2, CheckCircle, XCircle, User,
   BotMessageSquare, AlertTriangle, HelpCircle, HardDrive, Code2, FolderOpen as FolderOpenIcon,
+  ExternalLink, Siren, Rocket as RocketIcon,
 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import type { Project, VpsServer, ClaudeCheckResult } from '@cwm/config'
@@ -145,6 +146,27 @@ export default function Launcher() {
                       title="IDE integrado — editor + terminal + explorer"
                     >
                       <Code2 size={13} /> IDE
+                    </button>
+                    <button
+                      onClick={() => ipc.window.openIde(v.id, v.name)}
+                      className="btn-secondary text-xs py-1.5 px-3"
+                      title="Abrir IDE em nova janela independente"
+                    >
+                      <ExternalLink size={13} />
+                    </button>
+                    <button
+                      onClick={() => ipc.window.openIncident(v.id, v.name)}
+                      className="btn-secondary text-xs py-1.5 px-3 text-red-400 hover:text-red-300 border-red-800/40"
+                      title="Abrir Incident Mode para esta VPS"
+                    >
+                      <Siren size={13} />
+                    </button>
+                    <button
+                      onClick={() => ipc.window.openDeploy(v.id, v.name)}
+                      className="btn-secondary text-xs py-1.5 px-3 text-emerald-400 hover:text-emerald-300 border-emerald-800/40"
+                      title="Deploy Assistant — plano de deploy com aprovação"
+                    >
+                      <RocketIcon size={13} />
                     </button>
                     <button
                       onClick={() => navigate(`/explorer/${v.id}/${encodeURIComponent(v.name)}`)}

@@ -1,0 +1,979 @@
+HEXAGON IDE — Planejamento Completo
+TAREFA 1 — Entendimento do Problema
+Objetivo principal
+O HEXAGON IDE resolve um problema específico: quem usa o Claude Code em múltiplas VPS diferentes precisa trocar de conta manualmente o tempo todo, e isso gera conflito de autenticação. O app automatiza e organiza tudo isso em uma interface visual.
+
+Público-alvo
+Desenvolvedores que trabalham com:
+
+Múltiplos servidores VPS simultaneamente
+Múltiplas contas Claude Code (pessoal, trabalho, clientes)
+Projetos remotos que precisam de acesso SSH constante
+Equipes que têm VPS separadas por ambiente (dev/staging/produção)
+Problemas reais que resolve
+Problema	Como o HEXAGON IDE resolve
+Trocar de conta Claude manualmente	Cada VPS já tem sua conta associada
+Lembrar qual servidor é qual	Painel visual com nome, IP e status
+Abrir VS Code na VPS errada	Botão único que já abre no lugar certo
+Editar arquivos remotos sem VS Code	IDE integrado com Monaco + SFTP
+Terminal perdido sem contexto	Múltiplas abas com histórico
+Git manual via SSH	Painel Source Control integrado
+Não saber o que está rodando na VPS	Monitoramento de processos (roadmap)
+Por que é diferente do VS Code Remote SSH
+O VS Code Remote SSH é excelente, mas:
+
+Não gerencia múltiplas contas Claude
+Não tem visão de quais VPS estão acessíveis
+Não tem o chat Claude integrado ao editor
+Não tem port forwarding visual
+Não faz deploy local → VPS com um clique
+Não separa ambientes por conta IA
+O HEXAGON IDE é o painel de controle que organiza tudo. O VS Code Remote SSH é apenas uma das ferramentas que ele pode abrir.
+
+Riscos do produto
+Risco	Impacto	Mitigação
+Editar arquivo direto em produção	Alto	Badge PRODUÇÃO vermelho pulsante
+Credenciais SSH expostas	Crítico	Criptografia AES-256; nunca texto puro
+Conflito entre múltiplos túneis SSH	Médio	TunnelService com controle de sessões
+LSP consumindo muita memória	Baixo	LSP opt-in; desligado por padrão
+App quebrar ao perder conexão SSH	Médio	Reconexão automática + estado de erro visível
+TAREFA 2 — Requisitos Funcionais
+Cadastro e Gerenciamento de Ambientes
+O sistema deve permitir cadastrar VPS com: nome, host/IP, porta SSH, usuário, caminho padrão, senha (criptografada) ou caminho para chave SSH
+O sistema deve realizar teste de conexão SSH antes de salvar a VPS
+O sistema deve exibir o status de cada VPS: online, offline, conectando
+O sistema deve permitir associar uma conta Claude a cada VPS
+O sistema deve permitir cadastrar projetos remotos com: nome, caminho na VPS, repositório Git, VPS associada, conta Claude associada
+O sistema deve impedir cadastrar projetos sem VPS associada
+O sistema deve exibir no Lançador todas as VPS com seus projetos organizados
+Abertura de Ambientes
+O sistema deve permitir abrir o VS Code Remote SSH com um clique no projeto correto
+O sistema deve garantir que o VS Code abre com a conta Claude da VPS correta
+O sistema deve exibir confirmação visual quando o ambiente foi aberto
+O sistema deve registrar histórico de conexões por projeto
+IDE Integrado — Explorer SFTP
+O sistema deve exibir a árvore de arquivos da VPS via SFTP de forma hierárquica
+O sistema deve permitir criar, renomear, duplicar e excluir arquivos e pastas
+O sistema deve realizar auto-refresh da árvore ao salvar arquivos
+O sistema deve impedir excluir arquivos sem confirmação
+O sistema deve exibir preview de imagens (PNG, JPG, GIF, WebP) no editor
+IDE Integrado — Editor Monaco
+O sistema deve permitir abrir múltiplos arquivos em abas simultaneamente
+O sistema deve realizar syntax highlighting para todas as linguagens comuns
+O sistema deve permitir editar dois arquivos lado a lado (split editor)
+O sistema deve salvar arquivos na VPS via SFTP com Ctrl+S
+O sistema deve exibir indicador visual de alterações não salvas
+O sistema deve suportar Find/Replace (Ctrl+H) e Go to Line (Ctrl+G)
+O sistema deve permitir paleta de comandos (Ctrl+Shift+P)
+O sistema deve exibir painel de Problemas com erros/warnings do Monaco
+IDE Integrado — Terminal SSH
+O sistema deve permitir abrir múltiplas sessões SSH em abas independentes
+O sistema deve manter histórico de cada terminal ao trocar de aba
+O sistema deve permitir redimensionar o painel de terminal
+O sistema deve exibir cores ANSI completas no terminal
+O sistema deve suportar Ctrl+C, Ctrl+D e outros atalhos de terminal
+IDE Integrado — Git
+O sistema deve exibir status dos arquivos: staged, unstaged, untracked
+O sistema deve permitir stage/unstage de arquivos individualmente ou em lote
+O sistema deve permitir realizar commit com mensagem
+O sistema deve realizar push e pull com feedback visual
+O sistema deve exibir diff colorido dos arquivos alterados
+O sistema deve exibir branch atual e indicador de commits ahead/behind
+IDE Integrado — Busca e Navegação
+O sistema deve permitir busca em arquivos (Ctrl+Shift+F) com grep SSH
+O sistema deve exibir resultados agrupados por arquivo com número de linha
+O sistema deve navegar ao clicar num resultado, revelando a linha no editor
+O sistema deve suportar filtro por extensão de arquivo (ex: *.ts,*.tsx)
+IDE Integrado — Chat Claude
+O sistema deve permitir conversar com Claude via painel lateral
+O sistema deve incluir contexto automático do projeto (árvore, docs, arquivo ativo)
+O sistema deve exibir blocos de código com botões Copiar e Aplicar
+O sistema deve permitir aplicar código gerado diretamente no arquivo aberto
+O sistema deve impedir qualquer armazenamento de token ou API Key
+O sistema deve realizar a chamada ao Claude via claude -p na VPS autenticada
+Port Forwarding
+O sistema deve permitir criar túneis SSH: porta local → porta da VPS
+O sistema deve exibir lista de túneis ativos com status
+O sistema deve permitir encerrar túneis individualmente
+O sistema deve exibir link para abrir o serviço tunelado no navegador
+Configurações e Backup
+O sistema deve permitir exportar todas as VPS, projetos e contas em JSON
+O sistema deve permitir importar backup sem sobrescrever registros existentes
+O sistema deve exibir status de cada ferramenta (VS Code, SSH, Git, Node.js)
+Segurança e Controle
+O sistema deve exibir badge vermelho "PRODUÇÃO" no modo remoto
+O sistema deve exibir badge verde "LOCAL" no modo de edição local
+O sistema deve impedir comandos SSH com entrada não sanitizada
+O sistema deve validar toda entrada do usuário com Zod antes de persistir
+TAREFA 3 — Requisitos Não Funcionais
+Performance
+O sistema deve responder à abertura do Monaco Editor em menos de 2 segundos
+O sistema deve manter a interface responsiva durante operações SSH assíncronas
+O sistema deve realizar operações SFTP sem bloquear a thread principal
+O sistema deve processar eventos do terminal xterm.js em tempo real (< 50ms de latência)
+Segurança
+O sistema deve proteger senhas de VPS com criptografia AES-256-CBC
+O sistema não deve armazenar tokens Claude, API Keys ou credenciais de login
+O sistema não deve armazenar chaves SSH privadas — apenas o caminho para elas
+O sistema deve usar contextIsolation: true e nodeIntegration: false em toda BrowserWindow
+O sistema deve validar todos os dados recebidos via IPC com Zod no main process
+O sistema não deve expor stack traces de erros no renderer — apenas mensagens amigáveis
+O sistema deve sanitizar toda entrada antes de executar comandos SSH
+O sistema deve impedir que o renderer acesse ipcMain diretamente
+Usabilidade
+O sistema deve ser operável por qualquer desenvolvedor sem treinamento
+O sistema deve exibir feedback visual para todas as operações assíncronas (spinners, toasts)
+O sistema deve responder a atalhos de teclado padrão (Ctrl+S, Ctrl+H, Ctrl+G, etc.)
+O sistema deve manter o estado da interface ao trocar de seção
+Compatibilidade
+O sistema deve funcionar no Windows 10 e Windows 11 (x64)
+O sistema deve funcionar sem VS Code no PATH (uso do IDE integrado)
+O sistema deve funcionar offline para edição local (modo local)
+O sistema deve usar workers locais do Monaco para funcionar sem internet
+Disponibilidade e Estabilidade
+O sistema deve reconectar automaticamente o SFTP após queda de conexão
+O sistema deve manter o histórico do terminal ao reconectar
+O sistema deve preservar alterações não salvas em memória durante reconexão
+O sistema não deve travar quando uma VPS não está acessível
+Dados e Banco
+O sistema deve armazenar o banco SQLite no diretório de dados do usuário (app.getPath('userData'))
+O sistema deve receber DATABASE_URL exclusivamente de process.env, nunca hardcoded
+O sistema deve realizar migrations automaticamente ao iniciar
+O sistema deve versionar todas as alterações importantes no CHANGELOG.md
+TAREFA 4 — Arquitetura do Sistema
+Visão geral (nível iniciante)
+Pense no HEXAGON IDE como um prédio de 3 andares:
+
+
+┌─────────────────────────────────────────┐
+│  3º Andar — RENDERER (o que você vê)   │
+│  React + Monaco + xterm.js              │
+│  A janela do app, botões, telas         │
+├─────────────────────────────────────────┤
+│  2º Andar — PRELOAD (o porteiro)        │
+│  contextBridge — autoriza mensagens     │
+│  Define o que o 1º pode pedir ao 3º    │
+├─────────────────────────────────────────┤
+│  1º Andar — MAIN PROCESS (a máquina)   │
+│  Node.js — acesso total ao sistema      │
+│  SSH, SFTP, banco, arquivos, processos  │
+└─────────────────────────────────────────┘
+        ↕ (só via mensagens autorizadas)
+┌─────────────────────────────────────────┐
+│  SUBSOLO — Serviços externos            │
+│  VPS via SSH · SQLite · sistema de arquivos│
+└─────────────────────────────────────────┘
+Por que essa separação? Segurança. O renderer (React) não pode acessar o sistema diretamente. Tudo passa pelo "porteiro" (preload), que só deixa passar mensagens autorizadas.
+
+Camada Frontend (Renderer)
+Tecnologia: React 18 + Vite + TypeScript + Tailwind CSS
+
+Responsabilidades:
+
+Exibir todas as telas e componentes
+Gerenciar estado local (quais abas estão abertas, qual arquivo está ativo)
+Renderizar Monaco Editor, xterm.js, árvore de arquivos
+Enviar ações para o main process via window.electron.invoke(canal, dados)
+Receber eventos do main process via window.electron.on(canal, callback)
+Estado principal:
+
+
+openFiles[]      → arquivos abertos no editor
+activeTab        → arquivo ativo no painel 1
+activeTab2       → arquivo ativo no painel 2 (split)
+termTabs[]       → abas de terminal
+tunnels[]        → túneis SSH ativos
+chatMessages[]   → histórico do chat Claude
+gitStatus        → status do repositório
+Camada Preload (Porteiro)
+Tecnologia: contextBridge do Electron
+
+Responsabilidades:
+
+Definir a lista explícita de canais IPC autorizados
+Expor window.electron.invoke, window.electron.send e window.electron.on
+Bloquear qualquer canal não listado
+Regra de ouro: Se um canal não está na lista do preload, o renderer nunca pode usá-lo.
+
+Camada Main Process (A Máquina)
+Tecnologia: Node.js + electron-vite + @cwm/core
+
+Responsabilidades:
+
+Receber e validar mensagens do renderer (Zod)
+Gerenciar conexões SSH (ssh2)
+Gerenciar sessões SFTP (ssh2)
+Executar comandos na VPS
+Criar e destruir túneis SSH
+Ler/escrever banco SQLite (Prisma)
+Ler/escrever arquivos locais (node:fs)
+Abrir janelas externas (VS Code, Chrome DevTools)
+Como cada parte se conecta
+Monaco Editor → arquivo remoto:
+
+Usuário clica no arquivo no explorer
+Renderer envia sftp:readFile ao main
+Main lê via SFTP e retorna o conteúdo
+Renderer carrega no Monaco
+Usuário edita → Ctrl+S → renderer envia sftp:writeFile
+Main salva na VPS via SFTP
+Terminal xterm.js → SSH:
+
+Renderer solicita terminal:open
+Main cria sessão SSH interativa (ssh2 shell mode)
+Main emite eventos terminal:data ao renderer conforme dados chegam
+Renderer exibe no xterm.js
+Usuário digita → renderer envia terminal:input → main envia ao SSH
+Git → VPS:
+
+Renderer solicita git:status
+Main executa git status --porcelain -b via SSH exec
+Parseia a saída e retorna objeto estruturado
+Renderer exibe no painel Source Control
+Chat Claude:
+
+Renderer constrói prompt (contexto do projeto + arquivo + pergunta)
+Escreve o prompt em /tmp/hexagon_chat_xxx.txt via SFTP
+Main executa claude -p "$(cat arquivo.txt)" via SSH exec
+Retorna a resposta como string
+Renderer parseia e exibe no painel de chat
+Banco de dados
+Tecnologia: SQLite + Prisma ORM + better-sqlite3
+
+Onde fica: C:\Users\{usuario}\AppData\Roaming\HEXAGON IDE\cwm.db
+
+Por que SQLite? É local, sem servidor, fácil de fazer backup, funciona offline.
+
+TAREFA 5 — Tecnologias Recomendadas
+Tecnologia	Para que serve	Por que faz sentido	Cuidados	Alternativa
+Node.js 22 LTS	Runtime do main process	LTS = suporte longo; APIs modernas	—	—
+Electron 33+	Shell desktop	Acesso ao sistema; multiplataforma	CSP, contextIsolation	Tauri (Rust)
+electron-vite	Build do main com Rollup	Resolve imports corretamente no Electron	—	webpack
+electron-builder	Cria instaladores	NSIS, portable, auto-update	Requer assinar para Windows Defender	—
+React 18	UI declarativa	Componentes reativos; ecossistema enorme	—	Vue, Svelte
+Vite 6	Bundler do renderer	HMR rápido; workers locais para Monaco	—	Webpack
+TypeScript 5.7	Tipagem estática	Previne erros em tempo de compilação	—	—
+Tailwind CSS 3	Estilo utilitário	Sem CSS separado; classes reutilizáveis	—	—
+Lucide React	Ícones	Leve; consistente; tree-shakeable	—	heroicons
+SQLite + Prisma	Banco de dados local	Local-first; sem servidor; migrations fáceis	Não usar em múltiplos processos	—
+better-sqlite3	Driver SQLite síncrono	Rápido; confiável no Electron	Bindings nativos (rebuild ao instalar)	—
+Zod 3	Validação de dados	Type-safe; inferência TypeScript	—	Yup, Valibot
+pnpm 9	Package manager	Mais rápido; deduplicação; symlinks	—	npm, yarn
+Monaco Editor	Editor de código	Mesmo engine do VS Code; offline	Workers precisam de config extra	CodeMirror
+xterm.js	Emulador de terminal	Full-color; ANSI; resize; multi-tab	—	—
+ssh2	SSH/SFTP nativo	Sem OpenSSH no PATH; puro Node.js	Bindings nativos; rebuild necessário	—
+electron-updater	Auto-update	Integrado com electron-builder	Requer GitHub Releases configurado	—
+Vitest	Testes unitários	Compatível com ESM; rápido	—	Jest
+monaco-languageclient	LSP no Monaco	Mesmo protocolo do VS Code	Configuração complexa; v10 quebrou API	—
+Veredicto: A stack está correta para o problema. Não há tecnologia desnecessária. Os únicos riscos são os bindings nativos (better-sqlite3, ssh2, cpu-features) que precisam de rebuild ao empacotar.
+
+TAREFA 6 — Modelagem de Dados
+Entidades e Relacionamentos
+
+VpsServer (1) ──── (N) RemoteProject
+VpsServer (1) ──── (N) ClaudeAccount
+RemoteProject (N) ──── (1) ClaudeAccount
+AppSettings (1) ──── (único por instalação)
+LaunchHistory (N) ──── (1) RemoteProject
+Entidade: VpsServer
+Objetivo: Armazenar os dados de acesso a uma VPS.
+
+Campo	Tipo	Descrição
+id	String (CUID)	Identificador único
+name	String	Nome amigável (ex: "VPS-Produção")
+host	String	IP ou hostname
+port	Int	Porta SSH (padrão 22)
+username	String	Usuário SSH (ex: root)
+defaultPath	String	Caminho padrão ao abrir
+sshPassword	String?	Senha ou passphrase — criptografada AES-256
+createdAt	DateTime	Data de criação
+Dados sensíveis: sshPassword — armazenada cifrada, nunca em texto puro.
+
+O que NUNCA salvar: Token Claude, API Key Anthropic, conteúdo de chave SSH privada.
+
+Entidade: RemoteProject
+Objetivo: Representar um projeto em uma VPS específica.
+
+Campo	Tipo	Descrição
+id	String (CUID)	Identificador único
+name	String	Nome do projeto
+description	String	Descrição opcional
+remotePath	String	Caminho na VPS (ex: /var/www/projeto)
+gitRepo	String?	URL do repositório Git
+vpsServerId	String	FK → VpsServer
+claudeAccountId	String?	FK → ClaudeAccount
+createdAt	DateTime	Data de criação
+Entidade: ClaudeAccount
+Objetivo: Registro lógico de conta Claude — sem credenciais.
+
+Campo	Tipo	Descrição
+id	String (CUID)	Identificador único
+name	String	Nome amigável (ex: "Claude Conta A")
+email	String?	E-mail opcional para referência
+vpsServerId	String?	VPS onde esta conta está logada
+notes	String?	Anotações do usuário
+O que NUNCA salvar: Senha, token OAuth, cookie de sessão, API Key.
+
+Entidade: AppSettings
+Objetivo: Configurações locais do aplicativo.
+
+Campo	Tipo	Descrição
+id	String (sempre "default")	Singleton
+vscodePath	String	Caminho do executável VS Code
+vscodeInsidersPath	String	Caminho do VS Code Insiders
+sshKeyPath	String?	Caminho da chave SSH padrão
+theme	String	Tema da UI (dark/light)
+updatedAt	DateTime	Última atualização
+Entidade: LaunchHistory
+Objetivo: Histórico de quando ambientes foram abertos.
+
+Campo	Tipo	Descrição
+id	String (CUID)	Identificador único
+projectId	String	FK → RemoteProject
+launchType	String	"vscode", "ide", "terminal"
+success	Boolean	Se a abertura foi bem-sucedida
+errorMessage	String?	Mensagem de erro, se houver
+createdAt	DateTime	Quando foi aberto
+Schema Prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model VpsServer {
+  id          String    @id @default(cuid())
+  name        String
+  host        String
+  port        Int       @default(22)
+  username    String
+  defaultPath String    @default("/root")
+  sshPassword String?   // criptografado AES-256
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  projects        RemoteProject[]
+  claudeAccounts  ClaudeAccount[]
+  launchHistories LaunchHistory[]
+
+  @@map("vps_servers")
+}
+
+model RemoteProject {
+  id             String    @id @default(cuid())
+  name           String
+  description    String    @default("")
+  remotePath     String
+  gitRepo        String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  vpsServerId      String
+  vpsServer        VpsServer      @relation(fields: [vpsServerId], references: [id], onDelete: Cascade)
+  claudeAccountId  String?
+  claudeAccount    ClaudeAccount? @relation(fields: [claudeAccountId], references: [id])
+  launchHistories  LaunchHistory[]
+
+  @@map("projects")
+}
+
+model ClaudeAccount {
+  id          String    @id @default(cuid())
+  name        String
+  email       String?
+  notes       String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  vpsServerId String?
+  vpsServer   VpsServer?      @relation(fields: [vpsServerId], references: [id])
+  projects    RemoteProject[]
+
+  @@map("claude_accounts")
+}
+
+model AppSettings {
+  id                  String   @id @default("default")
+  vscodePath          String   @default("code")
+  vscodeInsidersPath  String   @default("code-insiders")
+  sshKeyPath          String?
+  updatedAt           DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model LaunchHistory {
+  id           String   @id @default(cuid())
+  launchType   String   // "vscode" | "ide" | "terminal"
+  success      Boolean
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  projectId  String
+  project    RemoteProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vpsId      String
+  vpsServer  VpsServer     @relation(fields: [vpsId], references: [id], onDelete: Cascade)
+
+  @@map("launch_history")
+}
+TAREFA 7 — Fluxo do Usuário
+Fluxo 1 — Primeiro uso
+
+1. Usuário abre o HEXAGON IDE
+2. Tela: Dashboard (vazio)
+3. Clica em "VPS" → "Nova VPS"
+4. Preenche: nome, IP, porta, usuário, senha
+5. Clica "Testar conexão" → app conecta via SSH e confirma
+6. Salva a VPS
+7. Vai para "Projetos" → "Novo Projeto"
+8. Preenche: nome, caminho na VPS, VPS associada
+9. Vai para "Contas Claude" → "Nova Conta"
+10. Preenche o nome amigável da conta
+11. Associa a conta ao projeto
+12. Vai para "Lançador"
+13. Vê o projeto com botão "IDE"
+14. Clica em IDE → ambiente abre
+Fluxo 2 — Abrir VS Code Remote SSH
+
+1. Usuário está no Lançador
+2. Vê os cards de VPS
+3. Clica em "Explorer" ou usa o botão de projeto
+4. App monta o URI: vscode-remote://ssh-remote+usuario@host:/caminho/projeto
+5. Executa: code --folder-uri <URI>
+6. VS Code abre já no diretório remoto correto
+7. Usuário autentica o Claude Code dentro do VS Code normalmente
+Fluxo 3 — Usar IDE integrado
+
+1. Usuário clica em "IDE" no card da VPS
+2. App abre a rota /ide/:vpsId/:vpsName
+3. SFTP abre conexão e carrega /root
+4. Painel esquerdo: árvore de arquivos
+5. Usuário navega pela árvore, clica num arquivo
+6. App lê via SFTP e carrega no Monaco
+7. Usuário edita com syntax highlighting
+8. Ctrl+S → app salva via SFTP na VPS
+9. Badge vermelho "PRODUÇÃO" sempre visível
+Fluxo 4 — Editar arquivo remoto
+
+1. Usuário clica no arquivo na árvore
+2. App verifica extensão:
+   - Imagem → carrega como base64, exibe <img>
+   - Binário → rejeita com toast de erro
+   - Texto → continua
+3. App chama sftp:readFile → main lê via SSH
+4. Monaco carrega o conteúdo com linguagem detectada
+5. Aba aparece com o nome do arquivo
+6. Indicador de não salvo: ponto azul na aba
+7. Ctrl+S → app chama sftp:writeFile
+8. Toast: "arquivo.ts salvo"
+9. Aba volta ao estado limpo (sem ponto)
+10. Explorer auto-atualiza a pasta pai
+Fluxo 5 — Usar terminal SSH
+
+1. Usuário pressiona Ctrl+` ou clica no ícone de terminal
+2. App abre painel inferior
+3. Clica em "+" para nova aba de terminal
+4. App chama terminal:open → main cria sessão SSH shell
+5. xterm.js recebe os dados e exibe o prompt da VPS
+6. Usuário digita comandos
+7. Cada tecla → terminal:input → SSH → resposta → terminal:data → xterm.js
+8. Para nova aba: clica "+" → nova sessão SSH independente
+9. Troca de aba: histórico preservado (display:none no DOM)
+10. Fechar aba: terminal:close → SSH encerrado
+Fluxo 6 — Usar Claude no IDE
+
+1. Usuário abre arquivo com bug no editor
+2. Clica em botão "Claude" (roxo) na top bar
+3. Painel de chat abre à direita
+4. App lê automaticamente:
+   - Árvore de pastas do projeto
+   - Arquivos de docs (CLAUDE.md, README, etc.)
+   - Conteúdo do arquivo aberto
+5. Usuário digita: "Por que esse código lança TypeError?"
+6. App monta o prompt com todo o contexto
+7. Escreve em /tmp/hexagon_chat_xxx.txt via SFTP
+8. Executa: cd /tmp && claude -p "$(cat arquivo.txt)" --allowedTools '' < /dev/null
+9. Claude responde usando o account já logado na VPS
+10. Resposta aparece no chat com blocos de código
+11. Usuário clica "▶ Aplicar em arquivo.ts"
+12. Código substitui o conteúdo do arquivo no Monaco
+13. Usuário revisa e pressiona Ctrl+S
+TAREFA 8 — Telas do App
+Dashboard
+Objetivo: Visão geral do sistema.
+Componentes: Cards de VPS com status, projetos recentes, ações rápidas.
+Ações: Navegar para qualquer seção.
+Estado de erro: VPS offline exibida em vermelho.
+Carregamento: Skeleton cards enquanto carrega.
+
+Lista de VPS
+Objetivo: Gerenciar todos os servidores cadastrados.
+Componentes: Cards com IP, usuário, status; botões Editar/Excluir/Testar.
+Ações: Criar, editar, excluir, testar conexão.
+Estado de erro: "Falha na conexão — verifique IP e credenciais."
+Carregamento: Spinner durante teste de conexão.
+
+Cadastro de VPS
+Objetivo: Adicionar ou editar uma VPS.
+Componentes: Formulário com campos nome/host/porta/usuário/senha; botão Testar Conexão.
+Ações: Salvar, cancelar, testar conexão antes de salvar.
+Estado de erro: Campos com validação inline; erro de conexão em toast.
+Carregamento: Botão desabilitado durante teste.
+
+Cadastro de Projeto
+Objetivo: Adicionar ou editar um projeto remoto.
+Componentes: Formulário com nome/caminho/VPS/conta Claude; opções para criar pasta ou clonar repo na VPS.
+Ações: Salvar, criar pasta remota, clonar repositório.
+Estado de erro: VPS não selecionada; caminho inválido.
+
+Contas Claude
+Objetivo: Gerenciar registros lógicos de contas (sem credenciais).
+Componentes: Lista com nome, e-mail, VPS associada, instruções de login.
+Ações: Criar, editar, excluir, ver instruções de autenticação.
+Estado de erro: Nenhuma VPS associada.
+
+Lançador
+Objetivo: Ponto de entrada para todos os ambientes.
+Componentes: Card por VPS com botões IDE/Explorer/Terminal; badges de status Claude Code; botão "Abrir pasta local".
+Ações: Abrir IDE, abrir VS Code Remote, abrir terminal, abrir pasta local.
+Estado de erro: VPS offline bloqueia os botões.
+Carregamento: Badge "verificando Claude..." enquanto checa.
+
+HEXAGON IDE — Layout Completo
+Objetivo: IDE integrado para edição remota.
+
+Componentes principais:
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│ TOP BAR: ← Sair | VPS-Nome | badge Produção/Local | tabs | ações │
+├──────────┬───────────────────────────────────────────────────────┤
+│ PAINEL   │ EDITOR PRINCIPAL (Monaco) | EDITOR SPLIT (opcional)   │
+│ ESQUERDO │                                                        │
+│ Arquivos │  arquivo.tsx                                          │
+│ Busca    │  1  import React from 'react'                         │
+│ Git      │  2  ...                                               │
+│ Portas   │                                                        │
+├──────────┴───────────────────────────────────────────────────────┤
+│ PAINEL INFERIOR: Terminal | Problemas                             │
+├──────────────────────────────────────────────────────────────────┤
+│ STATUS BAR: branch | arquivo | Ln/Col | TS LSP | DAP | Ctrl+`    │
+└──────────────────────────────────────────────────────────────────┘
+                                                      │ CHAT CLAUDE
+                                                      │ (lateral)
+Estados: Modo remoto (badge Produção), modo local (badge Local), modo split.
+
+Configurações
+Objetivo: Ajustar preferências do app.
+Componentes: Seções VS Code, SSH, Backup/Restore; botões Exportar/Importar JSON.
+Ações: Salvar caminhos, exportar backup, importar backup.
+
+Diagnósticos
+Objetivo: Verificar se todas as ferramentas estão configuradas.
+Componentes: Lista de itens com status OK/Erro; VS Code, SSH, Git, Node.js, VPS.
+Ações: Reexecutar diagnóstico.
+
+Manual de Uso (/help)
+Objetivo: Guia de uso para o próprio usuário.
+Componentes: 9 seções expansíveis com instruções passo a passo.
+
+TAREFA 9 — API Interna / IPC
+VPS
+vps:list
+
+Entrada: nenhuma
+Saída: VpsServer[]
+Erros: erro de banco
+vps:create
+
+Entrada: { name, host, port, username, defaultPath, sshPassword? }
+Validação Zod: campos obrigatórios; porta 1-65535; host não vazio
+Saída: VpsServer
+Erros: VPS com mesmo nome já existe
+vps:test
+
+Entrada: { id: string }
+Saída: { success, latencyMs?, error? }
+Cuidado: timeout de 10s; não expõe detalhes internos do SSH ao renderer
+vps:delete
+
+Entrada: { id: string }
+Cuidado: excluir em cascata (projetos, histórico)
+SSH / Terminal
+terminal:open
+
+Entrada: { vpsId: string }
+Saída: { sessionId: string }
+Cuidado: limite de sessões simultâneas
+Eventos: emite terminal:data e terminal:exit
+terminal:input (evento, não handle)
+
+Entrada: { sessionId, data: string }
+Cuidado: não sanitizar aqui — é input do terminal, não de formulário
+terminal:resize (evento)
+
+Entrada: { sessionId, cols, rows }
+terminal:close
+
+Entrada: { sessionId }
+Ação: encerra SSH e libera recursos
+terminal:exec
+
+Entrada: { vpsId, cmd, timeout? }
+Validação: cmd não pode conter input não sanitizado quando vem de formulários
+Saída: { success, output, error? }
+Cuidado: timeout máximo 120s; usado pelo chat Claude
+SFTP
+sftp:open
+
+Entrada: { vpsId }
+Saída: { sessionId }
+sftp:readdir
+
+Entrada: { sessionId, path }
+Validação Zod: path não vazio; não pode conter .. sem contexto
+Saída: { entries: FileEntry[] }
+sftp:readFile
+
+Entrada: { sessionId, path }
+Saída: { content: string }
+Cuidado: limite de tamanho (arquivos muito grandes podem travar o renderer)
+sftp:writeFile
+
+Entrada: { sessionId, path, content }
+Cuidado: criar backup automático antes de sobrescrever em produção (roadmap)
+sftp:mkdir / sftp:delete / sftp:rename / sftp:touch
+
+Validação: paths não nulos; confirmação de delete implementada no renderer
+Git
+git:status
+
+Entrada: { vpsId, cwd }
+Saída: { branch, ahead, behind, staged[], unstaged[], untracked[] }
+git:commit
+
+Entrada: { vpsId, cwd, message }
+Validação: message não vazia
+git:push / git:pull
+
+Entrada: { vpsId, cwd }
+Cuidado: timeout de 60s; operação pode demorar
+Túneis
+tunnel:open
+
+Entrada: { vpsId, localPort, remotePort, remoteHost? }
+Validação: portas 1-65535; não conflitar com portas já abertas
+Saída: { tunnel: TunnelInfo }
+Cuidado: fechar todos os túneis ao encerrar o app
+tunnel:close
+
+Entrada: tunnelId: string
+tunnel:list
+
+Saída: { tunnels: TunnelInfo[] }
+Config / Backup
+config:export
+
+Ação: dialog de salvar → JSON com VPS, projetos, contas
+Cuidado: senhas são omitidas do export; apenas estrutura
+config:import
+
+Ação: dialog de abrir → importa sem sobrescrever existentes
+Validação: verifica campo version para garantir que é backup válido
+Debug / LSP
+debug:openDevTools
+
+Entrada: { wsUrl }
+Ação: abre BrowserWindow com Chrome DevTools
+Clipboard
+clipboard:readImage
+
+Saída: { filePath } (PNG salvo em temp)
+Cuidado: arquivo temp deve ser limpo após uso
+TAREFA 10 — Plano de Desenvolvimento
+MVP — O mínimo para funcionar
+✅ Já implementado na v1.5.0:
+
+Cadastro de VPS, projetos, contas Claude
+Teste de conexão SSH real
+Abertura do VS Code Remote SSH
+Badge de status Claude Code
+HEXAGON IDE básico (explorer + Monaco + terminal)
+Versão 1.0 — Uso real diário
+✅ Já implementado:
+
+Git integrado completo
+Múltiplas abas de terminal
+Find in Files
+Painel de Problemas
+Auto-refresh da tree
+Chat Claude com contexto automático
+Modo local (OneDrive)
+Port Forwarding
+Packaging Windows
+Falta:
+
+Notificação ao abrir VS Code
+Histórico de lançamentos com filtros
+Versão 1.5 — Produtividade
+Feature	Status
+TypeScript LSP	✅ Implementado
+Split editor	✅ Implementado
+Backup/Restore	✅ Implementado
+SSH passphrase	✅ Implementado
+Auto-update	✅ Implementado
+Monitoramento da VPS (CPU/RAM)	🔜 Próximo
+Docker Explorer	🔜 Próximo
+PM2 / processos	🔜 Próximo
+Logs Viewer	🔜 Próximo
+Versão 2.0 — Diferenciais fortes
+Feature	Descrição
+Diff Viewer visual	Comparar dois arquivos ou versões Git
+Claude Context Manager	Salvar contextos prontos para perguntas frequentes
+AI Agent para VPS	Claude executa sequência de comandos na VPS
+Snapshot/Rollback	Backup automático antes de operações críticas
+Monitoramento em tempo real	Gráficos de CPU/RAM/disco via SSH
+Docker integrado	Listar, iniciar, parar containers visualmente
+PM2 integrado	Gerenciar processos Node.js na VPS
+Sistema de plugins	Extensibilidade via API interna
+Multi-monitor	Abrir múltiplas VPS em janelas independentes
+Anthropic API integrada	Chat mais rápido + multimodal real
+TAREFA 11 — Boas Práticas
+Organização de código
+
+packages/
+  config/    ← Tipos, schemas Zod, utilitários sem deps
+  db/        ← Prisma, migrations, tipos do banco
+  core/      ← Serviços de negócio (VpsService, GitService, etc.)
+
+apps/
+  desktop/   ← Electron main + preload + IPC handlers
+  web/       ← React renderer (nunca importa @cwm/core diretamente)
+Regra: O renderer nunca importa código do main. Toda comunicação é via IPC.
+
+Segurança no Electron
+
+// ✅ CORRETO
+new BrowserWindow({
+  webPreferences: {
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: false, // false necessário para preload com Node.js
+    preload: path.join(__dirname, 'preload.js'),
+  }
+})
+
+// ❌ NUNCA
+new BrowserWindow({
+  webPreferences: { nodeIntegration: true } // Expõe Node.js ao renderer
+})
+Segurança no SSH
+
+// ✅ CORRETO — entrada vem de formulário validado por Zod
+const { cmd } = validateWithZod(input)
+await ssh.exec(cmd)
+
+// ❌ PERIGOSO — nunca concatenar strings não validadas
+await ssh.exec(`ls ${userInput}`) // path traversal, command injection
+Validação com Zod
+
+// Sempre validar no main process, mesmo que o renderer já valide
+const VpsSchema = z.object({
+  name: z.string().min(1),
+  host: z.string().min(1),
+  port: z.coerce.number().int().min(1).max(65535).default(22),
+  username: z.string().min(1),
+})
+
+ipcMain.handle('vps:create', (_, raw) => {
+  const data = VpsSchema.parse(raw) // lança se inválido
+  return vpsService.create(data)
+})
+Tratamento de erros
+
+// ✅ Erros detalhados ficam no main (logs)
+// O renderer recebe apenas mensagens amigáveis
+function wrapHandler(fn) {
+  return fn().catch(err => {
+    console.error('[HEXAGON]', err) // log completo no main
+    return { error: err.message }  // mensagem resumida ao renderer
+  })
+}
+Testes
+
+// Vitest para lógica de negócio (sem SSH real)
+describe('VpsSchema', () => {
+  it('rejects port > 65535', () => {
+    expect(VpsSchema.safeParse({ port: 99999 }).success).toBe(false)
+  })
+})
+
+// Testes de integração: mockar o ssh2
+Versionamento
+
+SEMPRE ao implementar uma feature:
+1. Atualizar CHANGELOG.md com entrada versionada
+2. Bump nos 3 package.json (raiz, desktop, web)
+3. Atualizar Layout.tsx (versão na sidebar)
+4. Atualizar Help.tsx (versão na página de ajuda)
+5. Atualizar CURRENT_STATE.md
+6. Marcar tarefa em TASKS.md como concluída
+TAREFA 12 — Segurança
+Checklist obrigatória
+Electron:
+
+✅ contextIsolation: true em toda BrowserWindow
+✅ nodeIntegration: false em toda BrowserWindow
+✅ contextBridge com lista explícita de canais autorizados
+✅ Nenhum canal IPC não listado no preload é aceito
+✅ webContents.setWindowOpenHandler bloqueia popups não autorizadas
+✅ Links externos abrem no navegador do sistema (shell.openExternal)
+SSH:
+
+✅ Timeout em todas as conexões SSH (10-15s)
+✅ hostVerifier: () => true apenas para teste (produção: verificar fingerprint)
+✅ Senhas criptografadas AES-256; nunca texto puro
+✅ Chaves SSH: app armazena apenas o caminho, nunca o conteúdo
+✅ SSH agent suportado (Windows named pipe + Unix socket)
+SFTP:
+
+✅ Operações de delete exigem confirmação do usuário
+✅ Badge PRODUÇÃO visível para prevenir edição acidental em prod
+⚠️ Não há verificação de tamanho máximo de arquivo (risco de OOM)
+Comandos remotos:
+
+✅ terminal:exec para comandos do sistema (git, claude)
+⚠️ Inputs de formulários devem ser sanitizados antes de compor comandos SSH
+✅ Chat Claude usa arquivo temp (sem interpolação de string no comando)
+Banco de dados:
+
+✅ DATABASE_URL via process.env, nunca hardcoded
+✅ Banco no diretório userData (inacessível por outros apps)
+✅ Senhas cifradas antes de persistir
+Dados sensíveis:
+
+✅ Nunca armazena: token Claude, API Key, cookie de sessão, conteúdo de chave SSH
+✅ Export de backup omite senhas
+✅ Logs de erro ficam apenas no main process
+Riscos não mitigados (roadmap):
+
+⚠️ Sem verificação de fingerprint SSH em produção
+⚠️ Sem limite de tamanho para arquivos lidos via SFTP
+⚠️ Sem rate limiting no chat Claude (pode esgotar recursos da VPS)
+⚠️ Sem autenticação para abrir o app (app local, single-user)
+TAREFA 13 — Diferenciais do Produto
+Diferencial	Valor gerado
+Gerenciamento visual de múltiplas VPS	Elimina confusão de "qual servidor é qual"; status em tempo real
+Separação clara por conta Claude	Evita conflito de autenticação; cada projeto abre com a conta correta
+Badge DEV/STAGING/PRODUÇÃO	Previne edições acidentais em produção; segurança visual imediata
+IDE integrado sem VS Code	Editar arquivos remotos sem instalar/configurar Remote SSH
+Chat Claude com contexto automático	Claude já conhece seu projeto ao abrir o chat; sem copiar/colar
+Botão Aplicar no chat	Código gerado vai direto para o arquivo; sem copiar/colar manual
+Modo local seguro	Editar localmente sem risco; deploy manual quando pronto
+Port Forwarding visual	Acessar serviços da VPS sem linha de comando
+Backup/Restore de configurações	Migrar para outro PC em segundos
+DAP + Chrome DevTools	Depurar Node.js remoto sem VS Code
+Monitoramento de processos (roadmap)	Ver CPU/RAM/PM2 sem SSH manual
+AI Agent para VPS (roadmap)	Claude executa sequência de operações na VPS de forma autônoma
+Snapshot automático (roadmap)	Backup antes de alterações críticas; rollback em caso de problema
+TAREFA 14 — Roadmap Final
+Prioridade	Funcionalidade	Impacto	Dificuldade	Ordem
+🔴 Crítico	Monitoramento VPS (CPU/RAM)	Alto	Médio	1
+🔴 Crítico	Docker Explorer (listar/iniciar/parar containers)	Alto	Alto	2
+🔴 Crítico	PM2 / Process Manager integrado	Alto	Médio	3
+🟡 Alto	Logs Viewer (stdout de processos)	Alto	Baixo	4
+🟡 Alto	Anthropic API integrada (chat mais rápido + multimodal)	Alto	Médio	5
+🟡 Alto	Histórico de lançamentos com filtros	Médio	Baixo	6
+🟡 Alto	Notificação visual ao abrir VS Code	Baixo	Baixo	7
+🟢 Médio	Claude Context Manager (contextos salvos)	Alto	Médio	8
+🟢 Médio	AI Agent para VPS	Alto	Alto	9
+🟢 Médio	Snapshot/Rollback antes de ações críticas	Alto	Alto	10
+🟢 Médio	Multi-monitor / múltiplas janelas	Médio	Médio	11
+🔵 Baixo	Sistema de plugins	Alto	Muito Alto	12
+🔵 Baixo	Verificação de fingerprint SSH	Médio	Baixo	13
+🔵 Baixo	Limite de tamanho de arquivo SFTP	Baixo	Baixo	14
+Top 5 — O que fazer primeiro e por quê
+Monitoramento VPS — É a pergunta mais comum ao trabalhar com servidor: "Como está a CPU? Tem memória sobrando?" Implementar via SSH exec (top, free, df) é relativamente simples e gera enorme valor imediato.
+
+Anthropic API integrada — Substitui claude -p via SSH (lento, 15-30s) por chamada direta à API (rápido, 2-5s, multimodal real). Remove a limitação mais frustrante do chat atual.
+
+Docker Explorer — Grande parte dos projetos modernos usa Docker. Ver containers rodando, iniciar/parar, ver logs — tudo sem sair do IDE.
+
+PM2 / Process Manager — Projetos Node.js usam PM2. Reiniciar um processo sem abrir terminal é muito mais produtivo.
+
+Logs Viewer — Ver o stdout/stderr de processos rodando na VPS em tempo real é essencial para depurar problemas de produção.
+
+TAREFA 15 — Entregáveis Finais
+Resumo executivo
+O HEXAGON IDE é uma aplicação desktop Electron para Windows que resolve um problema real de desenvolvedores que trabalham com múltiplas VPS e múltiplas contas Claude Code: o conflito de autenticação e a falta de uma interface visual centralizada.
+
+Ele substitui scripts manuais .bat por uma interface visual completa, com duas camadas:
+
+Gerenciador de ambientes — abre o VS Code Remote SSH na VPS e conta corretas
+IDE integrado — Monaco Editor + SFTP + Terminal SSH + Git + Chat Claude, tudo rodando diretamente na VPS
+Estado atual (v1.5.0): Todas as 18 features planejadas (P0→P3) implementadas. Backlog zerado.
+
+Requisitos funcionais (resumo)
+Cadastro e gerenciamento de VPS, projetos e contas Claude
+Abertura de VS Code Remote SSH com um clique
+IDE integrado com explorer SFTP, Monaco Editor, terminal SSH, Git, busca, problemas
+Chat Claude com contexto automático do projeto
+Split editor, port forwarding SSH, TypeScript LSP, DAP debug
+Modo local para edição segura sem risco de alterar produção
+Import/export de configurações em JSON
+Packaging Windows (NSIS + portable)
+Requisitos não funcionais (resumo)
+contextIsolation obrigatório; nodeIntegration proibido
+Senhas criptografadas AES-256; nunca texto puro
+Nunca armazenar token Claude, API Key ou chave SSH privada
+Validação Zod em todos os IPC handlers
+Erros detalhados apenas no main process
+DATABASE_URL via process.env
+Arquitetura
+
+Renderer (React) ← contextBridge → Main Process (Node.js)
+                                         ↓
+                                    @cwm/core (services)
+                                         ↓
+                              ssh2 / Prisma / node:fs
+                                         ↓
+                              VPS remota / SQLite local
+Modelagem de dados
+4 entidades: VpsServer, RemoteProject, ClaudeAccount, AppSettings, LaunchHistory
+
+Dados proibidos em qualquer entidade: token Claude, API Key, conteúdo de chave SSH privada.
+
+Telas necessárias
+Dashboard · Lista VPS · Cadastro VPS · Lista Projetos · Cadastro Projeto · Contas Claude · Lançador · HEXAGON IDE (modo remoto) · HEXAGON IDE (modo local) · Configurações · Diagnósticos · Manual de Uso
+
+IPC / API interna
+Canais implementados: vps:* · projects:* · accounts:* · launcher:* · settings:* · diagnostics:* · terminal:* · sftp:* · git:* · tunnel:* · debug:* · config:* · clipboard:* · local:*
+
+Checklist de segurança
+✅ contextIsolation + nodeIntegration false
+✅ Lista explícita de canais no preload
+✅ Senhas cifradas AES-256
+✅ Nunca armazena token/API Key/chave privada
+✅ Validação Zod no main process
+✅ Badge PRODUÇÃO visível
+✅ Confirmação antes de excluir
+✅ Timeout em todas as conexões SSH
+⚠️ Falta: verificação de fingerprint SSH, limite de tamanho SFTP
+Próximas tarefas
+Monitoramento de VPS (CPU/RAM/disco via SSH)
+Integração direta com API Anthropic (chat rápido + imagens)
+Docker Explorer
+PM2 / Process Manager
+Logs Viewer em tempo real
+Verificação de fingerprint SSH
+Limite de tamanho para arquivos SFTP
+Histórico de lançamentos com filtros
+Documento gerado em 2026-05-31 · HEXAGON IDE v1.5.0 · HEXAGON TECNOLOGIA
+
+esse prompt traz quais melhorias?
+API Error: Usage credits required for 1M context · turn on usage credits at claude.ai/settings/usage, or use --model to switch to standard context
+

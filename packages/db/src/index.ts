@@ -79,6 +79,53 @@ export async function initializeDatabase(): Promise<void> {
       CONSTRAINT "launch_history_projectId_fkey"
         FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE
     )`,
+    `CREATE TABLE IF NOT EXISTS "ai_providers" (
+      "provider" TEXT NOT NULL PRIMARY KEY,
+      "apiKey" TEXT NOT NULL DEFAULT '',
+      "model" TEXT NOT NULL DEFAULT '',
+      "enabled" INTEGER NOT NULL DEFAULT 0,
+      "isDefault" INTEGER NOT NULL DEFAULT 0,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS "ai_conversations" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "title" TEXT NOT NULL DEFAULT 'Nova conversa',
+      "provider" TEXT NOT NULL DEFAULT '',
+      "model" TEXT NOT NULL DEFAULT '',
+      "vpsId" TEXT,
+      "projectId" TEXT,
+      "isPinned" INTEGER NOT NULL DEFAULT 0,
+      "totalTokens" INTEGER NOT NULL DEFAULT 0,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS "ai_messages" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "conversationId" TEXT NOT NULL,
+      "role" TEXT NOT NULL,
+      "content" TEXT NOT NULL,
+      "toolCallId" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY ("conversationId") REFERENCES "ai_conversations"("id") ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS "project_memory" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "vpsId" TEXT,
+      "projectId" TEXT,
+      "key" TEXT NOT NULL,
+      "value" TEXT NOT NULL,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS "tool_execution_log" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "conversationId" TEXT,
+      "toolName" TEXT NOT NULL,
+      "input" TEXT,
+      "output" TEXT,
+      "tier" TEXT,
+      "confirmed" INTEGER NOT NULL DEFAULT 0,
+      "executedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
   ]
 
   for (const sql of ddl) {
@@ -88,6 +135,7 @@ export async function initializeDatabase(): Promise<void> {
   // Migrações incrementais — ignoram erro se coluna já existe
   const migrations = [
     `ALTER TABLE "vps_servers" ADD COLUMN "sshPassword" TEXT`,
+    `ALTER TABLE "vps_servers" ADD COLUMN "sshHostFingerprint" TEXT`,
   ]
   for (const sql of migrations) {
     try { await db.$executeRawUnsafe(sql) } catch { /* coluna já existe */ }

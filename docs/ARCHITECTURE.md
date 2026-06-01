@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — Claude Workspace Manager
+# ARCHITECTURE.md — HEXAGON IDE v3.3.0
 
 ## Arquitetura geral
 
@@ -200,10 +200,98 @@ Ferramentas de desenvolvimento são montadas fora do `<Layout />` para ocupar 10
 - Monaco workers locais (`monacoSetup.ts`) — funciona offline
 - Ctrl+S salva o arquivo ativo; Ctrl+\` toggle do terminal
 
-## Futuras melhorias arquiteturais
+## HEXAGON AI HUB (v3.0.0+)
 
-- Docker local para isolamento de contas sem VPS
-- Plugin system para outros editores (JetBrains, Cursor)
-- Suporte a chaves SSH com passphrase (ssh-agent integration)
-- WebSocket para status em tempo real das VPS
-- Electron IPC tipado com `@electron-toolkit/typed-ipc`
+```
+packages/core/src/ai/
+├── ai.service.ts              ← orquestrador público
+├── key-store.ts               ← interface injetável para API keys (AES-256 SQLite)
+├── providers/
+│   ├── base.provider.ts       ← interface BaseProvider (sendMessage, streamMessage, validateKey, listModels)
+│   ├── anthropic.provider.ts  ← Anthropic API + SSE
+│   ├── openai.provider.ts     ← OpenAI-compat (OpenAI/DeepSeek/Groq/Mistral/xAI) + SSE
+│   ├── gemini.provider.ts     ← Gemini API + SSE
+│   ├── openrouter.provider.ts ← OpenRouter (300+ modelos, listModels dinâmico)
+│   └── ollama.provider.ts     ← Ollama local (sem API key, /api/tags)
+└── hub/
+    ├── provider-manager.ts    ← instancia provider correto pelo nome
+    ├── conversation-manager.ts← CRUD ai_conversations + ai_messages no SQLite
+    ├── context-manager.ts     ← monta context_block com prioridade de corte (80K chars)
+    ├── prompt-builder.ts      ← templates: chat / agent / sysadmin / deploy / incident
+    ├── model-registry.ts      ← catálogo de modelos + cache 24h
+    ├── tool-executor.ts       ← tiers: read/write/exec_safe/exec_dangerous + log SQLite
+    ├── response-streamer.ts   ← SSE streaming + AbortController + cancel
+    └── project-memory.ts      ← CRUD project_memory por VPS/projeto
+```
+
+**Tabelas SQLite novas (v3.0.0+):**
+```
+ai_conversations   — id, title, provider, model, vpsId, projectId, isPinned, totalTokens
+ai_messages        — id, conversationId(FK), role, content, toolCallId
+project_memory     — id, vpsId, projectId, key, value (UNIQUE vpsId+projectId+key)
+tool_execution_log — id, conversationId, toolName, input, output, tier, confirmed
+```
+
+## Fluxo de Streaming SSE
+
+```
+Renderer → ipc: ai:stream:start(input)
+                    ↓ handlers.ts
+              ResponseStreamer.start(input, onChunk)
+                    ↓ BaseProvider.streamMessage()
+              fetch SSE do provider (Anthropic/OpenAI/Gemini/etc.)
+                    ↓ ReadableStream tokens
+              onChunk({ type: 'text_delta', delta, streamId })
+                    ↓ ipcMain.emit('ai:stream:chunk', targetWin, chunk)
+Renderer ← ipc push: ai:stream:chunk
+              setChatMessages(append token)
+              [Botão ■ Parar] → ipc: ai:stream:cancel(streamId)
+```
+
+## Janelas Especializadas (v3.1.0+)
+
+```
+main.ts
+  createWindow()         ← janela principal (/)
+  createIdeWindow()      ← /ide/:vpsId/:vpsName
+  createIncidentWindow() ← /incident/:vpsId/:vpsName (1440×900, título 🚨)
+  createDeployWindow()   ← /deploy/:vpsId/:vpsName (1200×800)
+```
+
+Todas usam o mesmo preload, HashRouter, `applyWindowDefaults()`.
+
+## Roteamento completo (v3.3.0)
+
+```
+/ (Layout com sidebar + botão AI HUB)
+  /vps, /projects, /accounts, /launcher, /monitor
+  /history, /settings, /diagnostics, /help
+
+Ferramentas fullscreen (sem sidebar):
+  /ai-hub                      ← AIHubPage
+  /ide/:vpsId/:vpsName         ← IDEPage (VPS)
+  /ide/local                   ← IDEPage (local)
+  /incident/:vpsId/:vpsName    ← IncidentModePage
+  /deploy/:vpsId/:vpsName      ← DeployAssistantPage
+  /terminal/:vpsId/:vpsName    ← TerminalPage
+  /explorer/:vpsId/:vpsName    ← FileExplorerPage
+```
+
+## Fingerprint SSH (v2.5.0+)
+
+```
+Conexão SSH (qualquer serviço: VpsService/TerminalService/SftpService/GitService/TunnelService)
+    ↓ antes de conn.connect(config)
+buildHostVerifier(vpsId, storedFp)
+    ↓ hostVerifier(rawKey: Buffer) → SHA256(rawKey).base64
+  storedFp == null ?
+    → persistFingerprint(vpsId, fp)  [fire-and-forget]
+    → return true
+  fp === storedFp ?
+    → return true
+  else
+    → _mismatch = true
+    → return false  [SSH fecha conexão, error event dispara]
+  error handler checks wasMismatch()
+    → msg: "Fingerprint SSH mudou — possível ataque MITM..."
+```
