@@ -4,6 +4,11 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.3.1)
+
+- [x] **Manual de Uso — redesign UX** — Mapa do App em cards por objetivo (Gerenciamento · Desenvolvimento · IA · Deploy · Incidentes); copy orientado a benefício; seção "Dois modos de operação"; versão corrigida na sidebar — 2026-06-02
+- [x] **GUIA_INICIANTE.md** — documento em linguagem acessível: conceitos (VPS/SSH/SFTP/API Key), mapa de telas, IDE, AI Hub, Modo Agente, fluxo passo a passo, FAQ, glossário — 2026-06-02
+
 ## Concluídas recentemente (v1.6.0 → v3.3.0)
 
 - [x] **AI Hub UI Completo v3.3.0** — Project Memory CRUD, Context Selector, ToolExecutor confirmação CONFIRMO — 2026-06-01

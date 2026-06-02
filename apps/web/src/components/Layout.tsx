@@ -61,7 +61,7 @@ export default function Layout() {
         </nav>
 
         <div className="px-4 py-3 border-t border-slate-800">
-          <p className="text-xs text-slate-600">v3.0.0</p>
+          <p className="text-xs text-slate-600">v3.3.1</p>
           <p className="text-xs text-slate-700 mt-0.5">HEXAGON TECNOLOGIA</p>
         </div>
       </aside>

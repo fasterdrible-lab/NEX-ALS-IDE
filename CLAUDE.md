@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`3.3.0` — HEXAGON AI HUB: 6 provedores IA, streaming SSE, Incident Mode, Deploy Assistant, Context Selector, Project Memory, ToolExecutor confirmação
+`3.3.1` — Manual de Uso redesenhado (Mapa do App em cards por objetivo, guia para iniciantes); versão sincronizada em todos os arquivos
 
 ## Regras de desenvolvimento
 

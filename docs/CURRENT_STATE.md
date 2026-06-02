@@ -1,12 +1,12 @@
 # CURRENT_STATE.md — HEXAGON IDE
 
-**Data:** 2026-06-01
-**Versão:** 3.3.0
+**Data:** 2026-06-02
+**Versão:** 3.3.1
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**HEXAGON IDE 3.3.0** — IDE completo com **HEXAGON AI HUB** (6 provedores, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), Incident Mode (4 painéis + diagnóstico IA automático), Deploy Assistant (plano IA + aprovação + rollback + smoke test), agente IA autônomo (50 iter + Continuar + Snapshot/Rollback), multi-monitor, fingerprint SSH, e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**HEXAGON IDE 3.3.1** — IDE completo com **HEXAGON AI HUB** (6 provedores, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), Incident Mode (4 painéis + diagnóstico IA automático), Deploy Assistant (plano IA + aprovação + rollback + smoke test), agente IA autônomo (50 iter + Continuar + Snapshot/Rollback), multi-monitor, fingerprint SSH, e toda a infraestrutura IDE. Manual de Uso redesenhado (Mapa do App em cards por objetivo, guia para iniciantes). `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 

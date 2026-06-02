@@ -1,5 +1,18 @@
 # CHANGELOG — HEXAGON IDE
 
+## [3.3.1] — 2026-06-02
+
+### Melhorado
+
+- **Manual de Uso (Help.tsx) — redesign completo** — Mapa do App refeito como grade de cards agrupados por objetivo (Gerenciamento · Desenvolvimento · IA · Deploy · Incidentes); copy orientado a benefício (máx. 1 linha por item, ~62% menos texto); hierarquia visual com dot colorido por grupo e cards destacados para AI Hub, Deploy Assistant e Incident Mode; nova seção "Dois modos de operação" com cards comparativos Remoto vs Local; novo subtítulo do cabeçalho descrevendo o app de forma completa
+- **Layout.tsx** — versão na sidebar corrigida de `v3.0.0` para `v3.3.1`
+
+### Adicionado
+
+- **`docs/GUIA_INICIANTE.md`** — guia completo em linguagem acessível para desenvolvedores iniciantes: explica VPS, SSH, SFTP e API Key em termos simples; descreve cada tela do app; mostra o IDE, AI Hub, Modo Agente, Incident Mode e Deploy Assistant com diagramas ASCII; passo a passo do zero para configurar o app; FAQ e glossário de 13 termos técnicos
+
+---
+
 ## [3.3.0] — 2026-06-01
 
 ### Adicionado

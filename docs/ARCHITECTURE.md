@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — HEXAGON IDE v3.3.0
+# ARCHITECTURE.md — HEXAGON IDE v3.3.1
 
 ## Arquitetura geral
 
