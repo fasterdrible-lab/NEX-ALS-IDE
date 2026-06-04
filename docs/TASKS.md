@@ -4,6 +4,13 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.9.0)
+
+- [x] **Rename inline F2** — `selectedEntryRef` + `selectedPath` state; click/contextmenu atualizam ref; F2 no keydown abre rename inline sem context menu — 2026-06-04
+- [x] **Ctrl+Shift+T reabrir aba** — `closedTabsRef` (stack 15); `closeTab` faz push; Ctrl+Shift+T restaura a última aba fechada — 2026-06-04
+- [x] **Busca em arquivos modo local** — `handleSearch` com branch `isLocal`: `rg || findstr` via `local:exec`; caminhos absolutos; display relativo à raiz — 2026-06-04
+- [x] **Diffview modo local** — `handleLocalDiff`: `git diff -- file` via `local:exec`; mesmo Monaco diff viewer; botão Diff no top bar em modo local — 2026-06-04
+
 ## Concluídas recentemente (v3.8.0)
 
 - [x] **Autenticação interna multi-usuário** — `AuthService` (bcryptjs, SQLite `app_users`), sessão em memória no main, guards `requireAdmin/requireAuth` em todos os mutantes, `AuthContext`+`SetupPage`+`LoginPage`, sidebar com user card + logout, seção Usuários no Settings (admin CRUD) — 2026-06-04

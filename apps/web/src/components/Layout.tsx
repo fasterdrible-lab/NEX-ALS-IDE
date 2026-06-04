@@ -84,7 +84,7 @@ export default function Layout() {
             </div>
           )}
           <div>
-            <p className="text-xs text-slate-600">v3.8.0</p>
+            <p className="text-xs text-slate-600">v3.9.0</p>
             <p className="text-xs text-slate-700 mt-0.5">HEXAGON TECNOLOGIA</p>
           </div>
         </div>

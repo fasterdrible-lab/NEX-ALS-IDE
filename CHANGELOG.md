@@ -1,5 +1,16 @@
 # CHANGELOG — HEXAGON IDE
 
+## [3.9.0] — 2026-06-04
+
+### Adicionado — Melhorias incrementais no IDE
+
+- **Rename inline com F2** — clicar em qualquer entrada no explorador a seleciona (highlight azul); pressionar `F2` abre o input de renomeação inline diretamente, sem precisar do menu de contexto. `Enter` confirma, `Esc` cancela. `selectedEntryRef` + `selectedPath` state; atualiza `onContextMenu` também.
+- **Ctrl+Shift+T — Reabrir aba fechada** — `closeTab` empurra o arquivo removido para `closedTabsRef` (stack, máx 15 entradas, preserva conteúdo e estado `savedContent`). `Ctrl+Shift+T` no teclado faz pop do topo e reabre a aba; não reabre se o mesmo caminho já está aberto.
+- **Busca em arquivos no Modo Local** — `handleSearch` agora funciona sem VPS: usa `ipc.local.exec('rg ... || findstr ...')` no diretório raiz da pasta aberta; ripgrep prioritário (mais rápido), findstr como fallback Windows; resultados normalizados para caminhos absolutos; display no painel mostra caminho relativo à raiz local. Guard `!vpsId` removido.
+- **Diffview no Modo Local** — `handleLocalDiff` roda `git diff -- "<filePath>"` via `ipc.local.exec`; exibe no diff viewer Monaco (mesmo componente do modo VPS) com label relativo à raiz; toast quando sem alterações; botão **Diff** (ícone `GitCommit`) aparece no top bar do IDE quando em modo local e um arquivo está aberto.
+
+---
+
 ## [3.8.0] — 2026-06-04
 
 ### Adicionado — Autenticação interna multi-usuário

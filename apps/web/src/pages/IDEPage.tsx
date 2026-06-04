@@ -313,6 +313,11 @@ export default function IDEPage() {
   const [renaming,  setRenaming]  = useState<FileEntry|null>(null)
   const [renameVal, setRenameVal] = useState('')
   const [ctxMenu,   setCtxMenu]   = useState<CtxMenu|null>(null)
+  // F2 rename: tracks the explorer entry that was last clicked (no re-render needed)
+  const selectedEntryRef = useRef<FileEntry|null>(null)
+  const [selectedPath, setSelectedPath] = useState<string|null>(null)
+  // Ctrl+Shift+T: stack of recently closed tabs (max 15)
+  const closedTabsRef = useRef<OpenFile[]>([])
   const [toast,     setToast]     = useState<{ok:boolean;text:string}|null>(null)
 
   const showToast = (ok:boolean, text:string) => { setToast({ok,text}); setTimeout(()=>setToast(null), 3500) }
@@ -655,6 +660,24 @@ export default function IDEPage() {
       }
       if (e.key==='Escape') { setGitDiff(null); setCtxMenu(null) }
 
+      // F2 — rename the focused tree entry inline
+      if (e.key==='F2' && !renaming && selectedEntryRef.current) {
+        const entry = selectedEntryRef.current
+        setRenaming(entry); setRenameVal(entry.name)
+      }
+
+      // Ctrl+Shift+T — reopen last closed tab
+      if (ctrl && e.shiftKey && e.key==='T') {
+        e.preventDefault()
+        const last = closedTabsRef.current[0]
+        if (last) {
+          closedTabsRef.current = closedTabsRef.current.slice(1)
+          setOpenFiles(f => f.find(x=>x.path===last.path) ? f : [...f, last])
+          setActiveTab(last.path)
+          setGitDiff(null)
+        }
+      }
+
       // Ctrl+V no terminal — Electron intercepta o paste antes do xterm; repassamos manualmente
       if (ctrl && e.key === 'v' && showTerm && bottomPanel === 'terminal' && activeTermId) {
         const inst = termInstancesRef.current.get(activeTermId)
@@ -748,6 +771,8 @@ export default function IDEPage() {
     e.stopPropagation()
     const file = openFiles.find(f=>f.path===path)
     if (file&&isDirty(file)&&!confirm(`"${file.name}" tem alterações não salvas. Fechar?`)) return
+    // Push to closed-tab history (max 15 entries, Ctrl+Shift+T to reopen)
+    if (file) closedTabsRef.current = [file, ...closedTabsRef.current].slice(0, 15)
     const idx = openFiles.findIndex(f=>f.path===path)
     const next = openFiles[idx+1]?.path ?? openFiles[idx-1]?.path ?? null
     setOpenFiles(f=>f.filter(fl=>fl.path!==path)); setActiveTab(next)
@@ -827,23 +852,48 @@ export default function IDEPage() {
   // ── IDE-03: search ────────────────────────────────────────────────────
 
   const handleSearch = async () => {
-    if (!vpsId || !searchQuery.trim()) return
+    if (!searchQuery.trim()) return
+    if (!isLocal && !vpsId) return
     setSearchLoading(true); setSearchResults([]); setSearchDone(false)
     try {
-      const flags = ['-r', '-n', '--color=never', '-m 50']
-      if (!searchCase) flags.push('-i')
-      const globs = searchGlob.trim()
-        ? searchGlob.split(',').map(g => `--include="${g.trim()}"`).join(' ')
-        : ''
-      const pattern = searchQuery.replace(/'/g, "'\\''")
-      const cmd = `grep ${flags.join(' ')} ${globs} '${pattern}' /root 2>/dev/null | head -200`
-      const res = await ipc.terminal.exec(vpsId, cmd)
       const results: SearchResult[] = []
-      if (res.success) {
-        for (const line of res.output.split('\n')) {
-          if (!line.trim()) continue
-          const m = line.match(/^(.+?):(\d+):(.*)$/)
-          if (m) results.push({ file:m[1], line:parseInt(m[2]), preview:m[3].trim() })
+      if (isLocal) {
+        const root = localRootRef.current
+        if (!root) { setSearchDone(true); return }
+        const esc = searchQuery.replace(/"/g, '\\"')
+        // Try ripgrep first (fast), fall back to Windows findstr
+        const caseFlag = searchCase ? '' : '-i '
+        const cmd = `rg ${caseFlag}"${esc}" . --line-number --no-heading --color=never -m 200 2>nul || findstr /n /s ${searchCase ? '' : '/i '}"${esc}" *`
+        const res = await ipc.local.exec(cmd, root)
+        if (res.success || res.output) {
+          const rootNorm = root.replace(/\\/g, '/')
+          for (const line of res.output.split('\n')) {
+            if (!line.trim()) continue
+            const m = line.match(/^(.+?):(\d+):(.*)$/)
+            if (!m) continue
+            // Normalize to absolute path
+            const rel = m[1].replace(/\\/g, '/')
+            const absPath = rel.startsWith('/') || /^[A-Za-z]:/.test(rel)
+              ? rel
+              : `${rootNorm}/${rel}`
+            results.push({ file: absPath, line: parseInt(m[2]), preview: m[3].trim() })
+          }
+        }
+      } else {
+        const flags = ['-r', '-n', '--color=never', '-m 50']
+        if (!searchCase) flags.push('-i')
+        const globs = searchGlob.trim()
+          ? searchGlob.split(',').map(g => `--include="${g.trim()}"`).join(' ')
+          : ''
+        const pattern = searchQuery.replace(/'/g, "'\\''")
+        const cmd = `grep ${flags.join(' ')} ${globs} '${pattern}' /root 2>/dev/null | head -200`
+        const res = await ipc.terminal.exec(vpsId!, cmd)
+        if (res.success) {
+          for (const line of res.output.split('\n')) {
+            if (!line.trim()) continue
+            const m = line.match(/^(.+?):(\d+):(.*)$/)
+            if (m) results.push({ file:m[1], line:parseInt(m[2]), preview:m[3].trim() })
+          }
         }
       }
       setSearchResults(results)
@@ -895,6 +945,25 @@ export default function IDEPage() {
     const content = await ipc.git.diff(vpsId, activeDir, f.path, f.type==='staged')
     setGitDiff({ content, filePath:f.path, staged:f.type==='staged' })
     setActiveTab(null)
+  }
+
+  const handleLocalDiff = async () => {
+    if (!isLocal || !activeFile) return
+    const root = localRootRef.current
+    if (!root) return
+    try {
+      // Use the file path relative to root if possible; git diff needs the path as known by git
+      const absPath = activeFile.path.replace(/\\/g, '/')
+      const res = await ipc.local.exec(`git diff -- "${absPath}"`, root)
+      if (!res.success && !res.output) { showToast(false, 'git diff falhou'); return }
+      if (!res.output.trim()) { showToast(true, 'Sem alterações no arquivo'); return }
+      const rootNorm = root.replace(/\\/g, '/')
+      const relPath = absPath.startsWith(rootNorm)
+        ? absPath.slice(rootNorm.length).replace(/^\//, '')
+        : activeFile.name
+      setGitDiff({ content: res.output, filePath: relPath, staged: false })
+      setActiveTab(null)
+    } catch { showToast(false, 'Erro ao executar git diff') }
   }
 
   // IDE-12: navegar até a linha do problema
@@ -1526,6 +1595,15 @@ export default function IDEPage() {
           </span>
         )}
 
+        {/* Modo Local: botão git diff do arquivo ativo */}
+        {isLocal && activeFile && !activeFile.imageDataUrl && (
+          <button onClick={handleLocalDiff}
+            title="Ver git diff do arquivo ativo (requer repositório git na pasta local)"
+            className="flex items-center gap-1 px-2 text-xs text-slate-600 hover:text-amber-400 transition-colors shrink-0">
+            <GitCommitIcon size={11}/> Diff
+          </button>
+        )}
+
         {/* file tabs */}
         <div className="flex items-center gap-0 flex-1 min-w-0 overflow-x-auto mx-1">
           {gitDiff && (
@@ -1653,10 +1731,11 @@ export default function IDEPage() {
                   <div className="py-0.5">
                     {flatTree.map(({ entry, depth, childLoading }) => (
                       <div key={entry.path}
-                        className={`flex items-center group cursor-pointer text-xs hover:bg-slate-800 ${activeTab===entry.path?'bg-slate-800/80 text-slate-100':'text-slate-400 hover:text-slate-200'}`}
+                        className={`flex items-center group cursor-pointer text-xs hover:bg-slate-800 ${
+                          activeTab===entry.path||selectedPath===entry.path?'bg-slate-800/80 text-slate-100':'text-slate-400 hover:text-slate-200'}`}
                         style={{ paddingLeft: depth * 12 + 4 }}
-                        onClick={()=> entry.isDirectory ? handleToggleFolder(entry) : openFile(entry)}
-                        onContextMenu={ev=>{ev.preventDefault();setCtxMenu({x:ev.clientX,y:ev.clientY,entry})}}
+                        onClick={()=>{ selectedEntryRef.current=entry; setSelectedPath(entry.path); entry.isDirectory ? handleToggleFolder(entry) : openFile(entry) }}
+                        onContextMenu={ev=>{ev.preventDefault();selectedEntryRef.current=entry;setSelectedPath(entry.path);setCtxMenu({x:ev.clientX,y:ev.clientY,entry})}}
                       >
                         {entry.isDirectory
                           ? <ChevronRight size={11} className={`shrink-0 text-slate-600 transition-transform ${expandedFolders.has(entry.path)?'rotate-90':''}`}/>
@@ -1723,7 +1802,9 @@ export default function IDEPage() {
                 {!searchLoading && Object.entries(searchByFile).map(([file, results]) => (
                   <div key={file}>
                     <div className="px-2 py-1 text-[10px] text-slate-500 font-medium bg-slate-900/50 border-b border-slate-800/50 truncate" title={file}>
-                      {file.replace('/root/', '')}
+                      {isLocal
+                        ? file.replace(localRootRef.current.replace(/\\/g,'/'), '').replace(/^[\\/]/, '')
+                        : file.replace('/root/', '')}
                     </div>
                     {results.map((r, i) => (
                       <div key={i}

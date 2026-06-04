@@ -1,12 +1,12 @@
 # CURRENT_STATE.md — HEXAGON IDE
 
 **Data:** 2026-06-04
-**Versão:** 3.8.0
+**Versão:** 3.9.0
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**HEXAGON IDE 3.8.0** — IDE completo com **HEXAGON AI HUB** (6 provedores, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**HEXAGON IDE 3.9.0** — IDE completo com **HEXAGON AI HUB** (6 provedores, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
