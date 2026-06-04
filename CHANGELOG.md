@@ -1,5 +1,102 @@
 # CHANGELOG — HEXAGON IDE
 
+## [3.8.0] — 2026-06-04
+
+### Adicionado — Autenticação interna multi-usuário
+
+- **`bcryptjs`** adicionado como dependência de `@cwm/core` (hash/verify de senha, puro JS, sem binários nativos)
+- **Tabela `app_users`** no SQLite — `id`, `username` (UNIQUE), `passwordHash`, `role` (`admin`|`viewer`), `createdAt`, `updatedAt`; criada por DDL no `initializeDatabase()` existente (não quebra instalações sem usuários)
+- **`AuthService`** em `packages/core/src/auth/auth.service.ts` — `createUser`, `validatePassword` (bcrypt compare), `listUsers`, `deleteUser`, `changePassword`, `countUsers`
+- **IPC `auth:*`** (8 canais) — `auth:status`, `auth:setup`, `auth:login`, `auth:logout`, `auth:currentUser`, `auth:users:list`, `auth:users:create`, `auth:users:delete`, `auth:users:changePassword`
+- **Sessão em memória** no main process (`handlers.ts`) — `session: AppUser | null`; `sessionRequired` inicializado assincronamente a partir do `countUsers()`
+- **Modo backward-compat** — instalações sem usuários continuam funcionando sem login; auth é exigido apenas quando `sessionRequired = true` (ao menos 1 usuário no banco)
+- **Guards de permissão** — `requireAdmin()` + `requireAuth()` nas operações mutantes: `vps:create/update/delete`, `projects:create/update/delete`, `accounts:create/update/delete`, `settings:update`, `config:export/import`, `notifications:setEnabled`
+- **`AuthContext`** — `AuthProvider` + `useAuth()` hook; `auth:status` no mount; `login`, `logout`, `setup`, `refresh`
+- **`SetupPage`** — wizard de primeiro uso; cria a conta admin; mostrada quando `needsSetup=true`
+- **`LoginPage`** — formulário username + senha; botão show/hide; mostrada quando `sessionRequired && !user`
+- **`App.tsx`** refatorado — `AuthProvider` envolve tudo; `AppRoutes` decide entre Setup/Login/app normal baseado no estado do `AuthContext`; spinner durante loading
+- **Sidebar (`Layout.tsx`)** — card com avatar, username, role (`Administrador`/`Visualizador`), botão logout (LogOut icon); só visível quando `sessionRequired`
+- **Seção "Usuários" em Configurações** — visível apenas para admins; lista usuários com role badge (`ShieldCheck`/`Shield`); botão excluir (bloqueia excluir a si mesmo); formulário criar novo usuário (username + senha + role)
+
+---
+
+## [3.7.0] — 2026-06-04
+
+### Adicionado — LSP multi-linguagem (IDE-22)
+
+- **`apps/web/src/lib/lsp.ts` refatorado** — suporta 4 language servers simultaneamente via WebSocket tunnel:
+  - **TypeScript/JavaScript** — porta 6009 (`typescript-language-server`) — existente, sem alteração funcional
+  - **Python** — porta 6010 (`pylsp` — `pip install python-lsp-server`)
+  - **Rust** — porta 6011 (`rust-analyzer` — `rustup component add rust-analyzer`)
+  - **Go** — porta 6012 (`gopls` — `go install golang.org/x/tools/gopls@latest`)
+- **`LSP_CONFIGS`** — mapa exportado com `port`, `label`, `name`, `documentSelector` por linguagem
+- **`monacoLangToLspKey(monacoLang)`** — helper que converte ID Monaco (`typescript`, `python`, `rust`, `go`) para chave LSP
+- **`disconnectAllLSP()`** — desconecta todos os clientes ativos; chamado no unmount do IDEPage
+- **Botão LSP dinâmico na status bar** — label muda conforme a linguagem do arquivo aberto: `TS LSP`, `PY LSP`, `RS LSP`, `GO LSP`; oculto para linguagens não suportadas; tooltip inclui porta do túnel necessário
+- **Wrapper WebSocket** — mesmo padrão Node.js para todos os language servers (1 liner `node -e "..."` na VPS); documentado nos comentários de `lsp.ts`
+
+---
+
+## [3.6.0] — 2026-06-04
+
+### Adicionado — Testes E2E com Playwright
+
+- **`@playwright/test` + `electron`** adicionados como devDependencies no root `package.json`
+- **Scripts** `test:e2e` (requer build prévio) e `test:e2e:ci` (`pnpm build &&` playwright) na raiz
+- **`e2e/playwright.config.ts`** — timeout 40s, workers=1 (Electron serial), HTML report, screenshot on failure, trace on retry
+- **`e2e/global-setup.ts`** — limpa `e2e/.test-db/` antes de cada run para garantir banco isolado
+- **`e2e/helpers/app.ts`** — `launchApp()` inicia Electron com DB SQLite isolado por PID+timestamp + `ELECTRON_RENDERER_URL` apontando para `apps/web/dist/`; `closeApp()` encerra sem deixar processo zumbi
+- **`e2e/tests/01-launch.spec.ts`** — 5 testes: título da janela, janela visível, sidebar brand, links de navegação presentes, botão AI HUB
+- **`e2e/tests/02-navigation.spec.ts`** — 8 testes: navega para VPS, Projetos, Lançador, Monitor, Configurações, Manual, Diagnóstico; volta ao Dashboard
+- **`e2e/tests/03-vps.spec.ts`** — 8 testes: estado vazio, abrir modal (2 formas), fechar, Salvar desabilitado sem campos, criar VPS (aparece na lista), botão Testar, editar VPS
+- **`e2e/tests/04-settings.spec.ts`** — 8 testes: seção Notificações, toggle visível, toggle inicia ativado, toggle on/off, seção Provedores IA, Anthropic presente, seção Backup, botões Exportar/Importar
+
+---
+
+## [3.5.2] — 2026-06-04
+
+### Alterado
+
+- **Configurações simplificadas** — removidas as seções "VS Code" (vscodePath, vscodeInsidersPath) e "SSH" (sshKeyPath) da página de Configurações; os campos permanecem no banco com os valores padrão (`code`, `~/.ssh/id_rsa`); a página agora exibe apenas Notificações, Provedores de IA e Backup/Restauração
+- **Subtítulo de Configurações** atualizado de "Caminhos, preferências e provedores de IA" para "Preferências e provedores de IA"
+- **Manual de Uso atualizado** — versão corrigida para v3.5.1 em todo o Help.tsx; seção Modo Local atualizada com agente autônomo; seção Modo Agente reescrita com novos limites (500 ações, botão Parar, modo local); nova seção Notificações de Sistema adicionada
+
+---
+
+## [3.5.1] — 2026-06-04
+
+### Corrigido
+
+- **`local:writeFile` e `local:touch` criam pastas pai automaticamente** — ao salvar `api/controllers/user.js` em modo local, as pastas `api/` e `api/controllers/` são criadas com `fs.mkdir({ recursive: true })` antes de escrever o arquivo. Antes disso, o agente falhava silenciosamente ao tentar criar arquivos em subpastas inexistentes.
+
+---
+
+## [3.5.0] — 2026-06-04
+
+### Adicionado — Agente Autônomo Local
+
+- **IPC `local:exec`** — novo handler em `handlers.ts` que executa qualquer comando via `child_process.exec` no diretório do projeto local; timeout 120s; retorna `{ success, output }` com stdout+stderr combinados; adicionado ao preload e ao helper `ipc.local.exec(cmd, cwd?)`
+- **`execute_command` no modo local** — a ferramenta do agente que antes retornava erro em modo local agora executa via `local:exec`; sem necessidade de VPS; suporta `npm install`, `node`, `build`, criação de pastas, qualquer comando Windows/PowerShell
+- **`search_files` no modo local** — usa ripgrep (`rg`) se disponível no PATH, senão `findstr` nativo do Windows; busca em todos os arquivos do projeto sem VPS
+- **Agente autônomo sem pausa** — o loop do agente passou de MAX=50 com pausa manual para MAX=500 com auto-continuar; a cada 50 ações uma mensagem de progresso é exibida automaticamente; o agente só para quando a IA retorna texto sem tool calls (conclusão natural) ou o usuário clica **Parar**
+- **Botão Parar** — substitui o banner "Continuar"; visível durante execução do agente; interrompe o loop na próxima iteração sem perder o histórico; label "⏹ Parar"
+- **Descrição das ferramentas atualizada** — `execute_command` não diz mais "apenas modo remoto"; deixa claro que funciona em ambos os modos
+
+---
+
+## [3.4.0] — 2026-06-04
+
+### Adicionado — Notificações de Sistema
+
+- **`NotificationMonitor`** em `packages/core/src/notifications/notification-monitor.ts` — serviço de background que roda no main process; polling a cada 60s para todas as VPS cadastradas; lê CPU/RAM/Disco via SSH; dispara callback com `NotificationAlert` quando limites ultrapassados; cooldown de 30 min por VPS × tipo para evitar spam; tolerante a VPS offline (falha silenciosa)
+- **Limites de alerta** — Disco ≥ 85%, CPU ≥ 90%, RAM ≥ 90%
+- **Notificação nativa de erro no AI Hub** — quando o streaming é interrompido por erro e a janela não está focada, exibe notificação nativa do SO com a mensagem do erro
+- **IPC `notifications:getEnabled` / `notifications:setEnabled`** — lê e persiste preferência na coluna `notificationsEnabled` da tabela `settings` (SQLite)
+- **Toggle em Configurações** — nova seção "Notificações" na página de Settings com switch liga/desliga; estado lido do banco ao carregar; persiste imediatamente ao alternar
+- **Migração DDL incremental** — `ALTER TABLE "settings" ADD COLUMN "notificationsEnabled" INTEGER NOT NULL DEFAULT 1` (não quebra instalações existentes)
+
+---
+
 ## [3.3.1] — 2026-06-02
 
 ### Melhorado

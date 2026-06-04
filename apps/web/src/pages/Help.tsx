@@ -5,7 +5,7 @@ import {
   BotMessageSquare, CheckCircle, Monitor, HelpCircle, Code2,
   BarChart3, History, Box, Cpu, FileText, Bot, Zap,
   Sparkles, Siren, Globe, ShieldCheck, ExternalLink,
-  Play, RotateCcw, Database, Layers, LayoutDashboard,
+  Play, RotateCcw, Database, Layers, LayoutDashboard, Bell,
 } from 'lucide-react'
 
 interface Section {
@@ -157,6 +157,7 @@ const sections: Section[] = [
               <p className="text-slate-300">✓ Monaco Editor completo</p>
               <p className="text-slate-300">✓ Preview de imagem</p>
               <p className="text-slate-300">✓ Chat IA com contexto do projeto</p>
+              <p className="text-slate-300">✓ Agente autônomo — cria arquivos e roda comandos</p>
               <p className="text-slate-500">✗ Sem terminal SSH</p>
               <p className="text-slate-500">✗ Sem Git integrado</p>
               <p className="text-emerald-400">✓ Seguro — sem risco de produção</p>
@@ -422,7 +423,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
           <KV items={[
             ['Split editor', 'Dois painéis lado a lado com abas independentes'],
             ['Preview de imagem', 'PNG/JPG abrem como preview embutido na aba'],
-            ['TypeScript LSP', 'Clique "TS LSP" na status bar (requer tunel 6009 na VPS)'],
+            ['LSP multi-linguagem', 'TS (6009) · Python/pylsp (6010) · Rust/rust-analyzer (6011) · Go/gopls (6012) — botão na status bar muda conforme o arquivo aberto; requer túnel SSH + wrapper Node.js na VPS'],
             ['DAP debug', 'Clique "⬡ DAP" para abrir Chrome DevTools conectado à VPS'],
           ]}/>
         </div>
@@ -453,22 +454,24 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
 
         <div className="space-y-2">
-          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">🤖 Modo Agente</p>
-          <p className="text-xs">Ative o botão <strong className="text-slate-100">🤖 Agente</strong> no header do chat. Claude usa ferramentas reais — lê, escreve e executa arquivos por conta própria.</p>
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">🤖 Modo Agente — funciona em VPS e Local</p>
+          <p className="text-xs">Ative o botão <strong className="text-slate-100">🤖 Agente</strong> no header do chat. A IA usa ferramentas reais — lê, escreve e executa por conta própria, sem precisar de aprovação a cada passo.</p>
           <div className="bg-slate-800 rounded-lg p-3 text-xs font-mono space-y-0.5">
-            <p className="text-slate-400">Você: "Adicione validação Zod no formulário de usuário"</p>
-            <p className="text-yellow-400">⟳ list_directory src/schemas</p>
-            <p className="text-emerald-400">✓ read_file src/components/UserForm.tsx</p>
-            <p className="text-emerald-400">✓ write_file src/schemas/user.schema.ts</p>
-            <p className="text-emerald-400">✓ write_file src/components/UserForm.tsx</p>
-            <p className="text-slate-300">Claude: "Adicionei UserSchema com validação de email..."</p>
+            <p className="text-slate-400">Você: "Cria API REST com Node, Express e SQLite"</p>
+            <p className="text-yellow-400">⟳ execute_command: mkdir -p src/routes</p>
+            <p className="text-emerald-400">✓ write_file src/index.js</p>
+            <p className="text-emerald-400">✓ write_file src/routes/users.js</p>
+            <p className="text-yellow-400">⟳ execute_command: npm install express sqlite3</p>
+            <p className="text-slate-300">IA: "API criada e dependências instaladas."</p>
           </div>
           <KV items={[
-            ['50 iterações', 'O agente pode encadear até 50 chamadas de ferramentas'],
-            ['Botão ▶ Continuar', 'Aparece ao atingir 50 iter — retoma sem perder histórico'],
+            ['Até 500 ações', 'Loop automático sem pausas — progresso exibido a cada 50 ações'],
+            ['⏹ Parar', 'Interrompe o agente a qualquer momento, mantendo o histórico'],
+            ['Modo Local', 'Executa npm, node, mkdir e qualquer comando Windows no PC'],
             ['📦 Snapshots', 'Antes de cada write_file, o conteúdo original é salvo. Clique ↩ Restaurar.'],
           ]}/>
-          <Warn>Comandos destrutivos (docker stop, rm -rf, git reset --hard) no Modo Agente exigem digitar CONFIRMO no modal antes de executar.</Warn>
+          <Tip>No modo local: descreva o projeto completo — a IA cria todos os arquivos, instala dependências e garante que o projeto rode sem interação manual.</Tip>
+          <Warn>Comandos destrutivos (docker stop, rm -rf, git reset --hard) em modo VPS exigem digitar CONFIRMO no modal antes de executar.</Warn>
         </div>
 
         <div className="space-y-2">
@@ -524,6 +527,34 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
           <Step n={3}><span>Confirme "Limpar fingerprint". Na próxima conexão, o novo fingerprint será salvo.</span></Step>
         </div>
         <Warn>Se você não reinstalou o servidor mas o fingerprint mudou, pode ser um ataque. Não clique em Limpar sem investigar.</Warn>
+      </div>
+    ),
+  },
+
+  // ── NOTIFICAÇÕES DE SISTEMA ───────────────────────────────────────────
+  {
+    id: 'notifications',
+    icon: Bell,
+    title: 'Notificações de Sistema',
+    color: 'bg-yellow-600/20 text-yellow-400',
+    content: (
+      <div className="space-y-3">
+        <p>O HEXAGON IDE monitora suas VPS em segundo plano e exibe <strong className="text-slate-100">notificações nativas</strong> quando métricas críticas são atingidas — mesmo com a janela minimizada.</p>
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Alertas automáticos</p>
+          <KV items={[
+            ['Disco acima 85%', 'Notificação "Disco Cheio — NomeDaVPS"'],
+            ['CPU acima 90%', 'Notificação "CPU Alta — NomeDaVPS"'],
+            ['RAM acima 90%', 'Notificação "RAM Crítica — NomeDaVPS"'],
+            ['Erro no AI Hub', 'Notificação quando streaming falha e a janela não está em foco'],
+          ]}/>
+        </div>
+        <KV items={[
+          ['Polling', 'Verifica todas as VPS a cada 60 segundos via SSH'],
+          ['Cooldown', '30 minutos entre notificações do mesmo tipo por VPS (sem spam)'],
+          ['Ativar/desativar', 'Configurações → seção Notificações → toggle'],
+        ]}/>
+        <Tip>Se uma VPS estiver offline, o monitor ignora silenciosamente e tenta novamente no próximo ciclo de 60s.</Tip>
       </div>
     ),
   },
@@ -799,7 +830,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            ['Versão', '3.3.1'],
+            ['Versão', '3.5.2'],
             ['Runtime', 'Electron + Node.js 22'],
             ['Interface', 'React 18 + Tailwind CSS'],
             ['Banco de dados', 'SQLite local (Prisma ORM)'],
@@ -834,7 +865,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do HEXAGON IDE <strong className="text-slate-300">v3.3.1</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do HEXAGON IDE <strong className="text-slate-300">v3.8.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Incident Mode, Deploy Assistant e autenticação multi-usuário.</p>
       </div>
 
       {/* Cards de acesso rápido */}

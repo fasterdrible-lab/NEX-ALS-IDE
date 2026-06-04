@@ -15,8 +15,24 @@ import HistoryPage from './pages/HistoryPage'
 import AIHubPage from './pages/AIHubPage'
 import IncidentModePage from './pages/IncidentModePage'
 import DeployAssistantPage from './pages/DeployAssistantPage'
+import LoginPage from './pages/LoginPage'
+import SetupPage from './pages/SetupPage'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 
-export default function App() {
+function AppRoutes() {
+  const { user, needsSetup, sessionRequired, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (sessionRequired && needsSetup) return <SetupPage />
+  if (sessionRequired && !user) return <LoginPage />
+
   return (
     <Routes>
       {/* Páginas com sidebar */}
@@ -40,8 +56,15 @@ export default function App() {
       <Route path="/terminal/:vpsId/:vpsName" element={<TerminalPage />} />
       <Route path="/explorer/:vpsId/:vpsName" element={<FileExplorerPage />} />
       <Route path="/ide/:vpsId/:vpsName" element={<IDEPage />} />
-      {/* IDE-20: modo local (sem VPS) */}
       <Route path="/ide/local" element={<IDEPage />} />
     </Routes>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   )
 }

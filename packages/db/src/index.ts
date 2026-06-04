@@ -126,6 +126,14 @@ export async function initializeDatabase(): Promise<void> {
       "confirmed" INTEGER NOT NULL DEFAULT 0,
       "executedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS "app_users" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "username" TEXT NOT NULL UNIQUE,
+      "passwordHash" TEXT NOT NULL,
+      "role" TEXT NOT NULL DEFAULT 'viewer',
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
   ]
 
   for (const sql of ddl) {
@@ -136,6 +144,7 @@ export async function initializeDatabase(): Promise<void> {
   const migrations = [
     `ALTER TABLE "vps_servers" ADD COLUMN "sshPassword" TEXT`,
     `ALTER TABLE "vps_servers" ADD COLUMN "sshHostFingerprint" TEXT`,
+    `ALTER TABLE "settings" ADD COLUMN "notificationsEnabled" INTEGER NOT NULL DEFAULT 1`,
   ]
   for (const sql of migrations) {
     try { await db.$executeRawUnsafe(sql) } catch { /* coluna já existe */ }

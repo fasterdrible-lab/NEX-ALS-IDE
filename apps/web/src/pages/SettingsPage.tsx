@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
-  Settings, Loader2, CheckCircle, FolderSearch, Key,
+  Loader2, CheckCircle,
   Download, Upload, ChevronDown, ChevronUp, Eye, EyeOff,
-  Trash2, Zap, Star, Check, AlertCircle,
+  Trash2, Zap, Star, Check, AlertCircle, Bell, Users, Plus, ShieldCheck, Shield,
 } from 'lucide-react'
-import { ipc } from '../lib/ipc'
-import type { SettingsInput, AiProviderConfig } from '@cwm/config'
+import { ipc, type AppUser } from '../lib/ipc'
+import type { AiProviderConfig } from '@cwm/config'
+import { useAuth } from '../contexts/AuthContext'
 
 // ── Metadados estáticos dos provedores ──────────────────────────────────────
 
@@ -335,40 +336,44 @@ function ProviderCard({ meta, config, onRefresh }: ProviderCardProps) {
 // ── SettingsPage ─────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const [form, setForm] = useState<SettingsInput>({
-    vscodePath: 'code',
-    vscodeInsidersPath: 'code-insiders',
-    sshKeyPath: '',
-  })
+  const { user: currentUser, sessionRequired } = useAuth()
+  const isAdmin = !sessionRequired || currentUser?.role === 'admin'
+
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [aiProviders, setAiProviders] = useState<AiProviderConfig[]>([])
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+
+  // Gestão de usuários (admin only)
+  const [users, setUsers] = useState<AppUser[]>([])
+  const [newUsername, setNewUsername] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [newRole, setNewRole] = useState<'admin' | 'viewer'>('viewer')
+  const [userSaving, setUserSaving] = useState(false)
+  const [userMsg, setUserMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const loadAiProviders = useCallback(async () => {
     try { setAiProviders(await ipc.ai.list()) } catch { /* ignora */ }
   }, [])
 
+  const loadUsers = useCallback(async () => {
+    if (!isAdmin || !sessionRequired) return
+    try { setUsers(await ipc.auth.users.list()) } catch { /* ignora */ }
+  }, [isAdmin, sessionRequired])
+
   useEffect(() => {
     Promise.all([
-      ipc.settings.get()
-        .then(s => setForm({ vscodePath: s.vscodePath, vscodeInsidersPath: s.vscodeInsidersPath, sshKeyPath: s.sshKeyPath ?? '' }))
-        .catch(console.error),
       loadAiProviders(),
+      ipc.notifications.getEnabled()
+        .then(r => setNotificationsEnabled(r.enabled))
+        .catch(() => {}),
+      loadUsers(),
     ]).finally(() => setLoading(false))
-  }, [loadAiProviders])
+  }, [loadAiProviders, loadUsers])
 
-  const handleSave = async () => {
-    setSaving(true); setError(null); setSaved(false)
-    try {
-      await ipc.settings.update(form)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally { setSaving(false) }
+  const handleToggleNotifications = async (enabled: boolean) => {
+    setNotificationsEnabled(enabled)
+    try { await ipc.notifications.setEnabled(enabled) } catch { /* ignora */ }
   }
 
   const handleExport = async () => {
@@ -400,61 +405,37 @@ export default function SettingsPage() {
     <div className="p-8 max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-100">Configurações</h1>
-        <p className="text-slate-400 mt-1">Caminhos, preferências e provedores de IA</p>
+        <p className="text-slate-400 mt-1">Preferências e provedores de IA</p>
       </div>
 
-      {/* VS Code + SSH */}
+      {/* Notificações */}
       <div className="card space-y-6">
-        <Section icon={<Settings size={16} />} title="VS Code">
-          <Field label="Caminho do VS Code" hint='Comando ou caminho completo do executável. Padrão: "code"'>
-            <input
-              className="input font-mono"
-              value={form.vscodePath}
-              onChange={e => setForm(d => ({ ...d, vscodePath: e.target.value }))}
-              placeholder="code"
-            />
-          </Field>
-          <Field label="Caminho do VS Code Insiders" hint='Para projetos que usam VS Code Insiders. Padrão: "code-insiders"'>
-            <input
-              className="input font-mono"
-              value={form.vscodeInsidersPath}
-              onChange={e => setForm(d => ({ ...d, vscodeInsidersPath: e.target.value }))}
-              placeholder="code-insiders"
-            />
-          </Field>
-        </Section>
-
-        <div className="border-t border-slate-800" />
-
-        <Section icon={<Key size={16} />} title="SSH">
-          <Field
-            label="Caminho da chave SSH privada"
-            hint="Deixe vazio para usar a chave padrão (~/.ssh/id_rsa). O app nunca lê o conteúdo da chave."
-          >
-            <input
-              className="input font-mono"
-              value={form.sshKeyPath ?? ''}
-              onChange={e => setForm(d => ({ ...d, sshKeyPath: e.target.value }))}
-              placeholder="C:\Users\usuario\.ssh\id_rsa"
-            />
-          </Field>
-        </Section>
-
-        <div className="border-t border-slate-800" />
-
-        <div className="flex items-center gap-3">
-          {error && <p className="flex-1 text-sm text-red-400">{error}</p>}
-          {saved && (
-            <div className="flex items-center gap-2 text-sm text-emerald-400">
-              <CheckCircle size={14} /> Configurações salvas
+        <Section icon={<Bell size={16} />} title="Notificações">
+          <div className="flex items-center justify-between py-1">
+            <div>
+              <p className="text-sm text-slate-200">Alertas de sistema</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Notificações nativas quando disco ≥ 85%, CPU ≥ 90%, RAM ≥ 90% ou erro no AI Hub
+              </p>
             </div>
-          )}
-          <div className="ml-auto">
-            <button onClick={handleSave} disabled={saving} className="btn-primary">
-              {saving ? <><Loader2 size={14} className="animate-spin" /> Salvando...</> : 'Salvar configurações'}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={notificationsEnabled}
+              onClick={() => handleToggleNotifications(!notificationsEnabled)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                notificationsEnabled ? 'bg-brand-500' : 'bg-slate-700'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  notificationsEnabled ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
             </button>
           </div>
-        </div>
+        </Section>
+
       </div>
 
       {/* Provedores de IA */}
@@ -486,6 +467,88 @@ export default function SettingsPage() {
         </p>
       </div>
 
+      {/* Usuários — admin only, somente quando sessionRequired */}
+      {isAdmin && sessionRequired && (
+        <div className="card space-y-4">
+          <Section icon={<Users size={16} />} title="Usuários">
+            {userMsg && (
+              <div className={`text-sm px-3 py-2 rounded-lg ${userMsg.ok ? 'bg-emerald-900/40 text-emerald-300' : 'bg-red-900/40 text-red-300'}`}>
+                {userMsg.text}
+              </div>
+            )}
+
+            {/* Lista */}
+            <div className="space-y-2">
+              {users.map(u => (
+                <div key={u.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-slate-800 last:border-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {u.role === 'admin'
+                      ? <ShieldCheck size={14} className="text-brand-400 shrink-0" />
+                      : <Shield size={14} className="text-slate-500 shrink-0" />}
+                    <span className="text-sm text-slate-200 truncate">{u.username}</span>
+                    <span className="text-xs text-slate-500">{u.role === 'admin' ? 'admin' : 'viewer'}</span>
+                  </div>
+                  {u.id !== currentUser?.id && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Excluir usuário "${u.username}"?`)) return
+                        try {
+                          await ipc.auth.users.delete(u.id)
+                          await loadUsers()
+                          setUserMsg({ ok: true, text: `Usuário "${u.username}" excluído.` })
+                        } catch (e) {
+                          setUserMsg({ ok: false, text: e instanceof Error ? e.message : String(e) })
+                        }
+                      }}
+                      className="btn-ghost p-1 text-red-400 hover:text-red-300 shrink-0"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {users.length === 0 && <p className="text-sm text-slate-500">Nenhum usuário cadastrado.</p>}
+            </div>
+
+            {/* Criar novo */}
+            <div className="pt-2 border-t border-slate-800 space-y-3">
+              <p className="text-xs font-medium text-slate-400">Novo usuário</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input className="input text-sm" placeholder="Username" value={newUsername}
+                  onChange={e => setNewUsername(e.target.value)} />
+                <input className="input text-sm" type="password" placeholder="Senha (min 6)" value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)} />
+              </div>
+              <div className="flex items-center gap-3">
+                <select className="input text-sm flex-1" value={newRole}
+                  onChange={e => setNewRole(e.target.value as 'admin' | 'viewer')}>
+                  <option value="viewer">Visualizador (viewer)</option>
+                  <option value="admin">Administrador (admin)</option>
+                </select>
+                <button
+                  disabled={userSaving || !newUsername || !newPassword}
+                  onClick={async () => {
+                    setUserSaving(true); setUserMsg(null)
+                    try {
+                      await ipc.auth.users.create(newUsername, newPassword, newRole)
+                      setNewUsername(''); setNewPassword(''); setNewRole('viewer')
+                      await loadUsers()
+                      setUserMsg({ ok: true, text: 'Usuário criado com sucesso.' })
+                    } catch (e) {
+                      setUserMsg({ ok: false, text: e instanceof Error ? e.message : String(e) })
+                    } finally { setUserSaving(false) }
+                  }}
+                  className="btn-primary text-sm shrink-0"
+                >
+                  {userSaving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                  Criar
+                </button>
+              </div>
+            </div>
+          </Section>
+        </div>
+      )}
+
       {/* Backup / Restore */}
       <div className="card space-y-4">
         <div>
@@ -511,18 +574,6 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Onde encontrar caminhos */}
-      <div className="card border-slate-800/50">
-        <p className="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wide flex items-center gap-2">
-          <FolderSearch size={13} /> Onde encontrar os caminhos
-        </p>
-        <ul className="space-y-2 text-xs text-slate-500">
-          <li><span className="text-slate-300">VS Code (Windows):</span> C:\Users\{'{usuario}'}\AppData\Local\Programs\Microsoft VS Code\bin\code</li>
-          <li><span className="text-slate-300">VS Code (se no PATH):</span> code</li>
-          <li><span className="text-slate-300">SSH key (Windows):</span> C:\Users\{'{usuario}'}\.ssh\id_rsa</li>
-          <li><span className="text-slate-300">Para verificar:</span> Abra PowerShell → <code className="text-slate-400">where.exe code</code></li>
-        </ul>
-      </div>
     </div>
   )
 }

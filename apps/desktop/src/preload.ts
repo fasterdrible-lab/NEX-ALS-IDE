@@ -15,7 +15,7 @@ const ALLOWED_CHANNELS = new Set([
   'git:status', 'git:diff', 'git:add', 'git:restore', 'git:commit',
   'git:push', 'git:pull', 'git:log',
   'local:openFolder', 'local:readdir', 'local:readFile', 'local:readFileBase64',
-  'local:writeFile', 'local:mkdir', 'local:delete', 'local:rename', 'local:touch',
+  'local:writeFile', 'local:mkdir', 'local:delete', 'local:rename', 'local:touch', 'local:exec',
   'clipboard:readImage',
   'config:export', 'config:import',
   'tunnel:open', 'tunnel:close', 'tunnel:list',
@@ -32,6 +32,9 @@ const ALLOWED_CHANNELS = new Set([
   'window:openIde', 'window:openIncident', 'window:openDeploy',
   'memory:list', 'memory:save', 'memory:delete', 'memory:build',
   'tool:confirmRequest', 'tool:confirmResponse',
+  'notifications:getEnabled', 'notifications:setEnabled',
+  'auth:status', 'auth:setup', 'auth:login', 'auth:logout', 'auth:currentUser',
+  'auth:users:list', 'auth:users:create', 'auth:users:delete', 'auth:users:changePassword',
 ])
 
 contextBridge.exposeInMainWorld('electron', {

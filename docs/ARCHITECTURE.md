@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — HEXAGON IDE v3.3.1
+# ARCHITECTURE.md — HEXAGON IDE v3.5.2
 
 ## Arquitetura geral
 
@@ -37,6 +37,10 @@ packages/
   config/       ← Zod schemas + TypeScript types (sem deps externas)
   db/           ← PrismaClient + schema (depende: prisma, better-sqlite3)
   core/         ← Serviços de negócio (depende: @cwm/config, @cwm/db)
+    src/
+      ai/                  ← HEXAGON AI HUB (ver seção abaixo)
+      auth/                ← AuthService (bcryptjs, CRUD app_users, validatePassword)
+      notifications/       ← NotificationMonitor (polling VPS, alertas CPU/RAM/disco)
 
 apps/
   desktop/      ← Electron main + preload (depende: @cwm/core, electron)
@@ -110,11 +114,16 @@ createdAt, updatedAt
 id, name, email?, vpsServerId(FK?), createdAt, updatedAt
 
 -- settings (singleton, id="default")
-id, vscodePath, vscodeInsidersPath, sshKeyPath, updatedAt
+id, vscodePath, vscodeInsidersPath, sshKeyPath, notificationsEnabled, updatedAt
+
+-- app_users
+id, username (UNIQUE), passwordHash (bcrypt), role ('admin'|'viewer'), createdAt, updatedAt
 
 -- launch_history
 id, projectId(FK), launchedAt, success, errorMsg?
 ```
+
+**Nota (v3.4.0):** `notificationsEnabled` adicionado por `ALTER TABLE ... ADD COLUMN ... DEFAULT 1` (migration incremental, não quebra instalações existentes).
 
 **Nota:** O banco `cwm.db` é armazenado em `app.getPath('userData')`:
 - Windows: `%APPDATA%\claude-workspace-manager\cwm.db`
@@ -294,4 +303,192 @@ buildHostVerifier(vpsId, storedFp)
     → return false  [SSH fecha conexão, error event dispara]
   error handler checks wasMismatch()
     → msg: "Fingerprint SSH mudou — possível ataque MITM..."
+```
+
+## Autenticação multi-usuário (v3.8.0+)
+
+```
+packages/core/src/auth/auth.service.ts
+  AuthService
+    ├── createUser(username, password, role)   → bcrypt.hash (12 rounds) → INSERT app_users
+    ├── validatePassword(username, password)   → bcrypt.compare → AppUser | null
+    ├── listUsers()  deleteUser(id)            → SELECT / DELETE app_users
+    ├── changePassword(id, newPassword)        → bcrypt.hash → UPDATE app_users
+    └── countUsers()                           → COUNT(*) — usado para detectar modo single-user
+
+Fluxo de autenticação:
+  app.whenReady() → setupIpcHandlers()
+    → authSvc.countUsers() [async] → sessionRequired = n > 0
+
+  Renderer monta
+    → auth:status → { user, needsSetup, sessionRequired }
+    → needsSetup=true  → SetupPage → auth:setup → session = admin
+    → sessionRequired && !user → LoginPage → auth:login → session = user
+    → app normal
+
+Sessão:
+  let session: AppUser | null = null  [in-memory, main process]
+  Cleared on: auth:logout
+  Not persisted: requer login a cada restart do app
+
+Guards em handlers.ts:
+  requireAuth()  → lança erro se sessionRequired && !session
+  requireAdmin() → lança erro se sessionRequired && (!session || role !== 'admin')
+
+  Operações protegidas por requireAdmin():
+    vps:create/update/delete · projects:create/update/delete
+    accounts:create/update/delete · settings:update
+    config:export/import · notifications:setEnabled
+    auth:users:list/create/delete
+
+  Operações protegidas por requireAuth():
+    vps:list/test · projects:list/recent · accounts:list
+
+  Backward-compat: sessionRequired=false (sem usuários) → todos os guards são no-op
+
+IPC auth:*:
+  auth:status          → { user, needsSetup, sessionRequired }
+  auth:setup           → cria primeiro admin (só quando countUsers=0)
+  auth:login           → validatePassword → session = user
+  auth:logout          → session = null
+  auth:currentUser     → { user: session }
+  auth:users:list      → [admin] listUsers()
+  auth:users:create    → [admin] createUser()
+  auth:users:delete    → [admin] deleteUser() — bloqueia auto-exclusão
+  auth:users:changePassword → [próprio ou admin] changePassword()
+```
+
+## LSP multi-linguagem (v3.7.0+)
+
+```
+apps/web/src/lib/lsp.ts
+  LSP_CONFIGS: Record<string, LspConfig>
+    typescript  → port 6009, documentSelector: [ts, js, tsx, jsx]
+    python      → port 6010, documentSelector: [python]
+    rust        → port 6011, documentSelector: [rust]
+    go          → port 6012, documentSelector: [go]
+
+  monacoLangToLspKey(monacoLang) → string | null
+    Converte ID Monaco → chave LSP
+
+  connectLSP(monaco, langKey)
+    → LSP_CONFIGS[langKey] → wsUrl = ws://localhost:{port}
+    → WebSocket handshake (timeout 5s)
+    → MonacoLanguageClient({ documentSelector, messageTransports })
+    → activeClients.set(langKey, { dispose })
+
+  disconnectAllLSP() → chamado no cleanup de unmount do IDEPage
+
+Status bar no IDEPage:
+  activeFile → detectLang(name) → monacoLangToLspKey(lang) → cfg
+  Renderiza: {cfg.label} LSP [✓] com tooltip "requer túnel porta {cfg.port}"
+
+Wrapper WebSocket na VPS (padrão Node.js para qualquer language server):
+  node -e "const W=require('ws'),{spawn}=require('child_process');
+    new W.Server({port:PORT}).on('connection',ws=>{
+      const p=spawn('LANG_SERVER_BIN');
+      ws.on('message',d=>p.stdin.write(d)); p.stdout.on('data',d=>ws.send(d));
+      p.on('exit',()=>ws.close())});"
+```
+
+## Content Security Policy (v3.6.0+)
+
+```
+apps/desktop/src/main.ts — setupCSP()
+  session.defaultSession.webRequest.onHeadersReceived(callback)
+    Injeta Content-Security-Policy em todas as respostas do renderer
+    (funciona tanto em dev http://localhost:5173 quanto produção file://)
+
+CSP configurada:
+  default-src 'self'
+  script-src  'self' 'unsafe-eval' blob:   ← Monaco precisa de unsafe-eval
+  style-src   'self' 'unsafe-inline'       ← Tailwind + Monaco inline styles
+  img-src     'self' data: blob:           ← SFTP image preview via data:
+  font-src    'self' data:
+  connect-src 'self' ws: wss: https: http://localhost:*  ← AI APIs + LSP WS
+  worker-src  blob: 'self'                 ← Monaco web workers
+```
+
+## NotificationMonitor (v3.4.0+)
+
+```
+packages/core/src/notifications/notification-monitor.ts
+  NotificationMonitor
+    ├── start()          ← inicia setInterval 60s no main process
+    ├── stop()           ← limpa o intervalo
+    ├── setEnabled(bool) ← toggle em runtime (via IPC notifications:setEnabled)
+    └── onAlert(cb)      ← callback chamado quando limiar ultrapassado
+
+Fluxo de polling:
+  setInterval(60s)
+    ↓ poll(): busca todas VPS no SQLite
+    ↓ checkVps(vpsId, vpsName): exec SSH único com 4 métricas inline
+        cat /proc/loadavg · nproc · free -m · df /
+    ↓ calcula cpuPct · ramPct · diskPct
+    ↓ compara com THRESHOLDS { disk:85%, cpu:90%, ram:90% }
+    ↓ canNotify(vpsId, type): cooldown 30min por vps×tipo
+    ↓ emit(NotificationAlert) → callback no main.ts
+        → new Notification({ title, body }).show()   [nativo OS]
+    VPS offline → erro silencioso (Promise.allSettled)
+```
+
+**IPC de notificações:**
+```
+notifications:getEnabled  → { enabled: boolean }
+notifications:setEnabled  ← { enabled: boolean } → persiste no SQLite + notifMonitor.setEnabled()
+```
+
+**Notificação de erro IA Hub:** quando streaming falha com a janela desfocada, o handler `ai:stream:start` chama `new Notification(...)` diretamente (sem passar pelo monitor de polling).
+
+## Modo Local — Filesystem IPC (v3.5.0+)
+
+Canais IPC para operar no sistema de arquivos local (Windows) sem SSH/VPS:
+
+```
+local:openFolder                → dialog.showOpenDialog (seleção de pasta)
+local:readdir    (dirPath)      → fs.readdir com tipo (file/directory/symlink)
+local:readFile   (filePath)     → fs.readFile UTF-8
+local:readFileBase64 (filePath) → fs.readFile → base64
+local:writeFile  ({filePath, content})
+    → fs.mkdir({ recursive: true }) para criar pastas pai
+    → fs.writeFile UTF-8
+local:mkdir      (dirPath)      → fs.mkdir
+local:delete     (filePath)     → fs.rm({ recursive: true, force: true })
+local:rename     ({oldPath, newPath}) → fs.rename
+local:touch      (filePath)
+    → fs.mkdir({ recursive: true }) para criar pastas pai
+    → fs.writeFile '' se não existir
+local:exec       ({cmd, cwd?})
+    → child_process.exec(cmd, { cwd, timeout: 120s })
+    → retorna { success, output } (stdout + stderr combinados)
+    → usado pelo agente autônomo em modo local (npm install, node, etc.)
+```
+
+## Agente Autônomo (v3.5.0+)
+
+O agente IA no IDEPage opera em dois modos e suporta até 500 iterações sem pausa manual:
+
+```
+IDEPage.sendAgentMessage()
+    ↓ loop: até MAX=500 iterações
+    ↓ ai:agent:run (VPS) OU ai:stream:start com tools (local)
+    ↓ IA retorna tool_use?
+        NÃO → conclusão natural, loop para
+        SIM → executa ferramenta:
+          read_file    → sftp:readFile  OU local:readFile
+          write_file   → sftp:writeFile OU local:writeFile (cria pastas pai)
+          execute_command → terminal:exec (VPS) OU local:exec (local)
+          search_files → grep SSH (VPS) OU rg/findstr (local)
+          list_files   → sftp:readdir  OU local:readdir
+    ↓ a cada 50 ações: mensagem de progresso automática no histórico
+    ↓ usuário clica ⏹ Parar → stopAgentRef.current = true → loop para na próxima iteração
+
+Comandos destrutivos em modo VPS: modal confirmação "CONFIRMO"
+  padrões: docker rm/stop/restart · pm2 delete/stop/restart
+           git reset --hard · rm -rf · DROP TABLE · truncate
+
+Snapshot/Rollback:
+  antes de write_file → snapshot em memória (Map<filePath, conteúdo anterior>)
+  painel 📦 Snapshots → botão ↩ Restaurar por arquivo
+  limpo em nova sessão; preservado ao continuar (stopAgentRef + história intacta)
 ```

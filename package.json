@@ -1,6 +1,6 @@
 {
   "name": "hexagon-ide",
-  "version": "3.3.1",
+  "version": "3.8.0",
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.js",
@@ -11,13 +11,17 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts",
+    "test:e2e:ci": "pnpm build && playwright test --config e2e/playwright.config.ts",
     "db:generate": "pnpm --filter @cwm/db generate",
     "db:push": "pnpm --filter @cwm/db db:push",
     "db:studio": "pnpm --filter @cwm/db studio"
   },
   "devDependencies": {
+    "@playwright/test": "^1.50.0",
     "concurrently": "^9.1.0",
     "cross-env": "^7.0.3",
+    "electron": "^33.3.0",
     "typescript": "^5.7.3",
     "wait-on": "^8.0.1"
   },

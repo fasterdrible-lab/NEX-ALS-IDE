@@ -4,6 +4,38 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.8.0)
+
+- [x] **Autenticação interna multi-usuário** — `AuthService` (bcryptjs, SQLite `app_users`), sessão em memória no main, guards `requireAdmin/requireAuth` em todos os mutantes, `AuthContext`+`SetupPage`+`LoginPage`, sidebar com user card + logout, seção Usuários no Settings (admin CRUD) — 2026-06-04
+
+## Concluídas recentemente (v3.7.0)
+
+- [x] **LSP multi-linguagem (IDE-22)** — `lsp.ts` refatorado: `LSP_CONFIGS` (TS/PY/RS/GO), `monacoLangToLspKey`, `disconnectAllLSP`; botão LSP na status bar muda label/porta/tooltip conforme arquivo ativo; cleanup no unmount — 2026-06-04
+
+## Concluídas recentemente (v3.6.0)
+
+- [x] **Testes E2E com Playwright** — `@playwright/test` + `electron` na raiz; `e2e/playwright.config.ts` (workers=1, timeout 40s, HTML report); `global-setup.ts` limpa DB de teste; `helpers/app.ts` (launchApp/closeApp, DB isolado por run); 4 spec files: `01-launch` (5 testes), `02-navigation` (8), `03-vps` (8), `04-settings` (8) = **29 testes E2E**; scripts `test:e2e` e `test:e2e:ci` — 2026-06-04
+
+## Concluídas recentemente (v3.5.3)
+
+- [x] **ARCHITECTURE.md atualizado para v3.5.2** — adicionadas seções: NotificationMonitor (polling/thresholds/cooldown/IPC), Modo Local filesystem IPC (local:readdir/writeFile/exec/touch com criação de pastas pai), Agente Autônomo (loop 500 iterações, stop, snapshot/rollback, modo VPS vs local); schema settings com `notificationsEnabled`; módulo `notifications/` no diagrama de pacotes — 2026-06-04
+
+## Concluídas recentemente (v3.5.2)
+
+- [x] **Configurações simplificadas** — removidas seções VS Code e SSH da UI; campos mantidos no banco com padrões; Manual de Uso atualizado com todas as features v3.4–v3.5 — 2026-06-04
+
+## Concluídas recentemente (v3.5.1)
+
+- [x] **Bugfix local:writeFile/touch** — `fs.mkdir({ recursive: true })` antes de escrever; resolve "Falha ao salvar" ao criar arquivos em subpastas inexistentes — 2026-06-04
+
+## Concluídas recentemente (v3.5.0)
+
+- [x] **Agente autônomo local** — `local:exec` IPC; `execute_command` + `search_files` funcionando em modo local; loop auto-continua até 500 ações sem pausa; botão Parar substitui "Continuar" — 2026-06-04
+
+## Concluídas recentemente (v3.4.0)
+
+- [x] **Notificações de sistema** — `NotificationMonitor` (polling 60s, cooldown 30min); alertas Disco ≥ 85% / CPU ≥ 90% / RAM ≥ 90%; erro IA Hub; toggle em Configurações com persistência — 2026-06-04
+
 ## Concluídas recentemente (v3.3.1)
 
 - [x] **Manual de Uso — redesign UX** — Mapa do App em cards por objetivo (Gerenciamento · Desenvolvimento · IA · Deploy · Incidentes); copy orientado a benefício; seção "Dois modos de operação"; versão corrigida na sidebar — 2026-06-02

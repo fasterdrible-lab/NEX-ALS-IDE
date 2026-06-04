@@ -15,6 +15,7 @@ import {
   ExternalLink, Siren, Rocket as RocketDeployIcon,
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
+import { LSP_CONFIGS, monacoLangToLspKey } from '../lib/lsp'
 
 // ── language / icon helpers ────────────────────────────────────────────
 
@@ -152,21 +153,26 @@ export default function IDEPage() {
   const [problems,    setProblems]    = useState<Problem[]>([])
   const markerDisposableRef = useRef<{ dispose(): void } | null>(null)
 
-  // IDE-16: LSP
-  const [lspActive, setLspActive] = useState(false)
+  // IDE-16 / IDE-22: LSP multi-linguagem (TS/PY/RS/GO)
+  const [lspStates, setLspStates] = useState<Record<string, boolean>>({})
   const [lspLoading, setLspLoading] = useState(false)
   const monacoRef = useRef<Monaco|null>(null)
 
-  const toggleLSP = async () => {
+  const toggleLSP = async (langKey: string) => {
     if (lspLoading) return
+    const config = LSP_CONFIGS[langKey]
+    if (!config) return
     setLspLoading(true)
     try {
       const { connectLSP, disconnectLSP, isLSPConnected } = await import('../lib/lsp')
-      if (isLSPConnected()) {
-        disconnectLSP(); setLspActive(false); showToast(true, 'LSP desconectado')
+      if (isLSPConnected(langKey)) {
+        disconnectLSP(langKey)
+        setLspStates(s => ({ ...s, [langKey]: false }))
+        showToast(true, `${config.name} desconectado`)
       } else {
-        await connectLSP(monacoRef.current!, 'ws://localhost:6009')
-        setLspActive(true); showToast(true, 'TypeScript LSP conectado')
+        await connectLSP(monacoRef.current!, langKey)
+        setLspStates(s => ({ ...s, [langKey]: true }))
+        showToast(true, `${config.name} conectado`)
       }
     } catch (err) {
       showToast(false, `LSP: ${err instanceof Error ? err.message : String(err)}`)
@@ -244,6 +250,7 @@ export default function IDEPage() {
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([])
   const [agentPaused, setAgentPaused] = useState(false)
   const agentResumeRef = useRef<{ messages: Array<{role: string; content: unknown}>; systemCtx: string } | null>(null)
+  const agentStopRef   = useRef(false)
   // ToolExecutor — confirmação de ações perigosas em PROD
   type ToolConfirmState = { toolName: string; cmdSummary: string; resolve: (ok: boolean) => void }
   const [toolConfirm, setToolConfirm] = useState<ToolConfirmState | null>(null)
@@ -523,6 +530,7 @@ export default function IDEPage() {
       setTermTabs(tabs => tabs.map(t => t.id===tabId ? {...t, sessionId:r.sessionId, status:'connected'} : t))
       fit.fit()
       ipc.terminal.resize(r.sessionId, term.cols, term.rows)
+      term.focus()
 
       const u1 = window.electron.on('terminal:data', (p:unknown) => {
         const x = p as {sessionId:string;data:string}
@@ -600,16 +608,16 @@ export default function IDEPage() {
     if (inst) { inst.fit.fit() }
   }, [termH, activeTermId])
 
-  // Refit on show
+  // Refit + refocus on show
   useEffect(() => {
     if (!showTerm || !activeTermId) return
     setTimeout(() => {
       const inst = termInstancesRef.current.get(activeTermId)
-      if (inst) inst.fit.fit()
-    }, 50)
-  }, [showTerm, activeTermId])
+      if (inst) { inst.fit.fit(); inst.term.focus() }
+    }, 100)
+  }, [showTerm, activeTermId, bottomPanel])
 
-  // Cleanup all terminals + marker subscription on unmount
+  // Cleanup all terminals + marker subscription + LSP connections on unmount
   useEffect(() => {
     return () => {
       termInstancesRef.current.forEach(inst => {
@@ -617,6 +625,7 @@ export default function IDEPage() {
         if (inst.sessionId) ipc.terminal.close(inst.sessionId).catch(() => {})
       })
       markerDisposableRef.current?.dispose()
+      import('../lib/lsp').then(({ disconnectAllLSP }) => disconnectAllLSP()).catch(() => {})
     }
   }, [])
 
@@ -624,7 +633,7 @@ export default function IDEPage() {
     setActiveTermId(tabId)
     setTimeout(() => {
       const inst = termInstancesRef.current.get(tabId)
-      if (inst) inst.fit.fit()
+      if (inst) { inst.fit.fit(); inst.term.focus() }
     }, 50)
   }
 
@@ -645,11 +654,22 @@ export default function IDEPage() {
         setTimeout(() => document.getElementById('search-input')?.focus(), 100)
       }
       if (e.key==='Escape') { setGitDiff(null); setCtxMenu(null) }
+
+      // Ctrl+V no terminal — Electron intercepta o paste antes do xterm; repassamos manualmente
+      if (ctrl && e.key === 'v' && showTerm && bottomPanel === 'terminal' && activeTermId) {
+        const inst = termInstancesRef.current.get(activeTermId)
+        if (inst?.sessionId) {
+          e.preventDefault()
+          navigator.clipboard.readText().then(text => {
+            if (text) inst.term.paste(text)
+          }).catch(() => {})
+        }
+      }
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, openFiles])
+  }, [activeTab, openFiles, showTerm, bottomPanel, activeTermId])
 
   // IDE-21: carregar lista de VPS para seletor de chat no modo local
   useEffect(() => {
@@ -1062,9 +1082,9 @@ export default function IDEPage() {
       input_schema: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string', description: 'Conteúdo completo' } }, required: ['path', 'content'] } },
     { name: 'list_directory',  description: 'Lista arquivos e pastas de um diretório.',
       input_schema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } },
-    { name: 'execute_command', description: 'Executa um comando bash na VPS. Apenas modo remoto.',
+    { name: 'execute_command', description: 'Executa um comando no terminal do projeto (bash/PowerShell). Use para npm install, build, testes, criar pastas, etc.',
       input_schema: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } },
-    { name: 'search_files',    description: 'Busca um padrão de texto em arquivos com grep.',
+    { name: 'search_files',    description: 'Busca um padrão de texto em arquivos do projeto.',
       input_schema: { type: 'object', properties: { pattern: { type: 'string' }, directory: { type: 'string', description: 'Diretório (padrão: raiz)' } }, required: ['pattern'] } },
   ]
 
@@ -1125,9 +1145,14 @@ export default function IDEPage() {
           return r.success ? r.entries.map(e => `${e.isDirectory ? 'DIR' : 'FILE'} ${e.name}`).join('\n') : `Erro: ${r.error}`
         }
         case 'execute_command': {
-          if (isLocal || !vpsId) return '⚠️ execute_command não disponível no modo local.'
           const cmd = toolInput.command as string
-          // Confirma comandos perigosos em modo VPS (não-local)
+          if (isLocal) {
+            // Modo local — executa via child_process no diretório do projeto
+            const r = await ipc.local.exec(cmd, root)
+            return r.output || '(sem output)'
+          }
+          if (!vpsId) return '⚠️ Sem VPS configurada.'
+          // Confirma comandos perigosos em modo VPS
           const dangerous = /docker\s+(rm|stop|restart)|pm2\s+(delete|stop|restart)|git\s+reset\s+--hard|rm\s+-rf|DROP\s+TABLE|truncate/i.test(cmd)
           if (dangerous) {
             const confirmed = await new Promise<boolean>(resolve => {
@@ -1142,7 +1167,16 @@ export default function IDEPage() {
         case 'search_files': {
           const pattern = (toolInput.pattern as string).replace(/"/g, '\\"')
           const dir = resolvePath((toolInput.directory as string) || '.')
-          if (isLocal || !vpsId) return '⚠️ search_files requer modo VPS.'
+          if (isLocal) {
+            // Modo local — usa findstr (Windows nativo) ou ripgrep se disponível
+            const rg = await ipc.local.exec(`rg --version`, root).catch(() => ({ success: false, output: '' }))
+            const cmd = rg.success
+              ? `rg "${pattern}" "${dir}" -l --max-count 1 2>&1`
+              : `findstr /s /r /m "${pattern}" "${dir}\\*.*" 2>&1`
+            const r = await ipc.local.exec(cmd, root)
+            return r.output || '(sem resultados)'
+          }
+          if (!vpsId) return '⚠️ Sem VPS configurada.'
           const r = await ipc.terminal.exec(vpsId, `grep -r "${pattern}" "${dir}" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.py" -l 2>&1 | head -30`, 15000)
           return r.success ? (r.output || '(sem resultados)') : `Erro: ${r.error}`
         }
@@ -1178,12 +1212,20 @@ export default function IDEPage() {
     }
 
     setAgentSteps([])
+    agentStopRef.current = false
     let iterations = 0
-    const MAX = 50
+    const HARD_LIMIT = 500
+    const PROGRESS_EVERY = 50
 
     try {
-      while (iterations < MAX) {
+      while (iterations < HARD_LIMIT && !agentStopRef.current) {
         iterations++
+
+        // Progresso automático a cada 50 iterações — sem pausa
+        if (iterations > 1 && (iterations - 1) % PROGRESS_EVERY === 0) {
+          setChatMessages(m => [...m, { role: 'assistant', text: `↻ Continuando automaticamente… (${iterations - 1} ações executadas)` }])
+        }
+
         const result = await ipc.ai.chatAgent({
           messages: apiMessages,
           systemPrompt: `Responda em português brasileiro. Você é um agente de código com acesso real ao projeto. Use as ferramentas para ler arquivos antes de modificar. Raiz do projeto: ${root}\n\n${systemCtx}`,
@@ -1231,10 +1273,10 @@ export default function IDEPage() {
           apiMessages.push(...toolResults)
         }
       }
-      if (iterations >= MAX) {
-        agentResumeRef.current = { messages: [...apiMessages], systemCtx }
-        setAgentPaused(true)
-        setChatMessages(m => [...m, { role: 'assistant', text: `⚠️ Limite de ${MAX} iterações atingido. Clique em **Continuar** para retomar sem perder o histórico.` }])
+      if (agentStopRef.current) {
+        setChatMessages(m => [...m, { role: 'assistant', text: `⏹ Agente interrompido após ${iterations} ações.` }])
+      } else if (iterations >= HARD_LIMIT) {
+        setChatMessages(m => [...m, { role: 'assistant', text: `⚠️ Limite de segurança atingido (${HARD_LIMIT} ações). A tarefa pode estar em loop — verifique o projeto.` }])
       }
     } finally {
       if (sftpSid) ipc.sftp.close(sftpSid).catch(() => {})
@@ -2219,6 +2261,7 @@ export default function IDEPage() {
                   <div key={tab.id}
                     ref={el => { if (el) termContainerMapRef.current.set(tab.id, el) }}
                     style={{ display: tab.id===activeTermId ? 'block' : 'none', height:'100%', padding:'4px' }}
+                    onClick={() => termInstancesRef.current.get(tab.id)?.term.focus()}
                   />
                 ))}
                 {termTabs.length===0 && showTerm && (
@@ -2545,19 +2588,15 @@ export default function IDEPage() {
                 {chatLoading && (
                   <div className="flex items-center gap-2 text-slate-500 text-xs bg-slate-800/50 rounded-lg px-3 py-2">
                     <Loader2 size={12} className="animate-spin text-purple-400"/>
-                    <span>Claude pensando… <span className="text-slate-600">{chatElapsed}s</span></span>
-                    <span className="text-slate-700 text-[10px]">(pode levar 15-30s)</span>
-                  </div>
-                )}
-                {agentPaused && !chatLoading && (
-                  <div className="flex items-center justify-between bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2">
-                    <span className="text-xs text-amber-400">Agente pausado — limite de 50 iterações atingido</span>
-                    <button
-                      onClick={handleAgentContinue}
-                      className="text-xs bg-amber-700/40 hover:bg-amber-700/60 text-amber-300 border border-amber-600/40 rounded px-2.5 py-1 transition-colors"
-                    >
-                      ▶ Continuar
-                    </button>
+                    <span className="flex-1">Claude pensando… <span className="text-slate-600">{chatElapsed}s</span></span>
+                    {agentMode && (
+                      <button
+                        onClick={() => { agentStopRef.current = true }}
+                        className="text-xs bg-red-900/40 hover:bg-red-900/60 text-red-400 border border-red-800/40 rounded px-2.5 py-1 transition-colors shrink-0"
+                      >
+                        ⏹ Parar
+                      </button>
+                    )}
                   </div>
                 )}
                 <div ref={chatEndRef}/>
@@ -2716,15 +2755,22 @@ export default function IDEPage() {
         <span className="flex items-center gap-3">
           {activeFile && isDirty(activeFile) && <span className="text-brand-400">● Ctrl+S salvar</span>}
           {activeFile && !gitDiff && <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>}
-          {/* IDE-16: botão LSP na status bar */}
-          {!isLocal && (
-            <button onClick={toggleLSP} disabled={lspLoading}
-              title={lspActive ? 'TypeScript LSP ativo — clique para desconectar' : 'Ativar TypeScript LSP (requer túnel porta 6009)'}
-              className={`flex items-center gap-1 transition-colors ${lspActive?'text-emerald-400 hover:text-emerald-300':'text-slate-600 hover:text-slate-400'}`}>
-              {lspLoading ? <Loader2 size={10} className="animate-spin"/> : <span className="text-[10px]">TS</span>}
-              {lspActive ? ' LSP ✓' : ' LSP'}
-            </button>
-          )}
+          {/* IDE-16/22: botão LSP dinâmico — muda conforme linguagem do arquivo ativo */}
+          {!isLocal && (() => {
+            const monacoLang = activeFile ? detectLang(activeFile.name) : null
+            const lspKey = monacoLang ? monacoLangToLspKey(monacoLang) : null
+            if (!lspKey) return null
+            const cfg = LSP_CONFIGS[lspKey]
+            const active = lspStates[lspKey] ?? false
+            return (
+              <button onClick={() => toggleLSP(lspKey)} disabled={lspLoading}
+                title={active ? `${cfg.name} ativo — clique para desconectar` : `Ativar ${cfg.name} (túnel porta ${cfg.port})`}
+                className={`flex items-center gap-1 transition-colors ${active ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-600 hover:text-slate-400'}`}>
+                {lspLoading ? <Loader2 size={10} className="animate-spin"/> : <span className="text-[10px]">{cfg.label}</span>}
+                {active ? ' LSP ✓' : ' LSP'}
+              </button>
+            )
+          })()}
           {/* IDE-18: botão DAP debug remoto na status bar */}
           {!isLocal && (
             <button

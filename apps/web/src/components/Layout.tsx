@@ -1,8 +1,9 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Server, FolderOpen, Rocket,
-  Settings, Activity, BotMessageSquare, BookOpen, BarChart3, History, Sparkles,
+  Settings, Activity, BotMessageSquare, BookOpen, BarChart3, History, Sparkles, LogOut, User,
 } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -18,6 +19,7 @@ const navItems = [
 
 export default function Layout() {
   const navigate = useNavigate()
+  const { user, logout, sessionRequired } = useAuth()
   return (
     <div className="flex h-full">
       <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
@@ -60,9 +62,31 @@ export default function Layout() {
           ))}
         </nav>
 
-        <div className="px-4 py-3 border-t border-slate-800">
-          <p className="text-xs text-slate-600">v3.3.1</p>
-          <p className="text-xs text-slate-700 mt-0.5">HEXAGON TECNOLOGIA</p>
+        <div className="px-3 py-3 border-t border-slate-800 space-y-2">
+          {sessionRequired && user && (
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded-full bg-brand-600/30 flex items-center justify-center shrink-0">
+                  <User size={12} className="text-brand-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-300 truncate">{user.username}</p>
+                  <p className="text-[10px] text-slate-600">{user.role === 'admin' ? 'Administrador' : 'Visualizador'}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => logout()}
+                title="Sair"
+                className="shrink-0 p-1.5 text-slate-600 hover:text-red-400 transition-colors rounded"
+              >
+                <LogOut size={13} />
+              </button>
+            </div>
+          )}
+          <div>
+            <p className="text-xs text-slate-600">v3.8.0</p>
+            <p className="text-xs text-slate-700 mt-0.5">HEXAGON TECNOLOGIA</p>
+          </div>
         </div>
       </aside>
 

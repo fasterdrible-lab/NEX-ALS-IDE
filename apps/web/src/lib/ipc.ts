@@ -11,6 +11,13 @@ import type {
 export type { GitStatus, GitCommit }
 export type { GitFileStatus } from '@cwm/config'
 
+export interface AppUser {
+  id: string
+  username: string
+  role: 'admin' | 'viewer'
+  createdAt: string
+}
+
 export interface FileEntry {
   name: string
   path: string
@@ -269,5 +276,26 @@ export const ipc = {
       invoke<{ success: boolean }>('local:rename', { oldPath, newPath }),
     touch: (filePath: string) =>
       invoke<{ success: boolean }>('local:touch', filePath),
+    exec: (cmd: string, cwd?: string) =>
+      invoke<{ success: boolean; output: string }>('local:exec', { cmd, cwd }),
+  },
+  notifications: {
+    getEnabled: () => invoke<{ enabled: boolean }>('notifications:getEnabled'),
+    setEnabled: (enabled: boolean) => invoke<{ success: boolean }>('notifications:setEnabled', { enabled }),
+  },
+  auth: {
+    status: () => invoke<{ user: AppUser | null; needsSetup: boolean; sessionRequired: boolean }>('auth:status'),
+    setup: (username: string, password: string) => invoke<{ user: AppUser }>('auth:setup', { username, password }),
+    login: (username: string, password: string) => invoke<{ user: AppUser }>('auth:login', { username, password }),
+    logout: () => invoke<{ success: boolean }>('auth:logout'),
+    currentUser: () => invoke<{ user: AppUser | null }>('auth:currentUser'),
+    users: {
+      list: () => invoke<AppUser[]>('auth:users:list'),
+      create: (username: string, password: string, role: 'admin' | 'viewer') =>
+        invoke<AppUser>('auth:users:create', { username, password, role }),
+      delete: (id: string) => invoke<void>('auth:users:delete', { id }),
+      changePassword: (id: string, newPassword: string) =>
+        invoke<void>('auth:users:changePassword', { id, newPassword }),
+    },
   },
 }

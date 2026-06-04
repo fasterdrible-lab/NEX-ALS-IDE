@@ -1,6 +1,6 @@
 import { getPrismaClient } from '@cwm/db'
 import type { IpcMain } from 'electron'
-import { BrowserWindow, dialog, clipboard, nativeImage } from 'electron'
+import { BrowserWindow, dialog, clipboard, nativeImage, Notification } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -18,6 +18,9 @@ import {
   TunnelService,
   AiService,
   ProjectMemoryService,
+  NotificationMonitor,
+  AuthService,
+  type AppUser,
 } from '@cwm/core'
 
 function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
@@ -26,7 +29,26 @@ function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
   }))
 }
 
-export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
+export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMonitor?: NotificationMonitor): void {
+  // ── Sessão de autenticação ────────────────────────────────────────────────────
+  const authSvc = new AuthService()
+  let session: AppUser | null = null
+  // sessionRequired=true quando ao menos 1 usuário existe no banco
+  // Inicializado assincronamente; qualquer auth:status antes disso retorna needsSetup=true
+  let sessionRequired = false
+  void authSvc.countUsers().then((n: number) => { sessionRequired = n > 0 }).catch(() => {})
+
+  function requireAdmin(): void {
+    if (!sessionRequired) return // modo single-user: sem usuários cadastrados
+    if (!session) throw new Error('Não autenticado. Faça login primeiro.')
+    if (session.role !== 'admin') throw new Error('Permissão negada. Apenas administradores podem realizar esta ação.')
+  }
+
+  function requireAuth(): void {
+    if (!sessionRequired) return
+    if (!session) throw new Error('Não autenticado. Faça login primeiro.')
+  }
+
   const vps = new VpsService()
   const projects = new ProjectsService()
   const accounts = new AccountsService()
@@ -42,29 +64,40 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
 
+  // ── Estado em memória das notificações ───────────────────────────────────────
+  const db = getPrismaClient()
+  let notificationsEnabled = true
+  // Lê preferência salva no banco assincronamente
+  void (db.$queryRawUnsafe(
+    "SELECT notificationsEnabled FROM settings WHERE id = 'default'"
+  ) as Promise<{ notificationsEnabled: number }[]>).then((rows: { notificationsEnabled: number }[]) => {
+    notificationsEnabled = (rows[0]?.notificationsEnabled ?? 1) !== 0
+    notifMonitor?.setEnabled(notificationsEnabled)
+  }).catch(() => {})
+
   // VPS
-  ipcMain.handle('vps:list', () => wrapHandler(() => vps.list()))
-  ipcMain.handle('vps:create', (_, data) => wrapHandler(() => vps.create(data)))
-  ipcMain.handle('vps:update', (_, data) => wrapHandler(() => vps.update(data.id, data)))
-  ipcMain.handle('vps:delete', (_, id: string) => wrapHandler(() => vps.delete(id)))
-  ipcMain.handle('vps:test', (_, id: string) => wrapHandler(() => vps.testConnection(id)))
-  ipcMain.handle('vps:clearFingerprint', (_, id: string) => wrapHandler(() => vps.clearFingerprint(id)))
+  ipcMain.handle('vps:list', () => wrapHandler(() => { requireAuth(); return vps.list() }))
+  ipcMain.handle('vps:create', (_, data) => wrapHandler(() => { requireAdmin(); return vps.create(data) }))
+  ipcMain.handle('vps:update', (_, data) => wrapHandler(() => { requireAdmin(); return vps.update(data.id, data) }))
+  ipcMain.handle('vps:delete', (_, id: string) => wrapHandler(() => { requireAdmin(); return vps.delete(id) }))
+  ipcMain.handle('vps:test', (_, id: string) => wrapHandler(() => { requireAuth(); return vps.testConnection(id) }))
+  ipcMain.handle('vps:clearFingerprint', (_, id: string) => wrapHandler(() => { requireAdmin(); return vps.clearFingerprint(id) }))
   ipcMain.handle('vps:setupRemoteProject', (_, data: { id: string; remotePath: string; gitRepo?: string }) =>
-    wrapHandler(() => vps.setupRemoteProject(data.id, data.remotePath, data.gitRepo))
+    wrapHandler(() => { requireAdmin(); return vps.setupRemoteProject(data.id, data.remotePath, data.gitRepo) })
   )
 
   // Projects
-  ipcMain.handle('projects:list', () => wrapHandler(() => projects.list()))
-  ipcMain.handle('projects:create', (_, data) => wrapHandler(() => projects.create(data)))
-  ipcMain.handle('projects:update', (_, data) => wrapHandler(() => projects.update(data.id, data)))
-  ipcMain.handle('projects:delete', (_, id: string) => wrapHandler(() => projects.delete(id)))
-  ipcMain.handle('projects:recent', () => wrapHandler(() => projects.getRecent(5)))
+  ipcMain.handle('projects:list', () => wrapHandler(() => { requireAuth(); return projects.list() }))
+  ipcMain.handle('projects:create', (_, data) => wrapHandler(() => { requireAdmin(); return projects.create(data) }))
+  ipcMain.handle('projects:update', (_, data) => wrapHandler(() => { requireAdmin(); return projects.update(data.id, data) }))
+  ipcMain.handle('projects:delete', (_, id: string) => wrapHandler(() => { requireAdmin(); return projects.delete(id) }))
+  ipcMain.handle('projects:recent', () => wrapHandler(() => { requireAuth(); return projects.getRecent(5) }))
 
   // Accounts
-  ipcMain.handle('accounts:list', () => wrapHandler(() => accounts.list()))
-  ipcMain.handle('accounts:create', (_, data) => wrapHandler(() => accounts.create(data)))
-  ipcMain.handle('accounts:update', (_, data) => wrapHandler(() => accounts.update(data.id, data)))
-  ipcMain.handle('accounts:delete', (_, id: string) => wrapHandler(() => accounts.delete(id)))
+  ipcMain.handle('accounts:list', () => wrapHandler(() => { requireAuth(); return accounts.list() }))
+  ipcMain.handle('accounts:create', (_, data) => wrapHandler(() => { requireAdmin(); return accounts.create(data) }))
+  ipcMain.handle('accounts:update', (_, data) => wrapHandler(() => { requireAdmin(); return accounts.update(data.id, data) }))
+  ipcMain.handle('accounts:delete', (_, id: string) => wrapHandler(() => { requireAdmin(); return accounts.delete(id) }))
 
   // Launcher
   ipcMain.handle('launcher:openProject', (_, projectId: string) =>
@@ -79,7 +112,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
 
   // Settings
   ipcMain.handle('settings:get', () => wrapHandler(() => settings.get()))
-  ipcMain.handle('settings:update', (_, data) => wrapHandler(() => settings.update(data)))
+  ipcMain.handle('settings:update', (_, data) => wrapHandler(() => { requireAdmin(); return settings.update(data) }))
 
   // Diagnostics
   ipcMain.handle('diagnostics:run', () => wrapHandler(() => diagnostics.runAll()))
@@ -306,6 +339,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
   })
 
   ipcMain.handle('local:writeFile', async (_, { filePath, content }: { filePath: string; content: string }) => {
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, content, 'utf-8')
     return { success: true }
   })
@@ -326,8 +360,22 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
   })
 
   ipcMain.handle('local:touch', async (_, filePath: string) => {
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, '', { flag: 'wx' }).catch(() => {})
     return { success: true }
+  })
+
+  ipcMain.handle('local:exec', (_, { cmd, cwd }: { cmd: string; cwd?: string }) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { exec } = require('child_process') as typeof import('child_process')
+    return new Promise<{ success: boolean; output: string }>(resolve => {
+      exec(cmd, { cwd, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
+        (err, stdout, stderr) => {
+          const output = [stdout, stderr].filter(Boolean).join('\n').trim()
+          resolve({ success: !err, output: output || '(sem output)' })
+        }
+      )
+    })
   })
 
   // ── IDE-17: Remote Port Forwarding (SSH tunnel) ───────────────────────────
@@ -348,6 +396,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
 
   // ── Import/Export de configurações ─────────────────────────────────────────
   ipcMain.handle('config:export', async () => {
+    try { requireAdmin() } catch (e) { return { error: (e as Error).message } }
     const { filePath, canceled } = await dialog.showSaveDialog(win!, {
       title: 'Exportar configurações HEXAGON IDE',
       defaultPath: `hexagon-ide-backup-${new Date().toISOString().slice(0,10)}.json`,
@@ -374,6 +423,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
   })
 
   ipcMain.handle('config:import', async () => {
+    try { requireAdmin() } catch (e) { return { error: (e as Error).message } }
     const { filePaths, canceled } = await dialog.showOpenDialog(win!, {
       title: 'Importar configurações HEXAGON IDE',
       filters: [{ name: 'JSON', extensions: ['json'] }],
@@ -514,6 +564,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
       const targetWin = BrowserWindow.fromWebContents(event.sender)
       const session = await aiSvc.startStream(data, chunk => {
         try { targetWin?.webContents.send('ai:stream:chunk', chunk) } catch { /* janela fechada */ }
+        // Notifica erro quando a janela não está em foco
+        if (chunk.type === 'error' && notificationsEnabled && Notification.isSupported()) {
+          if (!targetWin?.isFocused()) {
+            new Notification({
+              title: 'Erro no AI Hub',
+              body: (chunk as { error?: string }).error || 'O streaming foi interrompido por um erro',
+            }).show()
+          }
+        }
       })
       return { streamId: session.streamId }
     })
@@ -651,5 +710,82 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow): void {
     const tmpPath = path.join(require('os').tmpdir(), `hexagon_clip_${Date.now()}.png`)
     await fs.writeFile(tmpPath, png)
     return { filePath: tmpPath.replace(/\\/g, '/') }
+  })
+
+  // ── Autenticação ─────────────────────────────────────────────────────────────
+  ipcMain.handle('auth:status', async () => {
+    const count = await authSvc.countUsers().catch(() => 0)
+    sessionRequired = count > 0
+    return { user: session, needsSetup: count === 0, sessionRequired }
+  })
+
+  ipcMain.handle('auth:setup', async (_, { username, password }: { username: string; password: string }) => {
+    const count = await authSvc.countUsers()
+    if (count > 0) return { error: 'Setup já realizado. Use login.' }
+    return wrapHandler(async () => {
+      const user = await authSvc.createUser(username, password, 'admin')
+      sessionRequired = true
+      session = user
+      return { user }
+    })
+  })
+
+  ipcMain.handle('auth:login', (_, { username, password }: { username: string; password: string }) =>
+    wrapHandler(async () => {
+      const user = await authSvc.validatePassword(username, password)
+      if (!user) throw new Error('Usuário ou senha incorretos.')
+      session = user
+      return { user }
+    })
+  )
+
+  ipcMain.handle('auth:logout', () => {
+    session = null
+    return { success: true }
+  })
+
+  ipcMain.handle('auth:currentUser', () => ({ user: session }))
+
+  ipcMain.handle('auth:users:list', () =>
+    wrapHandler(() => { requireAdmin(); return authSvc.listUsers() })
+  )
+
+  ipcMain.handle('auth:users:create', (_, data: { username: string; password: string; role: 'admin' | 'viewer' }) =>
+    wrapHandler(() => { requireAdmin(); return authSvc.createUser(data.username, data.password, data.role) })
+  )
+
+  ipcMain.handle('auth:users:delete', (_, { id }: { id: string }) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      if (session?.id === id) throw new Error('Não é possível excluir o próprio usuário.')
+      await authSvc.deleteUser(id)
+      const remaining = await authSvc.countUsers()
+      if (remaining === 0) sessionRequired = false
+    })
+  )
+
+  ipcMain.handle('auth:users:changePassword', (_, { id, newPassword }: { id: string; newPassword: string }) =>
+    wrapHandler(() => {
+      if (session?.id !== id) requireAdmin()
+      return authSvc.changePassword(id, newPassword)
+    })
+  )
+
+  // ── Notificações de sistema ──────────────────────────────────────────────────
+  ipcMain.handle('notifications:getEnabled', () => ({ enabled: notificationsEnabled }))
+
+  ipcMain.handle('notifications:setEnabled', async (_, { enabled }: { enabled: boolean }) => {
+    try { requireAdmin() } catch (e) { return { error: (e as Error).message } }
+    notificationsEnabled = enabled
+    notifMonitor?.setEnabled(enabled)
+    try {
+      await db.$executeRawUnsafe(
+        `INSERT INTO settings (id, notificationsEnabled, updatedAt)
+         VALUES ('default', ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(id) DO UPDATE SET notificationsEnabled = excluded.notificationsEnabled, updatedAt = CURRENT_TIMESTAMP`,
+        enabled ? 1 : 0
+      )
+    } catch { /* silent */ }
+    return { success: true }
   })
 }
