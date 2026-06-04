@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — HEXAGON IDE v3.5.2
+# ARCHITECTURE.md — HEXAGON IDE v3.9.0
 
 ## Arquitetura geral
 
@@ -491,4 +491,76 @@ Snapshot/Rollback:
   antes de write_file → snapshot em memória (Map<filePath, conteúdo anterior>)
   painel 📦 Snapshots → botão ↩ Restaurar por arquivo
   limpo em nova sessão; preservado ao continuar (stopAgentRef + história intacta)
+```
+
+## Melhorias incrementais do IDE (v3.9.0)
+
+### F2 — Rename inline no explorador de arquivos
+
+```
+Estado no IDEPage:
+  selectedEntryRef: useRef<FileEntry|null>  — última entrada clicada (sem re-render)
+  selectedPath: useState<string|null>       — para highlight visual da seleção
+
+Fluxo:
+  Click / ContextMenu na tree → selectedEntryRef.current = entry; setSelectedPath(entry.path)
+  Tecla F2 (window keydown handler) → if (selectedEntryRef.current && !renaming)
+    → setRenaming(entry); setRenameVal(entry.name)
+  Input inline → Enter: handleRename() | Escape: setRenaming(null)
+```
+
+### Ctrl+Shift+T — Reabrir aba fechada
+
+```
+Estado:
+  closedTabsRef: useRef<OpenFile[]>   — stack LIFO, máx 15 entradas
+
+Fluxo fechar:
+  closeTab(path) → encontra OpenFile pelo path
+    → closedTabsRef.current = [file, ...current].slice(0, 15)
+    → remove de openFiles; atualiza activeTab
+
+Fluxo reabrir:
+  Ctrl+Shift+T (window keydown)
+    → last = closedTabsRef.current[0]
+    → closedTabsRef.current = current.slice(1)
+    → setOpenFiles(f => [...f, last])  // só adiciona se path não está já aberto
+    → setActiveTab(last.path)
+
+Preserva: conteúdo, savedContent, language, imageDataUrl — estado completo da aba
+```
+
+### Busca em arquivos — Modo Local (Ctrl+Shift+F)
+
+```
+handleSearch() — antes: bail se !vpsId; agora: branch isLocal
+
+Modo Local:
+  root = localRootRef.current
+  cmd = `rg ${caseFlag}"${esc}" . --line-number --no-heading --color=never -m 200 2>nul
+         || findstr /n /s ${caseFlag}"${esc}" *`
+  ipc.local.exec(cmd, root)
+  Normalização: rel path → absoluto via `${rootNorm}/${rel}`
+  Display no painel: `file.replace(rootNorm, '').replace(/^[\\/]/, '')`
+
+Modo VPS (inalterado):
+  ipc.terminal.exec(vpsId, `grep -r -n ... /root`)
+```
+
+### Diffview — Modo Local
+
+```
+handleLocalDiff():
+  Só executa se isLocal && activeFile !== null
+  root = localRootRef.current
+  cmd = `git diff -- "${activeFile.path}"`
+  ipc.local.exec(cmd, root) → content
+  relPath = absPath.replace(rootNorm, '').replace(/^\//, '')
+  setGitDiff({ content, filePath: relPath, staged: false })
+  setActiveTab(null)   — ativa o Monaco diff viewer (mesmo componente do modo VPS)
+  Toast se output vazio ("Sem alterações")
+
+UI: botão "Diff" (GitCommitIcon) na top bar
+  Condicional: isLocal && activeFile && !activeFile.imageDataUrl
+  Posição: entre badge LOCAL e aba de arquivos
 ```

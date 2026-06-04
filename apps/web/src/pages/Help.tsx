@@ -158,8 +158,10 @@ const sections: Section[] = [
               <p className="text-slate-300">✓ Preview de imagem</p>
               <p className="text-slate-300">✓ Chat IA com contexto do projeto</p>
               <p className="text-slate-300">✓ Agente autônomo — cria arquivos e roda comandos</p>
+              <p className="text-slate-300">✓ Busca em arquivos (rg/findstr) — Ctrl+Shift+F</p>
+              <p className="text-slate-300">✓ Git diff do arquivo ativo — botão Diff na top bar</p>
+              <p className="text-slate-300">✓ F2 rename inline, Ctrl+Shift+T reabrir aba</p>
               <p className="text-slate-500">✗ Sem terminal SSH</p>
-              <p className="text-slate-500">✗ Sem Git integrado</p>
               <p className="text-emerald-400">✓ Seguro — sem risco de produção</p>
             </div>
           </div>
@@ -375,12 +377,14 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Atalhos principais</p>
           <KV items={[
-            ['Ctrl+S', 'Salvar arquivo via SFTP'],
+            ['Ctrl+S', 'Salvar arquivo via SFTP ou disco local'],
             ['Ctrl+`', 'Abrir/fechar terminal'],
-            ['Ctrl+Shift+F', 'Busca em arquivos (grep SSH) — resultados clicáveis'],
+            ['Ctrl+Shift+F', 'Busca em arquivos — grep SSH (VPS) ou rg/findstr (Local)'],
             ['Ctrl+Shift+P', 'Paleta de comandos Monaco'],
             ['Ctrl+H', 'Find & Replace no arquivo'],
             ['Ctrl+G', 'Ir para linha específica'],
+            ['F2', 'Renomear arquivo/pasta inline — clique para selecionar, F2 para editar o nome'],
+            ['Ctrl+Shift+T', 'Reabrir última aba fechada (histórico de até 15 abas)'],
             ['Botão ⊟ (Columns2)', 'Ativar/desativar split editor (dois painéis)'],
             ['Botão Claude (roxo)', 'Abrir painel de chat IA'],
           ]}/>
@@ -390,6 +394,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Botões na top bar</p>
           <KV items={[
             ['🔴 PRODUÇÃO / 🟢 LOCAL', 'Badge de modo — vermelho = VPS real, verde = local seguro'],
+            ['Diff (modo Local)', 'Aparece apenas em modo Local quando um arquivo está aberto — executa git diff do arquivo ativo e abre o diff viewer Monaco'],
             ['⎋ (ExternalLink)', 'Abre esta VPS em nova janela independente (multi-monitor)'],
             ['🚨 (Siren)', 'Abre Incident Mode para esta VPS'],
             ['🚀 (Rocket)', 'Abre Deploy Assistant para esta VPS'],
@@ -400,12 +405,12 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Abas do painel esquerdo</p>
           <KV items={[
-            ['Arquivos', 'Explorer SFTP: criar, renomear, deletar, duplicar, arrastar'],
-            ['Busca', 'grep SSH em todo o projeto com preview de linha'],
-            ['Git', 'Status, diff inline, stage, commit, push, pull, log'],
-            ['Portas', 'Port forwarding SSH: acessar porta da VPS como localhost'],
-            ['Docker', 'Listar containers, Start/Stop/Logs/Remover'],
-            ['PM2', 'Listar processos, Restart/Stop/Logs/Excluir'],
+            ['Arquivos', 'Explorer SFTP/local: criar, renomear (F2 ou menu), deletar, duplicar'],
+            ['Busca', 'Busca em arquivos — funciona em VPS (grep SSH) e em modo Local (rg/findstr)'],
+            ['Git', 'Status, diff inline, stage, commit, push, pull, log — apenas VPS'],
+            ['Portas', 'Port forwarding SSH: acessar porta da VPS como localhost — apenas VPS'],
+            ['Docker', 'Listar containers, Start/Stop/Logs/Remover — apenas VPS'],
+            ['PM2', 'Listar processos, Restart/Stop/Logs/Excluir — apenas VPS'],
           ]}/>
         </div>
 
@@ -421,8 +426,12 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Recursos avançados do editor</p>
           <KV items={[
-            ['Split editor', 'Dois painéis lado a lado com abas independentes'],
+            ['Split editor', 'Dois painéis lado a lado com abas independentes — Ctrl+⊟'],
             ['Preview de imagem', 'PNG/JPG abrem como preview embutido na aba'],
+            ['F2 — Rename inline', 'Clique no arquivo para selecioná-lo (highlight), pressione F2 para editar o nome sem abrir menu de contexto'],
+            ['Ctrl+Shift+T — Reabrir aba', 'Reabre a última aba fechada; histórico de até 15 abas com conteúdo preservado'],
+            ['Diff local', 'Botão "Diff" na top bar (só modo Local) — executa git diff e exibe no Monaco diff viewer'],
+            ['Busca local', 'Ctrl+Shift+F em modo Local usa ripgrep (se disponível) ou findstr — sem VPS necessária'],
             ['LSP multi-linguagem', 'TS (6009) · Python/pylsp (6010) · Rust/rust-analyzer (6011) · Go/gopls (6012) — botão na status bar muda conforme o arquivo aberto; requer túnel SSH + wrapper Node.js na VPS'],
             ['DAP debug', 'Clique "⬡ DAP" para abrir Chrome DevTools conectado à VPS'],
           ]}/>
@@ -655,6 +664,54 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     ),
   },
 
+  // ── AUTENTICAÇÃO ──────────────────────────────────────────────────────
+  {
+    id: 'auth',
+    icon: ShieldCheck,
+    title: 'Autenticação e permissões de usuário',
+    color: 'bg-brand-600/20 text-brand-400',
+    content: (
+      <div className="space-y-4">
+        <p className="text-xs text-slate-400">A autenticação é <strong className="text-slate-200">opcional</strong>. Sem usuários cadastrados, o app funciona exatamente como antes — modo single-user sem login. Quando você cria o primeiro usuário, login passa a ser obrigatório a cada início do app.</p>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Primeiro uso — Setup</p>
+          <Step n={1}><span>No primeiro acesso após ativar o recurso, o app exibe a tela de <strong className="text-slate-100">Configuração inicial</strong>.</span></Step>
+          <Step n={2}><span>Defina um nome de usuário e senha (mínimo 6 caracteres) para a conta <strong className="text-slate-100">admin</strong>.</span></Step>
+          <Step n={3}><span>Clique <strong className="text-slate-100">Criar conta e entrar</strong>. O app abre normalmente.</span></Step>
+          <Tip>Para voltar ao modo single-user, delete todos os usuários em Configurações → Usuários. Sem nenhum usuário, o login para de ser exigido.</Tip>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Perfis (roles)</p>
+          <KV items={[
+            ['admin', 'Acesso total — cria/edita/exclui VPS, projetos, contas, usuários e configurações'],
+            ['viewer', 'Somente leitura — visualiza tudo e usa o IDE, chat IA e agente, mas não altera cadastros'],
+          ]}/>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Gerenciar usuários</p>
+          <p className="text-xs">Acesse <em>Configurações → Usuários</em> (visível apenas para admins).</p>
+          <KV items={[
+            ['Criar usuário', 'Preencha username, senha e role (viewer ou admin) → Criar'],
+            ['Excluir usuário', 'Clique no ícone de lixeira na linha do usuário. Não é possível excluir a si mesmo.'],
+            ['Alterar senha', 'Implementado via IPC — em breve na UI'],
+          ]}/>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Sessão</p>
+          <KV items={[
+            ['Logout', 'Sidebar → botão ↙ ao lado do username (canto inferior esquerdo)'],
+            ['Duração', 'A sessão dura enquanto o app estiver aberto. Fechar e reabrir o app exige novo login.'],
+          ]}/>
+        </div>
+        <Warn>A autenticação protege o gerenciamento das configurações do app (VPS, projetos, usuários). O acesso SSH às VPS em si ainda depende das credenciais SSH configuradas individualmente.</Warn>
+      </div>
+    ),
+  },
+
   // ── CONFIGURAÇÕES ─────────────────────────────────────────────────────
   {
     id: 'settings',
@@ -685,8 +742,12 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
           <Tip>Clique "Testar conexão" para validar a API Key antes de usar no chat.</Tip>
         </div>
         <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide flex items-center gap-1.5"><ShieldCheck size={12}/> Usuários (autenticação)</p>
+          <p className="text-xs">Visível apenas para admins quando há usuários cadastrados. Crie contas com role <strong>admin</strong> (acesso total) ou <strong>viewer</strong> (somente leitura).</p>
+        </div>
+        <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Backup e Restauração</p>
-          <p className="text-xs">Exporta e importa todas as VPS, projetos e contas em JSON. API Keys e senhas SSH NÃO são exportadas.</p>
+          <p className="text-xs">Exporta e importa todas as VPS, projetos e contas em JSON. API Keys, senhas SSH e usuários NÃO são exportados.</p>
         </div>
       </div>
     ),
