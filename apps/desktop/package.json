@@ -113,7 +113,7 @@
     "publish": {
       "provider": "github",
       "owner": "fasterdrible-lab",
-      "repo": "HEXAGON-IDE"
+      "repo": "HEXAGON-WORKSPACE-MANAGER"
     }
   }
 }

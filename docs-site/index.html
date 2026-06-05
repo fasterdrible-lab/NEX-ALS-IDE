@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HEXAGON IDE — Gerenciador de VPS com IDE integrado e IA</title>
+  <meta name="description" content="HEXAGON IDE é um editor desktop que conecta múltiplas VPS, integra Monaco Editor, terminal SSH, Git e IA (Anthropic, DeepSeek, Gemini) numa única janela." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --border: #334155;
+      --brand: #6366f1;
+      --brand-light: #818cf8;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --green: #10b981;
+      --amber: #f59e0b;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; }
+
+    a { color: var(--brand-light); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* NAV */
+    nav { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 10; }
+    .nav-brand { font-weight: 700; font-size: 1.1rem; color: var(--text); display: flex; align-items: center; gap: .5rem; }
+    .nav-brand span { color: var(--brand-light); }
+    .nav-links { display: flex; gap: 1.5rem; font-size: .9rem; color: var(--muted); }
+    .nav-links a { color: var(--muted); }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .btn-download-nav { background: var(--brand); color: white; padding: .4rem 1rem; border-radius: 6px; font-size: .85rem; font-weight: 600; }
+    .btn-download-nav:hover { background: var(--brand-light); text-decoration: none; }
+
+    /* HERO */
+    .hero { max-width: 900px; margin: 5rem auto 3rem; padding: 0 2rem; text-align: center; }
+    .badge { display: inline-block; background: var(--brand)/20; border: 1px solid var(--brand)/40; color: var(--brand-light); font-size: .75rem; font-weight: 600; padding: .25rem .75rem; border-radius: 999px; margin-bottom: 1.5rem; letter-spacing: .05em; }
+    .hero h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; line-height: 1.15; margin-bottom: 1.25rem; }
+    .hero h1 span { color: var(--brand-light); }
+    .hero p { font-size: 1.15rem; color: var(--muted); max-width: 600px; margin: 0 auto 2.5rem; }
+
+    .download-group { display: flex; flex-direction: column; align-items: center; gap: .75rem; }
+    .btn-primary { display: inline-flex; align-items: center; gap: .6rem; background: var(--brand); color: white; padding: .85rem 2rem; border-radius: 8px; font-size: 1rem; font-weight: 700; transition: background .15s; }
+    .btn-primary:hover { background: var(--brand-light); text-decoration: none; }
+    .btn-primary svg { width: 18px; height: 18px; }
+    .version-hint { font-size: .8rem; color: var(--muted); }
+    .alt-links { font-size: .85rem; color: var(--muted); }
+    .alt-links a { color: var(--muted); text-decoration: underline; }
+
+    /* FEATURES */
+    .section { max-width: 1000px; margin: 4rem auto; padding: 0 2rem; }
+    .section-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 2rem; text-align: center; }
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
+    .feature { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .feature-icon { font-size: 1.5rem; margin-bottom: .75rem; }
+    .feature h3 { font-size: 1rem; font-weight: 600; margin-bottom: .4rem; }
+    .feature p { font-size: .875rem; color: var(--muted); }
+
+    /* MODES */
+    .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    .mode-card { border-radius: 12px; padding: 1.5rem; border: 1px solid; }
+    .mode-remote { background: rgba(239,68,68,.06); border-color: rgba(239,68,68,.25); }
+    .mode-local  { background: rgba(16,185,129,.06); border-color: rgba(16,185,129,.25); }
+    .mode-title { font-weight: 700; margin-bottom: .75rem; display: flex; align-items: center; gap: .5rem; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-red   { background: #ef4444; animation: pulse 2s infinite; }
+    .dot-green { background: var(--green); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .mode-list { list-style: none; font-size: .875rem; color: var(--muted); display: flex; flex-direction: column; gap: .3rem; }
+    .mode-list li::before { content: '✓ '; color: var(--green); }
+    .mode-list li.no::before { content: '✗ '; color: #64748b; }
+
+    /* TERMINAL MOCKUP */
+    .terminal { background: #0d1117; border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem 1.5rem; font-family: 'Consolas', monospace; font-size: .82rem; overflow-x: auto; margin-top: 1.5rem; }
+    .t-comment { color: #6e7681; }
+    .t-cmd     { color: #e6edf3; }
+    .t-out     { color: var(--green); }
+
+    /* FOOTER */
+    footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--muted); font-size: .85rem; margin-top: 4rem; }
+
+    @media (max-width: 640px) {
+      .modes { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">⬡ <span>HEXAGON</span> IDE</div>
+  <div class="nav-links">
+    <a href="#features">Funcionalidades</a>
+    <a href="#modes">Modos</a>
+    <a href="#install">Instalar</a>
+    <a href="https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER" target="_blank">GitHub</a>
+  </div>
+  <a class="btn-download-nav" href="#install">Download</a>
+</nav>
+
+<section class="hero">
+  <div class="badge">Windows · Electron · Monaco Editor</div>
+  <h1>Gerencie suas VPS com um <span>IDE integrado e IA</span></h1>
+  <p>Monaco Editor, terminal SSH, Git, Docker, PM2 e múltiplos provedores de IA — tudo numa janela desktop para Windows.</p>
+
+  <div class="download-group">
+    <a class="btn-primary" id="download-btn"
+       href="https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER/releases/latest/download/HEXAGON-IDE-Setup.exe">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+      </svg>
+      Download para Windows
+    </a>
+    <span class="version-hint" id="version-hint">Versão mais recente • Windows 10/11 • 64-bit</span>
+    <span class="alt-links">
+      <a href="https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER/releases" target="_blank">Todas as versões</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER/releases/latest/download/HEXAGON-IDE-Portable.exe" target="_blank">Portable (.exe)</a>
+    </span>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <h2 class="section-title">Tudo que você precisa num lugar só</h2>
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">🖊️</div>
+      <h3>Monaco Editor</h3>
+      <p>O mesmo editor do VS Code. Syntax highlighting, autocompletar, split editor, Find & Replace e Go to Line.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔗</div>
+      <h3>SSH / SFTP integrado</h3>
+      <p>Conecta em múltiplas VPS Linux. Explorer de arquivos hierárquico com lazy load, criar, renomear (F2), deletar e duplicar.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🤖</div>
+      <h3>HEXAGON AI HUB</h3>
+      <p>Chat com streaming para Anthropic, DeepSeek, OpenAI, Gemini, OpenRouter e Ollama. Modo Agente com até 500 ações autônomas.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🚨</div>
+      <h3>Incident Mode</h3>
+      <p>4 painéis simultâneos: diagnóstico IA + Logs + Docker/PM2 + Terminal. Para quando algo quebra em produção.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🚀</div>
+      <h3>Deploy Assistant</h3>
+      <p>Descreve o deploy em linguagem natural. IA gera plano com comandos e risco. Executa passo a passo com rollback automático.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔔</div>
+      <h3>Notificações de sistema</h3>
+      <p>Alertas nativos quando disco ≥ 85%, CPU ≥ 90% ou RAM ≥ 90% — mesmo com a janela minimizada.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🌿</div>
+      <h3>Git integrado</h3>
+      <p>Status, diff, stage, commit, push e pull direto no IDE. Sem precisar abrir terminal para operações Git.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">👥</div>
+      <h3>Multi-usuário</h3>
+      <p>Autenticação local opcional com roles admin/viewer. Trabalhe em equipe com controle de quem pode modificar configurações.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔒</div>
+      <h3>Fingerprint SSH</h3>
+      <p>Proteção contra MITM. O fingerprint SHA-256 do servidor é salvo na primeira conexão e verificado em todas as seguintes.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="modes">
+  <h2 class="section-title">Dois modos de operação</h2>
+  <div class="modes">
+    <div class="mode-card mode-remote">
+      <div class="mode-title"><span class="dot dot-red"></span> Modo Remoto (VPS)</div>
+      <ul class="mode-list">
+        <li>Explorer SFTP completo</li>
+        <li>Terminal SSH multi-abas</li>
+        <li>Git integrado</li>
+        <li>Docker e PM2</li>
+        <li>Port forwarding SSH</li>
+        <li>Chat IA + Modo Agente</li>
+        <li>LSP TypeScript, Python, Rust, Go</li>
+      </ul>
+    </div>
+    <div class="mode-card mode-local">
+      <div class="mode-title"><span class="dot dot-green"></span> Modo Local</div>
+      <ul class="mode-list">
+        <li>Monaco Editor completo</li>
+        <li>Agente autônomo (npm, node, etc.)</li>
+        <li>Busca em arquivos (ripgrep)</li>
+        <li>Git diff do arquivo ativo</li>
+        <li>F2 rename, Ctrl+Shift+T</li>
+        <li>Chat IA com contexto do projeto</li>
+        <li class="no">Sem risco de afetar produção</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="install">
+  <h2 class="section-title">Instalação</h2>
+  <div class="terminal">
+    <p class="t-comment"># Opção 1 — Installer (recomendado)</p>
+    <p class="t-cmd">1. Baixe o HEXAGON-IDE-Setup.exe abaixo</p>
+    <p class="t-cmd">2. Execute o instalador</p>
+    <p class="t-out">✓ Instalado em %LocalAppData%\HEXAGON IDE</p>
+    <br>
+    <p class="t-comment"># Opção 2 — Portable (sem instalação)</p>
+    <p class="t-cmd">1. Baixe o HEXAGON-IDE-Portable.exe</p>
+    <p class="t-cmd">2. Execute diretamente — não precisa instalar</p>
+    <br>
+    <p class="t-comment"># Requisitos</p>
+    <p class="t-out">✓ Windows 10 / 11 (64-bit)</p>
+    <p class="t-out">✓ OpenSSH instalado (vem por padrão no Windows 10+)</p>
+  </div>
+
+  <div style="text-align:center; margin-top: 2rem; display:flex; flex-direction:column; align-items:center; gap:.75rem;">
+    <a class="btn-primary"
+       href="https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER/releases/latest/download/HEXAGON-IDE-Setup.exe">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+      </svg>
+      Download HEXAGON IDE para Windows
+    </a>
+    <span style="font-size:.8rem; color: var(--muted)">
+      Gratuito · Open Source ·
+      <a href="https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER/releases" target="_blank">Ver todas as versões</a>
+    </span>
+  </div>
+</section>
+
+<footer>
+  <p>HEXAGON IDE · <a href="https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER" target="_blank">GitHub</a> · MIT License</p>
+  <p style="margin-top:.4rem; font-size:.75rem;">Feito com Electron · React · Monaco Editor · xterm.js</p>
+</footer>
+
+<script>
+  // Busca a última versão no GitHub API e atualiza o hint
+  fetch('https://api.github.com/repos/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER/releases/latest')
+    .then(r => r.json())
+    .then(data => {
+      if (data.tag_name) {
+        document.getElementById('version-hint').textContent =
+          data.tag_name + ' · Windows 10/11 · 64-bit'
+      }
+    })
+    .catch(() => {})
+</script>
+
+</body>
+</html>
