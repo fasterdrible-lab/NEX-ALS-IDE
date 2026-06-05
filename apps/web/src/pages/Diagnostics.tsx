@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Activity, CheckCircle, XCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import type { DiagnosticResults, DiagnosticItem } from '@cwm/config'
@@ -89,7 +89,7 @@ export default function Diagnostics() {
 }
 
 function DiagnosticRow({ item }: { item: DiagnosticItem }) {
-  const iconMap = {
+  const iconMap: Record<string, React.ReactElement> = {
     ok: <CheckCircle size={16} className="text-emerald-400" />,
     error: <XCircle size={16} className="text-red-400" />,
     warning: <AlertCircle size={16} className="text-yellow-400" />,

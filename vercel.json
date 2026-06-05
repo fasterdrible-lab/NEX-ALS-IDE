@@ -1,0 +1,6 @@
+{
+  "buildCommand": "",
+  "outputDirectory": "docs-site",
+  "installCommand": "echo skip",
+  "framework": null
+}
