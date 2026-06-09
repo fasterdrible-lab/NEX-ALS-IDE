@@ -113,7 +113,7 @@ const sections: Section[] = [
       <div className="space-y-3">
         <Step n={1}><strong className="text-slate-100">Cadastre sua VPS</strong> — vá em <em>VPS</em> → Nova VPS. Preencha IP, porta, usuário e senha SSH. Clique em <strong>Testar</strong> para confirmar a conexão.</Step>
         <Step n={2}><strong className="text-slate-100">Configure um provedor de IA</strong> — vá em <em>Configurações → Provedores de IA</em>. Groq é grátis, DeepSeek é barato, Anthropic é o melhor. Salve a API Key e marque como padrão.</Step>
-        <Step n={3}><strong className="text-slate-100">Abra o IDE</strong> — vá em <em>Lançador</em> → clique em <strong>IDE</strong> na VPS desejada. O HEXAGON IDE abre em tela cheia com explorer, editor e terminal SSH.</Step>
+        <Step n={3}><strong className="text-slate-100">Abra o IDE</strong> — vá em <em>Lançador</em> → clique em <strong>IDE</strong> na VPS desejada. O NEX-ALS IDE abre em tela cheia com explorer, editor e terminal SSH.</Step>
         <Step n={4}><strong className="text-slate-100">Converse com a IA</strong> — no IDE, clique no botão roxo <strong>Claude</strong> (canto superior direito). Para o agente autônomo (lê e escreve arquivos), ative o botão 🤖.</Step>
         <Step n={5}><strong className="text-slate-100">Explore o AI HUB</strong> — clique em <strong className="text-slate-100">AI HUB</strong> (botão roxo na sidebar) para um chat avançado com histórico de conversas, streaming e múltiplos provedores.</Step>
         <Tip>Para editar arquivos locais (sem VPS), clique em "Abrir pasta local no IDE" no Lançador — sem risco de afetar produção.</Tip>
@@ -129,7 +129,7 @@ const sections: Section[] = [
     color: 'bg-slate-600/30 text-slate-300',
     content: (
       <div className="space-y-4">
-        <p className="text-xs text-slate-400">O HEXAGON IDE opera em dois modos distintos. Entender qual usar evita erros e reduz o risco de modificar produção por acidente.</p>
+        <p className="text-xs text-slate-400">O NEX-ALS IDE opera em dois modos distintos. Entender qual usar evita erros e reduz o risco de modificar produção por acidente.</p>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-red-900/10 border border-red-800/30 rounded-lg p-3 space-y-2">
@@ -183,11 +183,11 @@ const sections: Section[] = [
   {
     id: 'aihub',
     icon: Sparkles,
-    title: 'HEXAGON AI HUB — Central de IA',
+    title: 'NEX-ALS AI HUB — Central de IA',
     color: 'bg-purple-600/20 text-purple-400',
     content: (
       <div className="space-y-4">
-        <p>O AI HUB é a central de inteligência artificial do HEXAGON IDE. Acesse pelo botão <strong className="text-slate-100">AI HUB</strong> (ícone Sparkles roxo) na sidebar principal.</p>
+        <p>O AI HUB é a central de inteligência artificial do NEX-ALS IDE. Acesse pelo botão <strong className="text-slate-100">AI HUB</strong> (ícone Sparkles roxo) na sidebar principal.</p>
 
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Layout</p>
@@ -353,11 +353,11 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     ),
   },
 
-  // ── HEXAGON IDE ────────────────────────────────────────────────────────
+  // ── NEX-ALS IDE ────────────────────────────────────────────────────────
   {
     id: 'ide',
     icon: Code2,
-    title: 'HEXAGON IDE — Editor integrado',
+    title: 'NEX-ALS IDE — Editor integrado',
     color: 'bg-brand-600/20 text-brand-400',
     content: (
       <div className="space-y-4">
@@ -504,7 +504,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
           ['⎋ Lançador', 'Botão ExternalLink ao lado do botão IDE em cada VPS'],
           ['⎋ IDE top bar', 'Ícone ExternalLink ao lado do nome da VPS'],
           ['Independência total', 'Estado React, SFTP, terminais e chat são isolados por janela'],
-          ['Título da janela', 'Mostra "HEXAGON IDE — {nome da VPS}" para identificação fácil'],
+          ['Título da janela', 'Mostra "NEX-ALS IDE — {nome da VPS}" para identificação fácil'],
         ]}/>
         <Tip>Ideal para monitorar uma VPS de produção em um monitor enquanto desenvolve em outra VPS em outro monitor.</Tip>
       </div>
@@ -519,7 +519,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     color: 'bg-emerald-600/20 text-emerald-400',
     content: (
       <div className="space-y-3">
-        <p>Na primeira conexão com uma VPS, o HEXAGON IDE salva automaticamente o <strong className="text-slate-100">fingerprint SHA-256</strong> da chave pública do servidor. Em todas as conexões seguintes, o fingerprint é comparado.</p>
+        <p>Na primeira conexão com uma VPS, o NEX-ALS IDE salva automaticamente o <strong className="text-slate-100">fingerprint SHA-256</strong> da chave pública do servidor. Em todas as conexões seguintes, o fingerprint é comparado.</p>
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Como funciona</p>
           <KV items={[
@@ -548,7 +548,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     color: 'bg-yellow-600/20 text-yellow-400',
     content: (
       <div className="space-y-3">
-        <p>O HEXAGON IDE monitora suas VPS em segundo plano e exibe <strong className="text-slate-100">notificações nativas</strong> quando métricas críticas são atingidas — mesmo com a janela minimizada.</p>
+        <p>O NEX-ALS IDE monitora suas VPS em segundo plano e exibe <strong className="text-slate-100">notificações nativas</strong> quando métricas críticas são atingidas — mesmo com a janela minimizada.</p>
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Alertas automáticos</p>
           <KV items={[
@@ -803,7 +803,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
             problem: 'Erro "column sshHostFingerprint does not exist" ao criar VPS',
             solutions: [
               'Os pacotes internos do app precisam ser atualizados. Use pnpm dev em vez do app empacotado.',
-              'Ou delete o banco de dados antigo em %APPDATA%\\HEXAGON IDE\\cwm.db (perde dados existentes).',
+              'Ou delete o banco de dados antigo em %APPDATA%\\NEX-ALS IDE\\cwm.db (perde dados existentes).',
               'O app empacotado (.exe) precisa ser regeado com pnpm package:win após atualizações de schema.',
             ],
           },
@@ -881,12 +881,12 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
   {
     id: 'about',
     icon: Monitor,
-    title: 'Sobre o HEXAGON IDE',
+    title: 'Sobre o NEX-ALS IDE',
     color: 'bg-slate-700/30 text-slate-400',
     content: (
       <div className="space-y-4 text-xs">
         <div className="flex flex-col gap-1">
-          <p className="text-slate-100 font-semibold text-sm">HEXAGON IDE</p>
+          <p className="text-slate-100 font-semibold text-sm">NEX-ALS IDE</p>
           <p className="text-slate-400">IDE desktop para gerenciar múltiplas VPS, projetos e contas IA — com AI HUB integrado, Incident Mode e Deploy Assistant.</p>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -908,10 +908,10 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
             </div>
           ))}
         </div>
-        <Tip>Os dados ficam em <Code>%APPDATA%\HEXAGON IDE\cwm.db</Code>. Nenhum dado é enviado a servidores externos, exceto as chamadas às APIs de IA que você configurar.</Tip>
+        <Tip>Os dados ficam em <Code>%APPDATA%\NEX-ALS IDE\cwm.db</Code>. Nenhum dado é enviado a servidores externos, exceto as chamadas às APIs de IA que você configurar.</Tip>
         <div className="border-t border-slate-800 pt-3 text-center space-y-1">
-          <p className="text-slate-300 font-semibold">HEXAGON TECNOLOGIA</p>
-          <p className="text-slate-500">Copyright © 2026 HEXAGON TECNOLOGIA. Todos os direitos reservados.</p>
+          <p className="text-slate-300 font-semibold">NEX-ALS</p>
+          <p className="text-slate-500">Copyright © 2026 NEX-ALS. Todos os direitos reservados.</p>
         </div>
       </div>
     ),
@@ -926,7 +926,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do HEXAGON IDE <strong className="text-slate-300">v3.8.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Incident Mode, Deploy Assistant e autenticação multi-usuário.</p>
+        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.8.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Incident Mode, Deploy Assistant e autenticação multi-usuário.</p>
       </div>
 
       {/* Cards de acesso rápido */}

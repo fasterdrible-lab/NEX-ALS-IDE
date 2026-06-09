@@ -114,7 +114,7 @@ export default function Launcher() {
         <button
           onClick={() => navigate('/ide/local')}
           className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-900/40 border border-emerald-700/50 text-emerald-300 hover:bg-emerald-900/70 text-sm font-medium transition-colors"
-          title="Abre uma pasta do seu PC (OneDrive, etc.) no HEXAGON IDE — sem risco de alterar produção"
+          title="Abre uma pasta do seu PC (OneDrive, etc.) no NEX-ALS IDE — sem risco de alterar produção"
         >
           <FolderOpenIcon size={15}/> Abrir pasta local no IDE
         </button>

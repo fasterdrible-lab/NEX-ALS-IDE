@@ -1,4 +1,4 @@
-# CURRENT_STATE.md — HEXAGON IDE
+# CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-06-04
 **Versão:** 3.9.0
@@ -6,7 +6,7 @@
 
 ## Estado atual
 
-**HEXAGON IDE 3.9.0** — IDE completo com **HEXAGON AI HUB** (6 provedores, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.9.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
@@ -29,7 +29,7 @@
 - [x] **Packaging** — `pnpm package:win` → NSIS installer + portable .exe
 - [x] **Testes** — Vitest: 18 testes unitários (`@cwm/config` + `@cwm/core`) + Playwright E2E: 29 testes (launch, navigation, VPS CRUD, settings)
 
-## Funcionalidades do HEXAGON IDE — todas concluídas
+## Funcionalidades do NEX-ALS IDE — todas concluídas
 
 ### P0 — Bloqueadores
 - [x] **IDE-01** — Criar arquivo inline (`FilePlus` + `touch()`)
@@ -93,7 +93,7 @@
 - [x] Fingerprint SSH — SHA-256, rejeita se mudar, badge + botão Limpar
 - [x] Multi-monitor — múltiplas janelas Electron independentes por VPS
 
-### HEXAGON AI HUB (v3.0.0)
+### NEX-ALS AI HUB (v3.0.0)
 - [x] 6 provedores: Anthropic, OpenAI-compat (OpenAI/DeepSeek/Groq/Mistral/xAI), Gemini, OpenRouter, Ollama
 - [x] BaseProvider + streaming SSE + AbortController
 - [x] ProviderManager, ModelRegistry (cache 24h, listModels dinâmico)

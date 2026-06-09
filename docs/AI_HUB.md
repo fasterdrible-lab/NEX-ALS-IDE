@@ -1,11 +1,11 @@
-# HEXAGON AI HUB — Arquitetura e Roadmap
+# NEX-ALS AI HUB — Arquitetura e Roadmap
 
 **Versão:** 3.0.0 (início)
 **Data:** 2026-06-01
 
 ## Visão geral
 
-O AI HUB transforma o HEXAGON IDE em: **Cursor + Docker + PM2 + SSH + Monitoramento + Gestão de VPS + Multi-IA**.
+O AI HUB transforma o NEX-ALS IDE em: **Cursor + Docker + PM2 + SSH + Monitoramento + Gestão de VPS + Multi-IA**.
 
 ## Estrutura de módulos
 

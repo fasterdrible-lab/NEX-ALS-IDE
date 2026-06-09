@@ -16,7 +16,7 @@ test('app opens with correct window title', async () => {
   const title = await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]?.getTitle()
   )
-  expect(title).toContain('HEXAGON IDE')
+  expect(title).toContain('NEX-ALS IDE')
 })
 
 test('main window is visible and not minimized', async () => {
@@ -29,7 +29,7 @@ test('main window is visible and not minimized', async () => {
 
 test('renders sidebar brand name', async () => {
   const page = await app.firstWindow()
-  await expect(page.getByText('HEXAGON IDE').first()).toBeVisible()
+  await expect(page.getByText('NEX-ALS IDE').first()).toBeVisible()
 })
 
 test('renders all primary navigation items', async () => {

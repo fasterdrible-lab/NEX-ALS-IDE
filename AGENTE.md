@@ -1,11 +1,11 @@
-# AGENTE.md — HEXAGON IDE
+# AGENTE.md — NEX-ALS IDE
 
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-IDE.git
 **Remote local:** `git remote set-url origin https://github.com/fasterdrible-lab/HEXAGON-IDE.git`
 
 ## O que o projeto faz
 
-**HEXAGON IDE** é uma aplicação desktop local (Electron) com duas camadas:
+**NEX-ALS IDE** é uma aplicação desktop local (Electron) com duas camadas:
 
 1. **Gerenciador de ambientes** — resolve o problema de autenticação compartilhada do Claude Code entre instâncias do VS Code. Isola as contas em VPS separadas e abre o ambiente correto (VS Code Remote SSH) com a conta Claude certa.
 
@@ -152,10 +152,10 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 | `/help` | Manual de Uso — 9 seções expansíveis |
 | `/terminal/:vpsId/:vpsName` | Terminal SSH fullscreen |
 | `/explorer/:vpsId/:vpsName` | Explorer SFTP fullscreen |
-| `/ide/:vpsId/:vpsName` | **HEXAGON IDE** modo remoto (VPS) |
-| `/ide/local` | **HEXAGON IDE** modo local (OneDrive/PC) |
+| `/ide/:vpsId/:vpsName` | **NEX-ALS IDE** modo remoto (VPS) |
+| `/ide/local` | **NEX-ALS IDE** modo local (OneDrive/PC) |
 
-## HEXAGON IDE — features implementadas
+## NEX-ALS IDE — features implementadas
 
 | Feature | Status | Versão |
 |---|---|---|
@@ -202,7 +202,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`V.1.5.0` — **Backlog zerado.** HEXAGON IDE completo com todas as features P0→P3 implementadas. Split editor, TypeScript LSP, port forwarding SSH, DAP debug remoto, packaging Windows, testes Vitest, import/export de configurações, SSH passphrase, auto-update. Ver `docs/CURRENT_STATE.md`.
+`V.1.5.0` — **Backlog zerado.** NEX-ALS IDE completo com todas as features P0→P3 implementadas. Split editor, TypeScript LSP, port forwarding SSH, DAP debug remoto, packaging Windows, testes Vitest, import/export de configurações, SSH passphrase, auto-update. Ver `docs/CURRENT_STATE.md`.
 
 ## Uso do Chat Claude
 

@@ -71,7 +71,7 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: false,
     },
-    title: 'HEXAGON IDE',
+    title: 'NEX-ALS IDE',
     show: false,
     backgroundColor: '#0f172a',
   })
@@ -174,7 +174,7 @@ function createIdeWindow(vpsId: string, vpsName: string): void {
       nodeIntegration: false,
       sandbox: false,
     },
-    title: `HEXAGON IDE — ${vpsName}`,
+    title: `NEX-ALS IDE — ${vpsName}`,
     show: false,
     backgroundColor: '#0f172a',
   })

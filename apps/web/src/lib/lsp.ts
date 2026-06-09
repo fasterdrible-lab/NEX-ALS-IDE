@@ -110,7 +110,7 @@ export async function connectLSP(monaco: Monaco, langKey: string): Promise<void>
   const writer = new WebSocketMessageWriter(socket)
 
   const client = new MonacoLanguageClient({
-    name: `HEXAGON ${config.name}`,
+    name: `NEX-ALS ${config.name}`,
     clientOptions: {
       documentSelector: config.documentSelector,
       errorHandler: {

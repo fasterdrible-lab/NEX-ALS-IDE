@@ -1,4 +1,4 @@
-# CHANGELOG — HEXAGON IDE
+# CHANGELOG — NEX-ALS IDE
 
 ## [3.9.0] — 2026-06-04
 
@@ -165,7 +165,7 @@
 
 ## [3.0.0] — 2026-06-01
 
-### Adicionado — HEXAGON AI HUB
+### Adicionado — NEX-ALS AI HUB
 
 - **Arquitetura multi-provider desacoplada** — `BaseProvider` abstrata com `sendMessage()`, `streamMessage()`, `validateKey()`, `listModels()`; providers isolados em `packages/core/src/ai/providers/`: `AnthropicProvider`, `OpenAICompatProvider` (OpenAI/DeepSeek/Groq/Mistral/xAI), `GeminiProvider`, `OpenRouterProvider`, `OllamaProvider`
 - **KeyStore** (`key-store.ts`) — interface injetável para troca da implementação de armazenamento de chaves; implementação padrão em AES-256 SQLite; interface compatível com keytar para migração futura
@@ -357,7 +357,7 @@ IDE: Painel Portas → túnel 9229→9229 → status bar "⬡ DAP" → clique
 
 ### Alterado
 
-- Descrição do `@cwm/desktop` atualizada para "HEXAGON IDE — gerenciador de ambientes VPS com IDE integrado"
+- Descrição do `@cwm/desktop` atualizada para "NEX-ALS IDE — gerenciador de ambientes VPS com IDE integrado"
 - Scripts `package:win` e `package:dir` adicionados ao `apps/desktop/package.json` e `pnpm package:win` na raiz
 - `pnpm test` roda os testes dos pacotes
 
@@ -424,7 +424,7 @@ IDE: Painel Portas → túnel 9229→9229 → status bar "⬡ DAP" → clique
 
 - **Repositório renomeado** — `Claude-Workspace-Manager` → `HEXAGON-IDE` no GitHub (`https://github.com/fasterdrible-lab/HEXAGON-IDE.git`)
 - Remote local atualizado (`git remote set-url origin`)
-- `CLAUDE.md` e `AGENTE.md` reescritos para refletir o nome oficial **HEXAGON IDE** e incluir a URL do repositório
+- `CLAUDE.md` e `AGENTE.md` reescritos para refletir o nome oficial **NEX-ALS IDE** e incluir a URL do repositório
 - Versão bumped `1.1.1 → 1.2.0` (marco: IDE completo + rename oficial)
 
 ---
@@ -490,7 +490,7 @@ IDE: Painel Portas → túnel 9229→9229 → status bar "⬡ DAP" → clique
 
 - **IDE-07 · Paleta de comandos** — `Ctrl+Shift+P` abre a paleta nativa do Monaco; botão `⌘` na top bar; `Escape` fecha diff
 - **IDE-01 · Criar arquivo** — botão `FilePlus` no explorer; input inline com `Enter`/`Escape`; arquivo aberto automaticamente após criação; IPC `sftp:touch` + `SftpSession.touch()`
-- **IDE-04 · Git integrado** — painel Source Control completo no HEXAGON IDE:
+- **IDE-04 · Git integrado** — painel Source Control completo no NEX-ALS IDE:
   - Tab "Git" na esquerda com badge de contagem de alterações
   - Status: branch atual, commits ahead/behind (↑↓)
   - Seções: Staged, Alterações, Não rastreados — com ícones de status (M/A/D/U)
@@ -536,7 +536,7 @@ IDE: Painel Portas → túnel 9229→9229 → status bar "⬡ DAP" → clique
 
 ### Adicionado
 
-- **HEXAGON IDE** — layout IDE completo com três painéis integrados e redimensionáveis:
+- **NEX-ALS IDE** — layout IDE completo com três painéis integrados e redimensionáveis:
   - Explorer SFTP (esquerda) — navega, cria pastas, renomeia e exclui arquivos na VPS via SFTP
   - Monaco Editor (centro) — edição com syntax highlighting, IntelliSense, tabs múltiplas e Ctrl+S
   - Terminal SSH xterm.js (baixo, togglável com Ctrl+\`) — shell interativo full-color diretamente na VPS
@@ -560,7 +560,7 @@ IDE: Painel Portas → túnel 9229→9229 → status bar "⬡ DAP" → clique
 
 ### Adicionado
 
-- Branding: **HEXAGON TECNOLOGIA** — copyright, versão e marca em toda a UI
+- Branding: **NEX-ALS** — copyright, versão e marca em toda a UI
 - Página **Manual de Uso** (`/help`) com 9 seções expansíveis: início rápido, VPS, projetos, contas Claude, lançador, autenticação Claude Code, configurações, chave SSH, solução de problemas, sobre
 - Botão **"Criar pasta na VPS"** / **"Clonar repositório na VPS"** no formulário de projetos — executa `mkdir -p` ou `git clone` via SSH diretamente da UI
 - Modal de autenticação Claude Code reescrito com instrução de janela anônima (resolve conflito de conta já logada no browser)
@@ -569,7 +569,7 @@ IDE: Painel Portas → túnel 9229→9229 → status bar "⬡ DAP" → clique
 ### Alterado
 
 - Versão global: `0.1.x` → `1.0.5`
-- Sidebar mostra versão e marca HEXAGON TECNOLOGIA
+- Sidebar mostra versão e marca NEX-ALS
 - Seção "Sobre" do Manual com informações completas e copyright
 
 ---

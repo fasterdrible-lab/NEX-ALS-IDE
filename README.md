@@ -1,4 +1,4 @@
-# HEXAGON IDE MULTI-IA
+# NEX-ALS IDE MULTI-IA
 
 Aplicação desktop para gerenciar múltiplos ambientes Claude Code em VPS separadas.
 

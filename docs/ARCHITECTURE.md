@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — HEXAGON IDE v3.9.0
+# ARCHITECTURE.md — NEX-ALS IDE v3.9.0
 
 ## Arquitetura geral
 
@@ -38,7 +38,7 @@ packages/
   db/           ← PrismaClient + schema (depende: prisma, better-sqlite3)
   core/         ← Serviços de negócio (depende: @cwm/config, @cwm/db)
     src/
-      ai/                  ← HEXAGON AI HUB (ver seção abaixo)
+      ai/                  ← NEX-ALS AI HUB (ver seção abaixo)
       auth/                ← AuthService (bcryptjs, CRUD app_users, validatePassword)
       notifications/       ← NotificationMonitor (polling VPS, alertas CPU/RAM/disco)
 
@@ -209,7 +209,7 @@ Ferramentas de desenvolvimento são montadas fora do `<Layout />` para ocupar 10
 - Monaco workers locais (`monacoSetup.ts`) — funciona offline
 - Ctrl+S salva o arquivo ativo; Ctrl+\` toggle do terminal
 
-## HEXAGON AI HUB (v3.0.0+)
+## NEX-ALS AI HUB (v3.0.0+)
 
 ```
 packages/core/src/ai/

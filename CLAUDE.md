@@ -1,4 +1,4 @@
-# HEXAGON IDE — CLAUDE.md
+# NEX-ALS IDE — CLAUDE.md
 
 **Sempre leia estes arquivos ao iniciar uma conversa sobre este projeto:**
 
@@ -13,11 +13,11 @@
 
 ## Resumo do projeto
 
-**HEXAGON IDE** é uma aplicação desktop Electron para gerenciar múltiplas VPS, múltiplos projetos remotos e múltiplas contas Claude Code. Substitui scripts .bat manuais por uma interface visual completa.
+**NEX-ALS IDE** é uma aplicação desktop Electron para gerenciar múltiplas VPS, múltiplos projetos remotos e múltiplas contas Claude Code. Substitui scripts .bat manuais por uma interface visual completa.
 
 Duas camadas de uso:
 - **Gerenciador de ambientes** — abre VS Code Remote SSH na conta e VPS correta, evitando conflitos de autenticação entre contas Claude.
-- **IDE integrado (HEXAGON IDE)** — editor de código com Monaco Editor, explorer SFTP hierárquico, terminal SSH xterm.js, Git integrado, busca em arquivos, painel de problemas e múltiplas abas de terminal, tudo rodando diretamente na VPS via SSH/SFTP.
+- **IDE integrado (NEX-ALS IDE)** — editor de código com Monaco Editor, explorer SFTP hierárquico, terminal SSH xterm.js, Git integrado, busca em arquivos, painel de problemas e múltiplas abas de terminal, tudo rodando diretamente na VPS via SSH/SFTP.
 
 **Repositório:** [github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER](https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER)
 
@@ -62,7 +62,7 @@ Duas camadas de uso:
 - Não expor `ipcMain` diretamente no renderer
 - Validar todos os dados recebidos via IPC no main process
 
-## Atalhos do HEXAGON IDE
+## Atalhos do NEX-ALS IDE
 
 | Atalho | Ação |
 |---|---|

@@ -1,4 +1,4 @@
-# TASKS.md — HEXAGON IDE
+# TASKS.md — NEX-ALS IDE
 
 ## Em andamento
 
@@ -53,7 +53,7 @@
 - [x] **AI Hub UI Completo v3.3.0** — Project Memory CRUD, Context Selector, ToolExecutor confirmação CONFIRMO — 2026-06-01
 - [x] **Deploy Assistant v3.2.0** — plano IA em JSON/markdown; tiers risco; confirmação modal para high; rollback automático; smoke test HTTP — 2026-06-01
 - [x] **Incident Mode v3.1.0** — janela 4-painéis (Diagnóstico IA + Logs + Docker/PM2 + Terminal); diagnóstico automático com streaming; botão Siren no Launcher e IDEPage — 2026-06-01
-- [x] **HEXAGON AI HUB v3.0.0** — BaseProvider, 6 providers (Anthropic/OpenAI/Gemini/DeepSeek/OpenRouter/Ollama), KeyStore, ProviderManager, ModelRegistry, ResponseStreamer, ContextManager, PromptBuilder, ConversationManager, ToolExecutor, AIHubPage com streaming — 2026-06-01
+- [x] **NEX-ALS AI HUB v3.0.0** — BaseProvider, 6 providers (Anthropic/OpenAI/Gemini/DeepSeek/OpenRouter/Ollama), KeyStore, ProviderManager, ModelRegistry, ResponseStreamer, ContextManager, PromptBuilder, ConversationManager, ToolExecutor, AIHubPage com streaming — 2026-06-01
 
 - [x] **Multi-monitor** (v2.8.0) — createIdeWindow; HashRouter hash nav; botão ExternalLink no Launcher e IDEPage top bar; janelas totalmente independentes — 2026-06-01
 - [x] **Snapshot/Rollback** (v2.7.0) — snapshot antes de write_file; painel 📦 Snapshots com ↩ Restaurar por arquivo; limpo em nova sessão; preservado no Continuar — 2026-06-01
@@ -134,7 +134,7 @@
 - [x] **Migrar build para electron-vite** — main process bundado via Rollup — 2026-05-30
 - [x] **SSH real via ssh2** — `VpsService.testConnection` com `ssh2` nativo — 2026-05-30
 - [x] **Claude Code check** — badges de status no Launcher — 2026-05-30
-- [x] **HEXAGON IDE v1** — Explorer SFTP + Monaco Editor + Terminal xterm.js em painéis redimensionáveis; rotas fullscreen; botão IDE no Lançador — 2026-05-30
+- [x] **NEX-ALS IDE v1** — Explorer SFTP + Monaco Editor + Terminal xterm.js em painéis redimensionáveis; rotas fullscreen; botão IDE no Lançador — 2026-05-30
 - [x] **Fix startup bloqueadores** — remover `app.isPackaged` de nível de módulo; `scripts/dev.js` deleta `ELECTRON_RUN_AS_NODE` antes de spawnar; `pnpm dev` funciona — 2026-05-30
 - [x] **IDE-01 Criar arquivo** — FilePlus + touch() + abre automaticamente — 2026-05-30
 - [x] **IDE-04 Git integrado** — GitService completo (status/diff/add/restore/commit/push/pull); painel Source Control no IDE; branch na status bar — 2026-05-30

@@ -1,8 +1,8 @@
 {
   "name": "@cwm/desktop",
   "version": "3.9.0",
-  "description": "HEXAGON IDE — gerenciador de ambientes VPS com IDE integrado",
-  "author": "HEXAGON TECNOLOGIA",
+  "description": "NEX-ALS IDE — gerenciador de ambientes VPS com IDE integrado",
+  "author": "NEX-ALS",
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
@@ -31,9 +31,9 @@
     "typescript": "^5.7.3"
   },
   "build": {
-    "appId": "com.hexagon.ide",
-    "productName": "HEXAGON IDE",
-    "copyright": "Copyright © 2026 HEXAGON TECNOLOGIA",
+    "appId": "com.nexals.ide",
+    "productName": "NEX-ALS IDE",
+    "copyright": "Copyright © 2026 NEX-ALS",
     "directories": {
       "output": "dist-app"
     },
@@ -60,7 +60,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "HEXAGON IDE",
+      "shortcutName": "NEX-ALS IDE",
       "deleteAppDataOnUninstall": false,
       "installerHeaderIcon": "build/icon.ico",
       "license": "LICENSE.txt"

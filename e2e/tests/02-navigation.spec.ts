@@ -42,7 +42,7 @@ test('navigates to Configurações page', async () => {
 
 test('navigates to Manual (Help) page', async () => {
   await page.getByRole('link', { name: 'Manual' }).click()
-  await expect(page.getByRole('heading', { name: /Manual|HEXAGON IDE/i }).first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Manual|NEX-ALS IDE/i }).first()).toBeVisible()
 })
 
 test('navigates to Diagnóstico page', async () => {
@@ -55,6 +55,6 @@ test('back-navigation returns to Dashboard', async () => {
   await expect(page.getByRole('heading', { name: 'VPS' })).toBeVisible()
 
   await page.getByRole('link', { name: 'Dashboard' }).click()
-  // Dashboard shows "HEXAGON IDE" as a main heading or the summary cards
+  // Dashboard shows "NEX-ALS IDE" as a main heading or the summary cards
   await expect(page.locator('main')).toBeVisible()
 })

@@ -16,7 +16,7 @@ Seja objetivo e direto. Quando sugerir alterações em arquivos, SEMPRE prefixe 
 const TEMPLATES: Record<PromptMode, string> = {
   chat: `${BASE_RULES}
 
-Você é um assistente de desenvolvimento integrado ao HEXAGON IDE.
+Você é um assistente de desenvolvimento integrado ao NEX-ALS IDE.
 Ajude com dúvidas de código, revisões, explicações e boas práticas.`,
 
   agent: `${BASE_RULES}

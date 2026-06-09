@@ -26,7 +26,7 @@ export default function Layout() {
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-800">
           <BotMessageSquare size={22} className="text-brand-400 shrink-0" />
           <div className="leading-tight">
-            <span className="font-bold text-sm text-slate-100 tracking-wide">HEXAGON IDE</span>
+            <span className="font-bold text-sm text-slate-100 tracking-wide">NEX-ALS IDE</span>
             <p className="text-slate-500 text-xs font-normal">Multi-conta IA</p>
           </div>
         </div>
@@ -85,7 +85,7 @@ export default function Layout() {
           )}
           <div>
             <p className="text-xs text-slate-600">v3.9.0</p>
-            <p className="text-xs text-slate-700 mt-0.5">HEXAGON TECNOLOGIA</p>
+            <p className="text-xs text-slate-700 mt-0.5">NEX-ALS</p>
           </div>
         </div>
       </aside>

@@ -1,4 +1,4 @@
-# IDE_ROADMAP.md — HEXAGON IDE: O que falta
+# IDE_ROADMAP.md — NEX-ALS IDE: O que falta
 
 **Data:** 2026-05-30  
 **Versão atual:** 1.0.7  
@@ -289,7 +289,7 @@ Sprint 5+:
 
 ## Comparativo com VS Code
 
-| Feature | VS Code | HEXAGON IDE |
+| Feature | VS Code | NEX-ALS IDE |
 |---|---|---|
 | Editor Monaco | ✅ | ✅ |
 | Terminal integrado | ✅ multi-tab | ⚠️ 1 aba |

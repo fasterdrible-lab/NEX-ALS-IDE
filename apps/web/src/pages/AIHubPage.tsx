@@ -386,7 +386,7 @@ export default function AIHubPage() {
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-600">
           <Bot size={48}/>
-          <p className="text-lg font-medium">HEXAGON AI HUB</p>
+          <p className="text-lg font-medium">NEX-ALS AI HUB</p>
           <p className="text-sm">Selecione uma conversa ou crie uma nova</p>
           <button onClick={newConv} className="flex items-center gap-2 px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded-xl text-sm transition-colors">
             <Plus size={14}/> Nova conversa

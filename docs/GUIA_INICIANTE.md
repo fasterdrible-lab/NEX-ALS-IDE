@@ -1,14 +1,14 @@
-# HEXAGON IDE — Guia para Iniciantes
+# NEX-ALS IDE — Guia para Iniciantes
 
 **Para quem está começando na programação e quer entender o que este app faz.**
 
 ---
 
-## O que é o HEXAGON IDE?
+## O que é o NEX-ALS IDE?
 
 Imagine que você tem um ou mais servidores na internet — computadores que ficam ligados 24 horas por dia rodando seus sites, APIs ou aplicações. O problema é: como você edita os arquivos dentro desses servidores? Como você vê o que está acontecendo lá dentro? Como você pede ajuda à inteligência artificial sem sair do contexto do seu projeto?
 
-O **HEXAGON IDE** resolve tudo isso numa única janela no seu computador.
+O **NEX-ALS IDE** resolve tudo isso numa única janela no seu computador.
 
 É um **programa de desktop para Windows** que permite:
 
@@ -37,15 +37,15 @@ Exemplos de onde você pode alugar uma VPS: DigitalOcean, Vultr, Hetzner, AWS, G
 
 ### O que é SSH?
 
-SSH é o protocolo que permite você "entrar" dentro de um servidor remoto pelo terminal. É como se você abrisse um controle remoto do servidor e digitasse comandos nele. O HEXAGON IDE usa SSH internamente para tudo — você nem precisa saber os detalhes, o app cuida disso.
+SSH é o protocolo que permite você "entrar" dentro de um servidor remoto pelo terminal. É como se você abrisse um controle remoto do servidor e digitasse comandos nele. O NEX-ALS IDE usa SSH internamente para tudo — você nem precisa saber os detalhes, o app cuida disso.
 
 ### O que é SFTP?
 
-SFTP é o protocolo para transferir arquivos entre seu computador e o servidor. Quando você salva um arquivo no editor do HEXAGON IDE, ele usa SFTP para enviar o arquivo para a VPS automaticamente.
+SFTP é o protocolo para transferir arquivos entre seu computador e o servidor. Quando você salva um arquivo no editor do NEX-ALS IDE, ele usa SFTP para enviar o arquivo para a VPS automaticamente.
 
 ### O que é uma API Key?
 
-Quando você usa um serviço de inteligência artificial (como Claude da Anthropic ou GPT da OpenAI), você precisa de uma "chave" para se identificar e pagar pelo uso. Essa chave é chamada de API Key. No HEXAGON IDE, você cadastra essa chave nas Configurações uma única vez e ela é salva com criptografia no seu computador.
+Quando você usa um serviço de inteligência artificial (como Claude da Anthropic ou GPT da OpenAI), você precisa de uma "chave" para se identificar e pagar pelo uso. Essa chave é chamada de API Key. No NEX-ALS IDE, você cadastra essa chave nas Configurações uma única vez e ela é salva com criptografia no seu computador.
 
 ---
 
@@ -85,7 +85,7 @@ Onde você configura as API Keys dos provedores de IA (Anthropic, OpenAI, Gemini
 
 ---
 
-## O coração do app: o HEXAGON IDE
+## O coração do app: o NEX-ALS IDE
 
 Quando você clica em **IDE** para uma VPS, abre uma janela de editor completa — parecida com o VS Code, mas conectada diretamente ao servidor.
 
@@ -219,7 +219,7 @@ O **Deploy Assistant** funciona assim:
 ## Por onde começar (passo a passo para iniciantes)
 
 ### Passo 1 — Instale o app
-Execute o instalador `HEXAGON IDE Setup.exe` (ou o portátil). Siga o wizard normal.
+Execute o instalador `NEX-ALS IDE Setup.exe` (ou o portátil). Siga o wizard normal.
 
 ### Passo 2 — Configure um provedor de IA
 Vá em **Configurações → Provedores de IA**. Para começar sem custo, use o **Groq** (grátis) ou o **Ollama** (local). Cole a API Key e marque como Padrão.
@@ -282,5 +282,5 @@ O Modo Agente salva snapshots antes de cada modificação. Você pode restaurar 
 
 ---
 
-*HEXAGON IDE v3.3.1 — HEXAGON TECNOLOGIA*
+*NEX-ALS IDE v3.3.1 — NEX-ALS*
 *github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER*
