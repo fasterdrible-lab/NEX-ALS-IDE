@@ -759,31 +759,43 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
   )
 
-  ipcMain.handle('claude:accounts:check', (_, configDir: string) => {
+  ipcMain.handle('claude:accounts:check', async (_, configDir: string) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { spawn } = require('child_process') as typeof import('child_process')
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const osModule = require('os') as typeof import('os')
-    return new Promise<{ installed: boolean; version: string; authenticated: boolean }>(resolve => {
-      const npmBin = process.platform === 'win32'
-        ? `${osModule.homedir()}\\AppData\\Roaming\\npm`
-        : `${osModule.homedir()}/.npm-global/bin:/usr/local/bin`
-      const sep = process.platform === 'win32' ? ';' : ':'
-      const env: NodeJS.ProcessEnv = {
-        ...process.env,
-        PATH: `${npmBin}${sep}${process.env.PATH ?? ''}`,
-        CLAUDE_CONFIG_DIR: configDir,
-      }
-      const proc = spawn('claude', ['--version'], { shell: true, env, timeout: 8000 })
-      let output = ''; let errOutput = ''
-      proc.stdout?.on('data', (d: Buffer) => { output += d.toString() })
-      proc.stderr?.on('data', (d: Buffer) => { errOutput += d.toString() })
-      proc.on('close', (code: number | null) => {
-        const version = (output || errOutput).trim()
-        resolve({ installed: code === 0 && !!version, version: version || '', authenticated: code === 0 && !!version })
-      })
-      proc.on('error', () => resolve({ installed: false, version: '', authenticated: false }))
+    const npmBin = process.platform === 'win32'
+      ? `${osModule.homedir()}\\AppData\\Roaming\\npm`
+      : `${osModule.homedir()}/.npm-global/bin:/usr/local/bin`
+    const sep = process.platform === 'win32' ? ';' : ':'
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PATH: `${npmBin}${sep}${process.env.PATH ?? ''}`,
+      CLAUDE_CONFIG_DIR: configDir,
+    }
+
+    // Verifica se CLI está instalado
+    const version = await new Promise<string>(res => {
+      const p = spawn('claude', ['--version'], { shell: true, env, timeout: 8000 })
+      let out = ''; let err = ''
+      p.stdout?.on('data', (d: Buffer) => { out += d.toString() })
+      p.stderr?.on('data', (d: Buffer) => { err += d.toString() })
+      p.on('close', (code: number | null) => { res(code === 0 ? (out || err).trim() : '') })
+      p.on('error', () => res(''))
     })
+    if (!version) return { installed: false, version: '', authenticated: false }
+
+    // Verifica autenticação: ~/.claude (ou configDir) deve ter .credentials.json
+    const credFiles = [
+      path.join(configDir, '.credentials.json'),
+      path.join(configDir, 'credentials.json'),
+    ]
+    let authenticated = false
+    for (const f of credFiles) {
+      try { await fs.access(f); authenticated = true; break } catch { /* não existe */ }
+    }
+
+    return { installed: true, version, authenticated }
   })
 
   // Conversas persistidas
