@@ -1,5 +1,16 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.13.0] — 2026-06-10
+
+### Corrigido — Autenticação real de contas Claude Code + comando PowerShell
+
+- `claude:accounts:check` agora verifica existência de `.credentials.json` / `credentials.json` no `configDir` em vez de usar `--version` (que sempre retornava OK independente do login)
+- Contas não autenticadas mostram status âmbar e o comando correto para PowerShell: `$env:CLAUDE_CONFIG_DIR="..."; claude`
+- Botão 📋 de cópia ao lado do comando — evita copiar texto extra acidentalmente
+- Versão bumped para 3.13.0
+
+---
+
 ## [3.12.0] — 2026-06-10
 
 ### Adicionado — Múltiplas contas Claude Code com alternância rápida

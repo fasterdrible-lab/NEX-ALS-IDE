@@ -4,6 +4,13 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.13.0)
+
+- [x] **Squad: fallback para provider padrão quando sem API Key** — `squad:stream:start` verifica API Key do provider preferido do agente; cai no padrão (claude-code) se não tiver — 2026-06-10
+- [x] **Múltiplas contas Claude Code** — tabela `claude_code_accounts`; `getActiveClaudeEnv()`; `claude:accounts:*` IPC; UI com lista, status, alternância, botão copiar comando PowerShell; conta existente `~/.claude` importável via checkbox — 2026-06-10
+- [x] **Fix verificação de auth** — `claude:accounts:check` usa `.credentials.json` em vez de `--version`; comando PowerShell `$env:CLAUDE_CONFIG_DIR=...` com botão copiar — 2026-06-10
+- [x] **Versão v3.13.0** — bumps em `package.json`, `Layout.tsx`; CHANGELOG, CURRENT_STATE, TASKS atualizados — 2026-06-10
+
 ## Concluídas recentemente (v3.11.0)
 
 - [x] **Claude Code como provedor de conta** — subprocess `claude` CLI; PATH enriquecido npm global bin Windows; `claude:check` IPC; `ClaudeCodeCard` em Settings; streaming sem API Key — 2026-06-10
