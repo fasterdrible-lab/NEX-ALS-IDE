@@ -3,7 +3,7 @@ import {
   Loader2, CheckCircle,
   Download, Upload, ChevronDown, ChevronUp, Eye, EyeOff,
   Trash2, Zap, Star, Check, AlertCircle, Bell, Users, Plus, ShieldCheck, Shield,
-  Terminal, RefreshCw,
+  Terminal, RefreshCw, Copy,
 } from 'lucide-react'
 import { ipc, type AppUser } from '../lib/ipc'
 import type { AiProviderConfig } from '@cwm/config'
@@ -238,11 +238,22 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
                     </div>
                     <p className="text-[10px] text-slate-600 font-mono truncate mt-0.5">{acc.configDir}</p>
                     {st?.status === 'ok' && <p className="text-[10px] text-emerald-400 mt-0.5">✓ {st.version} — autenticada</p>}
-                    {st?.status === 'not_found' && (
-                      <p className="text-[10px] text-amber-400 mt-0.5">
-                        Autentique: <code className="font-mono">CLAUDE_CONFIG_DIR="{acc.configDir}" claude</code>
-                      </p>
-                    )}
+                    {st?.status === 'not_found' && (() => {
+                      const cmd = `$env:CLAUDE_CONFIG_DIR="${acc.configDir}"; claude`
+                      return (
+                        <div className="mt-1 space-y-0.5">
+                          <p className="text-[10px] text-amber-400">Não autenticada — rode no PowerShell:</p>
+                          <div className="flex items-center gap-1">
+                            <code className="text-[10px] text-emerald-300 bg-slate-900 px-1.5 py-0.5 rounded font-mono break-all">{cmd}</code>
+                            <button onClick={() => void navigator.clipboard.writeText(cmd)}
+                              title="Copiar"
+                              className="shrink-0 p-0.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-700 transition-colors">
+                              <Copy size={10} />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })()}
                     {st?.status === 'checking' && <p className="text-[10px] text-slate-500 mt-0.5">verificando…</p>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
