@@ -21,6 +21,7 @@ import {
   NotificationMonitor,
   AuthService,
   SquadService,
+  AGENTS,
   type AppUser,
   type AgentName,
 } from '@cwm/core'
@@ -764,6 +765,68 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     wrapHandler(async () => {
       requireAuth()
       const targetWin = BrowserWindow.fromWebContents(event.sender)
+
+      // Resolve provider efetivo: preferido → checar API key → fallback padrão
+      const agentCfg = AGENTS[data.agent]
+      let effectiveProvider: string = data.providerOverride ?? agentCfg.preferredProvider
+      try {
+        const hasKey = await db.$queryRawUnsafe(
+          `SELECT provider FROM ai_providers WHERE provider=? AND enabled=1 AND apiKey!='' LIMIT 1`,
+          effectiveProvider
+        ) as Array<{ provider: string }>
+        if (!hasKey[0]) {
+          const def = await db.$queryRawUnsafe(
+            `SELECT provider FROM ai_providers WHERE isDefault=1 AND enabled=1 LIMIT 1`
+          ) as Array<{ provider: string }>
+          if (def[0]) effectiveProvider = def[0].provider
+        }
+      } catch { /* ignora — usa preferredProvider */ }
+
+      // Rota Claude Code (conta Pro, sem API key)
+      if (effectiveProvider === 'claude-code') {
+        const streamId = crypto.randomUUID()
+        const sys = agentCfg.systemPrompt + (data.projectContext ? `\n\nCONTEXTO DO PROJETO:\n${data.projectContext}` : '')
+        const history = data.history ?? []
+        const parts: string[] = [sys, '']
+        for (const m of history) {
+          parts.push(`${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
+        }
+        const prompt = parts.join('\n') + `\nHuman: ${data.message}`
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { spawn } = require('child_process') as typeof import('child_process')
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const osModule = require('os') as typeof import('os')
+        const npmBin = process.platform === 'win32'
+          ? `${osModule.homedir()}\\AppData\\Roaming\\npm`
+          : `${osModule.homedir()}/.npm-global/bin:/usr/local/bin`
+        const spawnEnv = { ...process.env, PATH: `${npmBin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}` }
+        const proc = spawn('claude', ['-p', prompt, '--output-format', 'text', '--no-color'], { shell: true, env: spawnEnv })
+        claudeProcs.set(streamId, proc)
+        let doneSent = false
+        const sendDone = () => {
+          if (doneSent) return; doneSent = true
+          claudeProcs.delete(streamId)
+          try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'done' }) } catch { /* janela fechada */ }
+        }
+        proc.stdout?.on('data', (chunk: Buffer) => {
+          try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'text_delta', delta: chunk.toString() }) } catch { /* janela fechada */ }
+        })
+        proc.stderr?.on('data', (chunk: Buffer) => {
+          const txt = chunk.toString()
+          if (/not logged in|authentication|unauthorized/i.test(txt)) {
+            try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'error', error: 'Não autenticado. Execute "claude" no terminal e faça login.' }) } catch { /* janela fechada */ }
+            proc.kill()
+          }
+        })
+        proc.on('close', sendDone)
+        proc.on('error', (err: Error) => {
+          try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'error', error: `claude CLI não encontrado: ${err.message}` }) } catch { /* janela fechada */ }
+          sendDone()
+        })
+        return { streamId }
+      }
+
+      // Rota padrão (API Key)
       const session = await squadSvc.startAgentStream(
         data.agent,
         data.message,
@@ -771,7 +834,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         chunk => {
           try { targetWin?.webContents.send('squad:stream:chunk', chunk) } catch { /* janela fechada */ }
         },
-        { projectContext: data.projectContext, providerOverride: data.providerOverride }
+        { projectContext: data.projectContext, providerOverride: effectiveProvider }
       )
       return { streamId: session.streamId }
     })
