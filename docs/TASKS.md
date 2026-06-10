@@ -7,11 +7,13 @@
 ## Concluídas recentemente (v3.11.0)
 
 - [x] **Claude Code como provedor de conta** — subprocess `claude` CLI; PATH enriquecido npm global bin Windows; `claude:check` IPC; `ClaudeCodeCard` em Settings; streaming sem API Key — 2026-06-10
-- [x] **CURRENT_STATE.md atualizado para v3.11.0** — Squad, Pipeline e Claude Code documentados — 2026-06-10
+- [x] **CURRENT_STATE.md / TASKS.md atualizados para v3.11.0** — Squad, Pipeline e Claude Code documentados; limitações corrigidas — 2026-06-10
 
 ## Concluídas recentemente (v3.10.0)
 
 - [x] **Squad — 8 agentes com ACTION tags e Pipeline** — SquadPage fullscreen; streaming por agente; blocos SHELL/WRITE_FILE/READ_FILE executados via SSH/SFTP; toggle Pipeline com gate homolog→prod; estados visuais do gate; `agents.ts`, `actions.ts`, `squad.service.ts` em `packages/core/src/squad/` — 2026-06-10
+- [x] **Squad — persistência de sessões SQLite** — `squad_sessions` + `squad_messages` via Prisma; histórico no painel direito; carregar sessão restaura mensagens — 2026-06-10
+- [x] **Squad — delegação automática @agente** — `detectDelegations()` + `extractTask()` no renderer; `streamAgent()` re-invocado com depth=1; badge "delegado por @X" no chat — 2026-06-10
 
 ## Concluídas recentemente (v3.9.0)
 

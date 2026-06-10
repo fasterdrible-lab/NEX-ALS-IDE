@@ -17,6 +17,8 @@
 
 - [x] **Squad** — página fullscreen com 8 agentes: Jarvis (PM/Claude), Friday (Dev/GPT), Fury (Pesquisa/Gemini), Shuri (UX/Claude), Pepper (Marketing/GPT), Vision (Growth/Gemini), Requis (Docs/Claude), Tester (QA/GPT)
 - [x] **Chat por agente** — streaming em tempo real; menção direta `@agente` no input redireciona para o agente mencionado
+- [x] **Persistência de sessões** — `squad_sessions` + `squad_messages` no SQLite via Prisma; sessões listadas no histórico (painel direito); clicar recarrega mensagens; `updatedAt` atualizado a cada mensagem
+- [x] **Delegação automática** — após stream concluído (depth=0), `detectDelegations()` escaneia `@agente` na resposta; `extractTask()` extrai a tarefa; novo `streamAgent()` disparado automaticamente; profundidade máxima 1 (evita loops); badge "delegado por @X" visível no chat
 - [x] **ACTION tags** — `SHELL`, `WRITE_FILE`, `READ_FILE` geradas pelo agente; botão Executar por bloco via SSH/SFTP na VPS selecionada; resultado inline (verde/vermelho)
 - [x] **Pipeline homolog → prod** — toggle no painel direito; gate âmbar pós-execução com Aprovar/Rejeitar; Aprovar executa na VPS Prod selecionada; estados visuais (âmbar/azul/verde/vermelho/cinza)
 - [x] **Claude Code como provedor** — `ai:stream:start` roteia para subprocess `claude` CLI quando provider = `claude-code`; PATH enriquecido com npm global bin; zero API Key / zero cobrança por token; `claude:check` detecta versão e status; `ClaudeCodeCard` em Configurações
@@ -126,11 +128,10 @@
 4. **DAP** — requer `node --inspect` na VPS + túnel 9229; sem breakpoints no Monaco
 5. **Chat multimodal** — Anthropic e Gemini suportam; outros providers recebem base64 no texto
 6. **Fingerprint SSH** — SHA-256 da chave bruta; não usa CA/known_hooks do sistema
-7. **Squad sessões** — conversas não persistidas no SQLite ainda; somem ao fechar a página
-8. **Squad delegação** — `@agente` na resposta exibe menção mas não dispara stream automático do agente citado
+7. **LSP** — requer `typescript-language-server` + WebSocket wrapper na VPS; configuração manual
+8. **DAP** — requer `node --inspect` na VPS + túnel 9229; sem breakpoints no Monaco
 
 ## Próximos passos
 
-- Squad: persistência de sessões/mensagens no SQLite
-- Squad: delegação automática quando agente menciona `@outro` na resposta
 - Testes E2E Playwright para página Squad
+- Suporte a WebSocket LSP para mais linguagens (Python, Rust, Go)
