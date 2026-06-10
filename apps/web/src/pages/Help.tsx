@@ -6,6 +6,7 @@ import {
   BarChart3, History, Box, Cpu, FileText, Bot, Zap,
   Sparkles, Siren, Globe, ShieldCheck, ExternalLink,
   Play, RotateCcw, Database, Layers, LayoutDashboard, Bell,
+  Users, GitBranch,
 } from 'lucide-react'
 
 interface Section {
@@ -877,6 +878,84 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     ),
   },
 
+  // ── SQUAD ─────────────────────────────────────────────────────────────
+  {
+    id: 'squad',
+    icon: Users,
+    title: 'Squad — Equipe de 8 agentes de IA',
+    color: 'bg-indigo-600/20 text-indigo-400',
+    content: (
+      <div className="space-y-4">
+        <p>O Squad substitui o chat com um único agente por uma <strong className="text-slate-100">equipe completa de especialistas</strong>. Cada agente tem papel, personalidade e provedor de IA próprios. Acesse pelo botão <strong className="text-slate-100">Squad</strong> na sidebar.</p>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Os 8 agentes</p>
+          <KV items={[
+            ['🎯 Jarvis  (Claude)',  'PM / Orquestrador — coordena o time e delega tarefas'],
+            ['👩‍💻 Friday  (GPT)',    'Desenvolvedora — escreve e refatora código'],
+            ['🔍 Fury    (Gemini)', 'Pesquisa de Mercado — analisa concorrência e dados'],
+            ['🎨 Shuri   (Claude)', 'UX / Design — cria specs de interface e fluxos'],
+            ['📣 Pepper  (GPT)',    'Marketing / Brand — copy, posicionamento e comunicação'],
+            ['📊 Vision  (Gemini)', 'Growth / Métricas — funil, conversão e estratégia'],
+            ['📋 Requis  (Claude)', 'Documentação — requisitos técnicos com critério de aceite'],
+            ['🧪 Tester  (GPT)',    'QA / Testes — planos de teste e identificação de bugs'],
+          ]}/>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Como usar</p>
+          <KV items={[
+            ['Selecionar agente', 'Clique no nome do agente no painel esquerdo'],
+            ['@mencionar', 'Digite @friday no início da mensagem para direcionar a um agente específico'],
+            ['Delegação automática', 'Quando um agente menciona @outro na resposta, aquele agente responde automaticamente'],
+            ['Histórico', 'Conversas salvas por sessão — painel direito'],
+          ]}/>
+          <Tip>Use <Code>@jarvis planeje o projeto X</Code> para o Jarvis coordenar e delegar automaticamente para Friday, Shuri ou outros agentes.</Tip>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Blocos de ação — a IA executa na VPS</p>
+          <p className="text-xs">Friday e Tester podem gerar blocos executáveis com um botão <strong className="text-slate-100">Executar</strong>. A IA nunca executa sem você clicar.</p>
+          <KV items={[
+            ['SHELL  (amarelo)', 'Executa um comando no terminal da VPS'],
+            ['WRITE  (azul)',    'Cria ou sobrescreve um arquivo na VPS'],
+            ['READ   (cinza)',   'Lê o conteúdo de um arquivo da VPS'],
+          ]}/>
+          <Warn>Selecione a VPS correta no seletor "VPS Alvo" antes de executar qualquer bloco de ação.</Warn>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide flex items-center gap-1.5"><GitBranch size={12}/> Pipeline — Homolog → Produção</p>
+          <p className="text-xs">Modo de segurança para quem tem dois servidores. Testa no Homolog, pede confirmação, depois vai para Produção.</p>
+          <Step n={1}><span>Ative o toggle <strong className="text-slate-100">PIPELINE</strong> no painel direito do Squad.</span></Step>
+          <Step n={2}><span>Selecione <strong className="text-slate-100">VPS Alvo</strong> (seletor superior) = seu Homolog.</span></Step>
+          <Step n={3}><span>Selecione <strong className="text-slate-100">VPS Prod</strong> (aparece ao ativar) = seu servidor de Produção.</span></Step>
+          <Step n={4}><span>Clique <strong className="text-slate-100">Executar</strong> em qualquer bloco → roda no Homolog → aparece gate âmbar.</span></Step>
+          <Step n={5}><span><strong className="text-emerald-400">Aprovar</strong> → executa em Produção. <strong className="text-slate-400">Rejeitar</strong> → produção intocada.</span></Step>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="bg-amber-900/20 border border-amber-800/30 rounded-lg px-3 py-2">
+              <p className="text-amber-300 font-semibold">Âmbar — Pendente</p>
+              <p className="text-slate-400 text-[11px]">Homolog OK. Aguarda sua aprovação.</p>
+            </div>
+            <div className="bg-green-900/20 border border-green-800/30 rounded-lg px-3 py-2">
+              <p className="text-green-300 font-semibold">Verde — Concluído</p>
+              <p className="text-slate-400 text-[11px]">Deploy em Prod realizado com sucesso.</p>
+            </div>
+            <div className="bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2">
+              <p className="text-red-300 font-semibold">Vermelho — Falha</p>
+              <p className="text-slate-400 text-[11px]">Erro na Prod. Verifique o log abaixo.</p>
+            </div>
+            <div className="bg-slate-800/40 border border-slate-700/30 rounded-lg px-3 py-2">
+              <p className="text-slate-400 font-semibold">Cinza — Rejeitado</p>
+              <p className="text-slate-500 text-[11px]">Você clicou Rejeitar. Prod intocada.</p>
+            </div>
+          </div>
+          <Warn>Se "— VPS Prod —" estiver selecionado (sem VPS escolhida), o Aprovar não executa nada. Selecione o servidor de produção antes de usar.</Warn>
+        </div>
+      </div>
+    ),
+  },
+
   // ── SOBRE ─────────────────────────────────────────────────────────────
   {
     id: 'about',
@@ -891,7 +970,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            ['Versão', '3.5.2'],
+            ['Versão', '3.10.0'],
             ['Runtime', 'Electron + Node.js 22'],
             ['Interface', 'React 18 + Tailwind CSS'],
             ['Banco de dados', 'SQLite local (Prisma ORM)'],
@@ -926,14 +1005,15 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.8.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Incident Mode, Deploy Assistant e autenticação multi-usuário.</p>
+        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.10.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de 8 agentes, Pipeline Homolog→Prod, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}
-      <div className="mb-6 grid grid-cols-4 gap-3">
+      <div className="mb-6 grid grid-cols-5 gap-3">
         {[
           { icon: Code2,     label: 'IDE Integrado',  desc: 'Lançador → IDE',       color: 'text-brand-400' },
           { icon: Sparkles,  label: 'AI HUB',         desc: 'Sidebar → AI HUB',     color: 'text-purple-400' },
+          { icon: Users,     label: 'Squad',           desc: 'Sidebar → Squad',      color: 'text-indigo-400' },
           { icon: Siren,     label: 'Incident Mode',  desc: 'Lançador → 🚨',         color: 'text-red-400' },
           { icon: Rocket,    label: 'Deploy',         desc: 'Lançador → 🚀',         color: 'text-emerald-400' },
         ].map(({ icon: Icon, label, desc, color }) => (
@@ -1005,8 +1085,8 @@ export default function Help() {
           </div>
         </div>
 
-        {/* Linha 2: IA · Deploy · Incident */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Linha 2: IA · Squad · Deploy · Incident */}
+        <div className="grid grid-cols-4 gap-3">
           {([
             {
               icon: Sparkles,
@@ -1015,6 +1095,14 @@ export default function Help() {
               desc: 'Converse com IA usando o contexto real do seu servidor.',
               dot:  'bg-purple-400', accent: 'text-purple-400',
               card: 'bg-purple-950/25 border-purple-800/30',
+            },
+            {
+              icon: Users,
+              tag:  'Equipe de Agentes',
+              name: 'Squad',
+              desc: '8 agentes especializados com pipeline homolog → prod.',
+              dot:  'bg-indigo-400', accent: 'text-indigo-400',
+              card: 'bg-indigo-950/25 border-indigo-800/30',
             },
             {
               icon: Rocket,
