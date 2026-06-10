@@ -11,12 +11,12 @@ export class SquadService {
     message: string,
     history: Array<{ role: string; content: string }>,
     onChunk: StreamChunkCallback,
-    opts?: { projectContext?: string; providerOverride?: string }
+    opts?: { projectContext?: string; systemPromptOverride?: string; providerOverride?: string }
   ): Promise<{ streamId: string }> {
     const config = AGENTS[agent]
 
-    let systemPrompt = config.systemPrompt
-    if (opts?.projectContext) {
+    let systemPrompt = opts?.systemPromptOverride ?? config.systemPrompt
+    if (!opts?.systemPromptOverride && opts?.projectContext) {
       systemPrompt += `\n\nCONTEXTO DO PROJETO:\n${opts.projectContext}`
     }
 

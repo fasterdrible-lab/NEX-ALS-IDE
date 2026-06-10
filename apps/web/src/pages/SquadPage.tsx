@@ -209,7 +209,11 @@ export default function SquadPage() {
 
         let streamId: string
         try {
-          const res = await ipc.squad.stream.start({ agent, message, history, projectContext: projectContext || undefined })
+          const res = await ipc.squad.stream.start({
+            agent, message, history,
+            projectContext: projectContext || undefined,
+            localPath: executionMode === 'local' ? (localPath || undefined) : undefined,
+          })
           streamId = res.streamId
         } catch (err) {
           console.error('stream.start failed:', err)

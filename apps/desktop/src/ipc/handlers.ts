@@ -862,6 +862,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     message: string
     history: Array<{ role: string; content: string }>
     projectContext?: string
+    localPath?: string
     providerOverride?: string
   }) =>
     wrapHandler(async () => {
@@ -884,10 +885,22 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         }
       } catch { /* ignora — usa preferredProvider */ }
 
+      // Monta system prompt com contexto de projeto e/ou execução local
+      function buildSystemPrompt(base: string): string {
+        let sys = base
+        if (data.localPath) {
+          sys += `\n\nEXECUÇÃO LOCAL ATIVA (Windows PC):\n- Pasta base do projeto: ${data.localPath}\n- Use SEMPRE caminhos Windows em ACTION tags. Exemplos:\n  [ACTION:READ_FILE path="${data.localPath}\\src\\index.ts"][/ACTION]\n  [ACTION:SHELL cwd="${data.localPath}"]npm install[/ACTION]\n- NÃO use caminhos Linux (/home/...) — o código roda diretamente no PC do usuário.`
+        }
+        if (data.projectContext) {
+          sys += `\n\nCONTEXTO DO PROJETO:\n${data.projectContext}`
+        }
+        return sys
+      }
+
       // Rota Claude Code (conta Pro, sem API key)
       if (effectiveProvider === 'claude-code') {
         const streamId = crypto.randomUUID()
-        const sys = agentCfg.systemPrompt + (data.projectContext ? `\n\nCONTEXTO DO PROJETO:\n${data.projectContext}` : '')
+        const sys = buildSystemPrompt(agentCfg.systemPrompt)
         const history = data.history ?? []
         const parts: string[] = [sys, '']
         for (const m of history) {
@@ -931,7 +944,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         chunk => {
           try { targetWin?.webContents.send('squad:stream:chunk', chunk) } catch { /* janela fechada */ }
         },
-        { projectContext: data.projectContext, providerOverride: effectiveProvider }
+        { systemPromptOverride: buildSystemPrompt(agentCfg.systemPrompt), providerOverride: effectiveProvider }
       )
       return { streamId: session.streamId }
     })
@@ -952,6 +965,18 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       if (data.vpsId === '__local__') {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { exec } = require('child_process') as typeof import('child_process')
+
+        // Normaliza caminhos Unix gerados pelo agente para Windows
+        function resolveLocalPath(filePath: string, cwd?: string): string {
+          if (!filePath.startsWith('/')) return filePath // já é caminho Windows
+          if (!cwd) return filePath
+          const cwdBase = path.basename(cwd).toLowerCase()
+          const parts = filePath.split('/').filter(Boolean)
+          const idx = parts.findIndex(p => p.toLowerCase() === cwdBase)
+          if (idx >= 0) return path.join(cwd, ...parts.slice(idx + 1))
+          return path.join(cwd, ...parts) // fallback: relativo ao cwd
+        }
+
         if (data.type === 'shell') {
           return new Promise<{ output: string }>(resolve => {
             exec(data.content, { cwd: data.cwd, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
@@ -963,14 +988,16 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         }
         if (data.type === 'read_file') {
           if (!data.path) throw new Error('path é obrigatório para read_file')
-          const content = await fs.readFile(data.path, 'utf-8')
+          const resolved = resolveLocalPath(data.path, data.cwd)
+          const content = await fs.readFile(resolved, 'utf-8')
           return { output: content }
         }
         if (data.type === 'write_file') {
           if (!data.path) throw new Error('path é obrigatório para write_file')
-          await fs.mkdir(path.dirname(data.path), { recursive: true })
-          await fs.writeFile(data.path, data.content, 'utf-8')
-          return { output: `✓ Arquivo escrito: ${data.path}` }
+          const resolved = resolveLocalPath(data.path, data.cwd)
+          await fs.mkdir(path.dirname(resolved), { recursive: true })
+          await fs.writeFile(resolved, data.content, 'utf-8')
+          return { output: `✓ Arquivo escrito: ${resolved}` }
         }
         throw new Error(`Tipo desconhecido para execução local: ${data.type}`)
       }
