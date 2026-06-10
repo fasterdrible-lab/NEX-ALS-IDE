@@ -315,6 +315,9 @@ export const ipc = {
         invoke<{ output: string }>('squad:action:execute', data),
     },
   },
+  claude: {
+    check: () => invoke<{ installed: boolean; version: string }>('claude:check'),
+  },
   auth: {
     status: () => invoke<{ user: AppUser | null; needsSetup: boolean; sessionRequired: boolean }>('auth:status'),
     setup: (username: string, password: string) => invoke<{ user: AppUser }>('auth:setup', { username, password }),

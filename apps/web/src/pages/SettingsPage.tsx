@@ -3,6 +3,7 @@ import {
   Loader2, CheckCircle,
   Download, Upload, ChevronDown, ChevronUp, Eye, EyeOff,
   Trash2, Zap, Star, Check, AlertCircle, Bell, Users, Plus, ShieldCheck, Shield,
+  Terminal, RefreshCw,
 } from 'lucide-react'
 import { ipc, type AppUser } from '../lib/ipc'
 import type { AiProviderConfig } from '@cwm/config'
@@ -110,6 +111,121 @@ const PROVIDERS: ProviderMeta[] = [
     ],
   },
 ]
+
+// ── ClaudeCodeCard ───────────────────────────────────────────────────────────
+
+function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; onRefresh: () => void }) {
+  const [status, setStatus] = useState<'idle' | 'checking' | 'ok' | 'not_found'>('idle')
+  const [version, setVersion] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const config = configs.find(c => c.provider === 'claude-code')
+  const isDefault = config?.isDefault ?? false
+
+  const check = useCallback(async () => {
+    setStatus('checking')
+    try {
+      const res = await ipc.claude.check()
+      setStatus(res.installed ? 'ok' : 'not_found')
+      setVersion(res.version)
+    } catch {
+      setStatus('not_found')
+    }
+  }, [])
+
+  useEffect(() => { void check() }, [check])
+
+  const setAsDefault = async () => {
+    setSaving(true)
+    try {
+      await ipc.ai.save({ provider: 'claude-code', apiKey: '', model: 'claude-code', enabled: true, isDefault: true })
+      onRefresh()
+    } finally { setSaving(false) }
+  }
+
+  const removeDefault = async () => {
+    setSaving(true)
+    try {
+      await ipc.ai.delete('claude-code')
+      onRefresh()
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className={`border rounded-xl transition-colors ${
+      isDefault ? 'border-brand-600/60 bg-brand-950/20' : 'border-slate-700 bg-slate-900'
+    }`}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="p-2 rounded-lg bg-brand-600/20">
+          <Terminal size={15} className="text-brand-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-slate-100">Claude Code</span>
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium text-brand-300 bg-brand-600/20">
+              Conta — sem API Key
+            </span>
+            {isDefault && (
+              <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium text-yellow-300 bg-yellow-600/20">
+                <Star size={10} /> Padrão
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Usa o CLI instalado localmente com sua conta Claude Pro — sem cobrar por token
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {status === 'checking' && <Loader2 size={13} className="animate-spin text-slate-500" />}
+          {status === 'ok' && <span className="flex items-center gap-1 text-xs text-emerald-400"><Check size={11} /> Detectado</span>}
+          {status === 'not_found' && <span className="flex items-center gap-1 text-xs text-red-400"><AlertCircle size={11} /> Não encontrado</span>}
+          <button onClick={check} title="Verificar novamente" className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
+            <RefreshCw size={12} />
+          </button>
+        </div>
+      </div>
+
+      <div className="px-4 pb-4 space-y-3 border-t border-slate-800 pt-3">
+        {status === 'ok' && (
+          <p className="text-xs text-emerald-400/80">
+            ✓ {version} — autenticado e pronto para uso
+          </p>
+        )}
+        {status === 'not_found' && (
+          <div className="bg-amber-900/20 border border-amber-800/30 rounded-lg px-3 py-2.5 space-y-1.5">
+            <p className="text-xs text-amber-300 font-semibold">Claude Code CLI não encontrado no PATH</p>
+            <p className="text-xs text-slate-400">Instale com:</p>
+            <code className="block text-xs text-emerald-300 bg-slate-800 px-2 py-1 rounded font-mono">
+              npm install -g @anthropic-ai/claude-code
+            </code>
+            <p className="text-xs text-slate-400">Depois autentique executando <code className="text-brand-300">claude</code> no terminal.</p>
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          {!isDefault ? (
+            <button
+              onClick={() => void setAsDefault()}
+              disabled={saving || status !== 'ok'}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-600/30 border border-brand-600/50 text-brand-300 hover:bg-brand-600/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
+            >
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <Star size={11} />}
+              Usar como padrão
+            </button>
+          ) : (
+            <button
+              onClick={() => void removeDefault()}
+              disabled={saving}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-700/40 border border-slate-600/50 text-slate-400 hover:bg-slate-700/60 disabled:opacity-40 transition-colors"
+            >
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <Zap size={11} />}
+              Remover como padrão
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── ProviderCard ─────────────────────────────────────────────────────────────
 
@@ -451,6 +567,9 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-2">
+          {/* Claude Code — conta, sem API Key */}
+          <ClaudeCodeCard configs={aiProviders} onRefresh={loadAiProviders} />
+
           {PROVIDERS.map(meta => (
             <ProviderCard
               key={meta.id}
@@ -462,8 +581,8 @@ export default function SettingsPage() {
         </div>
 
         <p className="text-xs text-slate-600">
-          Dica: Groq tem plano gratuito. DeepSeek é o mais barato para código.
-          Configure pelo menos um provedor para usar o chat sem VPS.
+          Dica: Claude Code usa sua conta Pro sem cobrar por token. Groq tem plano gratuito.
+          DeepSeek é o mais barato para código via API.
         </p>
       </div>
 

@@ -66,6 +66,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const memorySvc = new ProjectMemoryService()
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
+  // Claude Code subprocess streams (account-based, sem API key)
+  const claudeProcs = new Map<string, { kill: () => void }>()
 
   // ── Estado em memória das notificações ───────────────────────────────────────
   const db = getPrismaClient()
@@ -562,12 +564,85 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('ai:chatCtx',    (_, data) => wrapHandler(() => aiSvc.chatWithContext(data)))
 
   // Streaming — ai:stream:start / ai:stream:cancel
-  ipcMain.handle('ai:stream:start', (event, data) =>
+  ipcMain.handle('ai:stream:start', (event, data: {
+    provider?: string
+    messages?: Array<{ role: string; content: unknown }>
+    systemPrompt?: string
+    [key: string]: unknown
+  }) =>
     wrapHandler(async () => {
+      requireAuth()
       const targetWin = BrowserWindow.fromWebContents(event.sender)
-      const session = await aiSvc.startStream(data, chunk => {
+
+      // Descobre o provider efetivo (explícito ou padrão do banco)
+      let effectiveProvider = data.provider
+      if (!effectiveProvider) {
+        try {
+          const rows = await db.$queryRawUnsafe(
+            `SELECT provider FROM ai_providers WHERE isDefault=1 AND enabled=1 LIMIT 1`
+          ) as Array<{ provider: string }>
+          effectiveProvider = rows[0]?.provider
+        } catch { /* ignora */ }
+      }
+
+      // ── Rota Claude Code (conta, sem API key) ──────────────────────────────
+      if (effectiveProvider === 'claude-code') {
+        const streamId = crypto.randomUUID()
+        const msgs = (data.messages ?? []) as Array<{ role: string; content: unknown }>
+        const sys = data.systemPrompt as string | undefined
+
+        // Monta prompt para `claude -p` incluindo histórico
+        const parts: string[] = []
+        if (sys) parts.push(sys, '')
+        for (const m of msgs.slice(0, -1)) {
+          const label = m.role === 'user' ? 'Human' : 'Assistant'
+          const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+          parts.push(`${label}: ${text}`)
+        }
+        const last = msgs[msgs.length - 1]
+        const lastText = last ? (typeof last.content === 'string' ? last.content : JSON.stringify(last.content)) : ''
+        const prompt = msgs.length > 1
+          ? parts.join('\n') + `\nHuman: ${lastText}`
+          : lastText
+
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { spawn } = require('child_process') as typeof import('child_process')
+        const proc = spawn('claude', ['-p', prompt, '--output-format', 'text', '--no-color'], {
+          shell: true,
+          env: { ...process.env },
+        })
+        claudeProcs.set(streamId, proc)
+
+        let doneSent = false
+        const sendDone = () => {
+          if (doneSent) return; doneSent = true
+          claudeProcs.delete(streamId)
+          try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'done' }) } catch { /* janela fechada */ }
+        }
+        proc.stdout?.on('data', (chunk: Buffer) => {
+          try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'text_delta', delta: chunk.toString() }) } catch { /* janela fechada */ }
+        })
+        proc.stderr?.on('data', (chunk: Buffer) => {
+          const txt = chunk.toString()
+          // Apenas erros reais (não warnings normais do CLI)
+          if (/not logged in|authentication|unauthorized/i.test(txt)) {
+            try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'error', error: 'Não autenticado. Execute "claude" no terminal e faça login.' }) } catch { /* janela fechada */ }
+            proc.kill()
+          }
+        })
+        proc.on('close', sendDone)
+        proc.on('error', (err: Error) => {
+          try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'error', error: `claude CLI não encontrado: ${err.message}` }) } catch { /* janela fechada */ }
+          sendDone()
+        })
+
+        return { streamId }
+      }
+
+      // ── Rota padrão (API Key) ──────────────────────────────────────────────
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const session = await aiSvc.startStream(data as any, chunk => {
         try { targetWin?.webContents.send('ai:stream:chunk', chunk) } catch { /* janela fechada */ }
-        // Notifica erro quando a janela não está em foco
         if (chunk.type === 'error' && notificationsEnabled && Notification.isSupported()) {
           if (!targetWin?.isFocused()) {
             new Notification({
@@ -581,8 +656,22 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
   )
   ipcMain.handle('ai:stream:cancel', (_, streamId: string) => {
-    aiSvc.cancelStream(streamId)
+    const proc = claudeProcs.get(streamId)
+    if (proc) { proc.kill(); claudeProcs.delete(streamId) }
+    else { aiSvc.cancelStream(streamId) }
     return { success: true }
+  })
+
+  // Claude Code — detecção local (sem API key)
+  ipcMain.handle('claude:check', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { exec } = require('child_process') as typeof import('child_process')
+    return new Promise<{ installed: boolean; version: string }>(resolve => {
+      exec('claude --version', { timeout: 8000 }, (err: Error | null, stdout: string) => {
+        if (err) resolve({ installed: false, version: '' })
+        else resolve({ installed: true, version: stdout.trim() })
+      })
+    })
   })
 
   // Conversas persistidas
