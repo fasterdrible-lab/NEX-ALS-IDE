@@ -1,12 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-06-10
-**Versão:** 3.13.0
+**Versão:** 3.14.0
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**NEX-ALS IDE 3.13.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH, Pipeline homolog→prod), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.14.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, Contexto de Projeto, Pipeline homolog→prod, Execução Local), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
@@ -19,8 +19,10 @@
 - [x] **Chat por agente** — streaming em tempo real; menção direta `@agente` no input redireciona para o agente mencionado
 - [x] **Persistência de sessões** — `squad_sessions` + `squad_messages` no SQLite via Prisma; sessões listadas no histórico (painel direito); clicar recarrega mensagens; `updatedAt` atualizado a cada mensagem
 - [x] **Delegação automática** — após stream concluído (depth=0), `detectDelegations()` escaneia `@agente` na resposta; `extractTask()` extrai a tarefa; novo `streamAgent()` disparado automaticamente; profundidade máxima 1 (evita loops); badge "delegado por @X" visível no chat
-- [x] **ACTION tags** — `SHELL`, `WRITE_FILE`, `READ_FILE` geradas pelo agente; botão Executar por bloco via SSH/SFTP na VPS selecionada; resultado inline (verde/vermelho)
-- [x] **Pipeline homolog → prod** — toggle no painel direito; gate âmbar pós-execução com Aprovar/Rejeitar; Aprovar executa na VPS Prod selecionada; estados visuais (âmbar/azul/verde/vermelho/cinza)
+- [x] **ACTION tags** — `SHELL`, `WRITE_FILE`, `READ_FILE` geradas pelo agente; botão Executar por bloco; executa via SSH/SFTP (modo VPS) ou `child_process`/`node:fs` (modo Local); resultado inline (verde/vermelho)
+- [x] **Contexto do Projeto** — campo collapsível no painel direito; cola README/arquitetura/stack; todos os agentes da sessão recebem o contexto automaticamente no system prompt; indicador verde ativo (v3.14.0)
+- [x] **Execução Local** — toggle VPS/Local no painel direito; modo Local executa ações no PC sem VPS via `vpsId: '__local__'`; dialog para selecionar pasta de trabalho; ações SHELL usam `cwd` da pasta selecionada (v3.14.0)
+- [x] **Pipeline homolog → prod** — toggle no painel direito (modo VPS apenas); gate âmbar pós-execução com Aprovar/Rejeitar; Aprovar executa na VPS Prod selecionada; estados visuais (âmbar/azul/verde/vermelho/cinza)
 - [x] **Claude Code como provedor** — `ai:stream:start` roteia para subprocess `claude` CLI quando provider = `claude-code`; PATH enriquecido com npm global bin; zero API Key / zero cobrança por token; `claude:check` detecta versão e status; `ClaudeCodeCard` em Configurações
 - [x] **Múltiplas contas Claude Code** — tabela `claude_code_accounts` (SQLite); N contas isoladas via `CLAUDE_CONFIG_DIR`; alternância com um clique; conta já autenticada (`~/.claude`) ou nova com dir gerado automaticamente; verificação real via `.credentials.json`; comando PowerShell com botão copiar (v3.12.0–v3.13.0)
 
@@ -123,7 +125,7 @@
 
 ## Limitações conhecidas
 
-1. **Squad sem contexto automático de projeto** — Jarvis e demais agentes respondem de forma genérica quando não há contexto do projeto fornecido; é necessário descrever o projeto no input ou selecionar VPS/projeto no painel direito
+1. **Squad — contexto do projeto via campo manual** — campo "Contexto do Projeto" resolvido (v3.14.0): cole README/arquitetura no painel direito e todos os agentes passam a receber esse contexto; não há leitura automática dos arquivos do projeto (isso é feito via ações READ_FILE)
 2. **Squad lentidão na primeira mensagem** — CLI `claude` tem overhead de inicialização/OAuth (~3–5s); respostas seguintes são mais rápidas
 3. **Autenticação interna opt-in** — sem usuários cadastrados = single-user (backward compat); com usuários = login obrigatório, roles `admin`/`viewer`; sessão in-memory (requer login a cada restart)
 2. **SSH key privada** — usuário configura no sistema; app não armazena

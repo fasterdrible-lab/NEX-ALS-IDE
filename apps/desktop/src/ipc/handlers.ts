@@ -947,6 +947,35 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   }) =>
     wrapHandler(async () => {
       requireAuth()
+
+      // ── Execução local (sem VPS) ─────────────────────────────────────────
+      if (data.vpsId === '__local__') {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { exec } = require('child_process') as typeof import('child_process')
+        if (data.type === 'shell') {
+          return new Promise<{ output: string }>(resolve => {
+            exec(data.content, { cwd: data.cwd, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
+              (err, stdout, stderr) => {
+                const output = [stdout, stderr].filter(Boolean).join('\n').trim()
+                resolve({ output: output || (err ? err.message : '✓ Concluído') })
+              })
+          })
+        }
+        if (data.type === 'read_file') {
+          if (!data.path) throw new Error('path é obrigatório para read_file')
+          const content = await fs.readFile(data.path, 'utf-8')
+          return { output: content }
+        }
+        if (data.type === 'write_file') {
+          if (!data.path) throw new Error('path é obrigatório para write_file')
+          await fs.mkdir(path.dirname(data.path), { recursive: true })
+          await fs.writeFile(data.path, data.content, 'utf-8')
+          return { output: `✓ Arquivo escrito: ${data.path}` }
+        }
+        throw new Error(`Tipo desconhecido para execução local: ${data.type}`)
+      }
+
+      // ── Execução remota (VPS via SSH/SFTP) ──────────────────────────────
       if (data.type === 'shell') {
         const cmd = data.cwd ? `cd ${JSON.stringify(data.cwd)} && ${data.content}` : data.content
         const output = await terminal.exec(data.vpsId, cmd, 30000)

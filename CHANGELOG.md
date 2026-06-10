@@ -1,5 +1,24 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.14.0] — 2026-06-10
+
+### Adicionado — Squad: Contexto de Projeto + Execução Local
+
+#### Contexto do Projeto
+- Novo campo "Contexto do Projeto" (collapsível) no painel direito do Squad
+- Cole README, arquitetura, stack técnica ou qualquer descrição do projeto
+- Todos os agentes da sessão recebem esse contexto automaticamente no system prompt
+- Indicador verde mostra quando o contexto está ativo (com contagem de caracteres)
+
+#### Execução Local (sem VPS)
+- Toggle **VPS / Local** no painel direito do Squad (seção "Execução")
+- Modo Local: ações SHELL, READ_FILE e WRITE_FILE rodam no PC local via `child_process` / `node:fs` — sem precisar de VPS
+- Botão "Selecionar pasta" abre dialog nativo para escolher a pasta de trabalho (ex: OneDrive/projeto)
+- O `cwd` padrão das ações SHELL é a pasta selecionada; `path` em READ/WRITE usa o caminho absoluto do ACTION tag
+- `vpsId: '__local__'` como sentinel — detectado no handler `squad:action:execute` para rotear para execução local
+
+---
+
 ## [3.13.0] — 2026-06-10
 
 ### Corrigido — Autenticação real de contas Claude Code + comando PowerShell

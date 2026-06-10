@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server } from 'lucide-react'
+import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronUp, FileText, Monitor } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 
 // ── Agent metadata (UI only) ─────────────────────────────────────────────────
@@ -112,6 +112,11 @@ export default function SquadPage() {
   const [pipelineMode, setPipelineMode] = useState(false)
   const [prodVpsId, setProdVpsId] = useState<string>('')
   const [pipelineGates, setPipelineGates] = useState<Record<string, PipelineGate>>({})
+  // Project context + local execution
+  const [projectContext, setProjectContext] = useState('')
+  const [contextOpen, setContextOpen] = useState(false)
+  const [executionMode, setExecutionMode] = useState<'vps' | 'local'>('vps')
+  const [localPath, setLocalPath] = useState('')
 
   const endRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -204,7 +209,7 @@ export default function SquadPage() {
 
         let streamId: string
         try {
-          const res = await ipc.squad.stream.start({ agent, message, history })
+          const res = await ipc.squad.stream.start({ agent, message, history, projectContext: projectContext || undefined })
           streamId = res.streamId
         } catch (err) {
           console.error('stream.start failed:', err)
@@ -352,12 +357,14 @@ export default function SquadPage() {
   }
 
   async function executeAction(action: ActionBlock) {
-    if (!selectedVpsId) return
+    const vpsId = executionMode === 'local' ? '__local__' : selectedVpsId
+    if (!vpsId) return
     setActionStates(prev => ({ ...prev, [action.id]: { status: 'running' } }))
     try {
-      const res = await ipc.squad.action.execute({ type: action.type, content: action.content, cwd: action.cwd, path: action.path, vpsId: selectedVpsId })
+      const cwd = executionMode === 'local' ? (action.cwd ?? localPath ?? undefined) : action.cwd
+      const res = await ipc.squad.action.execute({ type: action.type, content: action.content, cwd, path: action.path, vpsId })
       setActionStates(prev => ({ ...prev, [action.id]: { status: 'ok', output: res.output } }))
-      if (pipelineMode && prodVpsId && prodVpsId !== selectedVpsId) {
+      if (executionMode === 'vps' && pipelineMode && prodVpsId && prodVpsId !== selectedVpsId) {
         setPipelineGates(prev => ({ ...prev, [action.id]: { action, homologOutput: res.output, status: 'pending' } }))
       }
     } catch (err) {
@@ -542,7 +549,7 @@ export default function SquadPage() {
                               </div>
                               <button
                                 onClick={() => void executeAction(action)}
-                                disabled={!selectedVpsId || st.status === 'running'}
+                                disabled={(executionMode === 'vps' ? !selectedVpsId : !localPath) || st.status === 'running'}
                                 className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-lg bg-brand-600/30 border border-brand-600/50 text-brand-300 hover:bg-brand-600/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                               >
                                 {st.status === 'running' ? <Loader2 size={11} className="animate-spin" /> : st.status === 'ok' ? <CheckCircle size={11} /> : st.status === 'error' ? <AlertCircle size={11} /> : <Play size={11} />}
@@ -636,62 +643,148 @@ export default function SquadPage() {
         </div>
       </div>
 
-      {/* ── Right panel — Sessions ───────────────────────────────────────────── */}
+      {/* ── Right panel ─────────────────────────────────────────────────────── */}
       <aside className="w-60 bg-slate-900 border-l border-slate-800 flex flex-col shrink-0">
-        <div className="px-4 py-3 border-b border-slate-800 space-y-2">
-          <div className="flex items-center gap-1.5">
-            <Server size={12} className="text-slate-500 shrink-0" />
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">VPS Alvo</h3>
-          </div>
-          {vpsList.length === 0 ? (
-            <p className="text-[10px] text-slate-600">Nenhuma VPS cadastrada</p>
-          ) : (
-            <select
-              value={selectedVpsId}
-              onChange={e => setSelectedVpsId(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-600"
-            >
-              {vpsList.map(v => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
-            </select>
+
+        {/* Project context — collapsible */}
+        <div className="border-b border-slate-800">
+          <button
+            onClick={() => setContextOpen(v => !v)}
+            className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors"
+          >
+            <div className="flex items-center gap-1.5">
+              <FileText size={12} className="text-slate-500 shrink-0" />
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Contexto do Projeto</span>
+            </div>
+            {contextOpen ? <ChevronUp size={12} className="text-slate-600" /> : <ChevronDown size={12} className="text-slate-600" />}
+          </button>
+          {contextOpen && (
+            <div className="px-3 pb-3">
+              <textarea
+                value={projectContext}
+                onChange={e => setProjectContext(e.target.value)}
+                placeholder="Cole aqui o README, arquitetura, stack técnica… Todos os agentes usarão este contexto automaticamente."
+                rows={6}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-brand-600 transition-colors leading-relaxed"
+              />
+              {projectContext && (
+                <p className="text-[10px] text-green-500 mt-1 flex items-center gap-1">
+                  <CheckCircle size={9} /> Contexto ativo ({projectContext.length} chars)
+                </p>
+              )}
+            </div>
           )}
         </div>
-        {/* Pipeline mode toggle */}
+
+        {/* Execution mode — VPS or Local */}
         <div className="px-4 py-3 border-b border-slate-800 space-y-2">
-          <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pipeline</span>
+          <div className="flex items-center gap-1.5 mb-1">
+            <Monitor size={12} className="text-slate-500 shrink-0" />
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Execução</h3>
+          </div>
+          <div className="flex rounded-lg overflow-hidden border border-slate-700 text-xs">
             <button
-              onClick={() => setPipelineMode(v => !v)}
-              className={`relative w-9 h-5 rounded-full border transition-colors ${
-                pipelineMode ? 'bg-brand-600/40 border-brand-600/60' : 'bg-slate-700/50 border-slate-600/50'
+              onClick={() => setExecutionMode('vps')}
+              className={`flex-1 py-1.5 transition-colors font-medium ${
+                executionMode === 'vps' ? 'bg-brand-600/40 text-brand-300' : 'bg-slate-800 text-slate-500 hover:text-slate-300'
               }`}
             >
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform ${
-                pipelineMode ? 'translate-x-4 bg-brand-400' : 'translate-x-0 bg-slate-500'
-              }`} />
+              VPS
             </button>
-          </label>
-          {pipelineMode && (
-            <>
-              <p className="text-[10px] text-slate-500">Após homolog OK, confirme deploy em Prod:</p>
-              {vpsList.length === 0 ? (
-                <p className="text-[10px] text-slate-600">Nenhuma VPS cadastrada</p>
-              ) : (
-                <select
-                  value={prodVpsId}
-                  onChange={e => setProdVpsId(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-600"
+            <button
+              onClick={() => setExecutionMode('local')}
+              className={`flex-1 py-1.5 transition-colors font-medium ${
+                executionMode === 'local' ? 'bg-green-700/40 text-green-300' : 'bg-slate-800 text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              Local
+            </button>
+          </div>
+
+          {executionMode === 'vps' && (
+            vpsList.length === 0 ? (
+              <p className="text-[10px] text-slate-600">Nenhuma VPS cadastrada</p>
+            ) : (
+              <select
+                value={selectedVpsId}
+                onChange={e => setSelectedVpsId(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-600"
+              >
+                {vpsList.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            )
+          )}
+
+          {executionMode === 'local' && (
+            <div className="space-y-1.5">
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={localPath}
+                  onChange={e => setLocalPath(e.target.value)}
+                  placeholder="Pasta local (ex: C:\OneDrive\projeto)"
+                  className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-green-600 transition-colors"
+                />
+                <button
+                  onClick={async () => {
+                    const res = await ipc.local.openFolder()
+                    if (res) setLocalPath(res)
+                  }}
+                  title="Selecionar pasta"
+                  className="shrink-0 px-2 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-400 hover:text-slate-200 hover:bg-slate-600 transition-colors"
                 >
-                  <option value="">— VPS Prod —</option>
-                  {vpsList.map(v => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
+                  <FolderOpen size={12} />
+                </button>
+              </div>
+              {localPath && (
+                <p className="text-[10px] text-green-500 flex items-center gap-1">
+                  <CheckCircle size={9} /> Pasta selecionada
+                </p>
               )}
-            </>
+              <p className="text-[10px] text-slate-600">Ações SHELL, READ e WRITE rodam no seu PC (sem VPS).</p>
+            </div>
           )}
         </div>
+
+        {/* Pipeline mode toggle — only for VPS mode */}
+        {executionMode === 'vps' && (
+          <div className="px-4 py-3 border-b border-slate-800 space-y-2">
+            <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pipeline</span>
+              <button
+                onClick={() => setPipelineMode(v => !v)}
+                className={`relative w-9 h-5 rounded-full border transition-colors ${
+                  pipelineMode ? 'bg-brand-600/40 border-brand-600/60' : 'bg-slate-700/50 border-slate-600/50'
+                }`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform ${
+                  pipelineMode ? 'translate-x-4 bg-brand-400' : 'translate-x-0 bg-slate-500'
+                }`} />
+              </button>
+            </label>
+            {pipelineMode && (
+              <>
+                <p className="text-[10px] text-slate-500">Após homolog OK, confirme deploy em Prod:</p>
+                {vpsList.length === 0 ? (
+                  <p className="text-[10px] text-slate-600">Nenhuma VPS cadastrada</p>
+                ) : (
+                  <select
+                    value={prodVpsId}
+                    onChange={e => setProdVpsId(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-600"
+                  >
+                    <option value="">— VPS Prod —</option>
+                    {vpsList.map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         <div className="px-4 py-2 border-b border-slate-800">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Histórico</h3>
