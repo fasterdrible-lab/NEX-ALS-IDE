@@ -121,6 +121,7 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
   const [accounts, setAccounts] = useState<ClaudeAccount[]>([])
   const [accountStatuses, setAccountStatuses] = useState<Record<string, { status: AccountStatus; version: string }>>({})
   const [newName, setNewName] = useState('')
+  const [useDefault, setUseDefault] = useState(false)
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState('')
   const [showAdd, setShowAdd] = useState(false)
@@ -151,12 +152,13 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
     setAdding(true)
     setAddError('')
     try {
-      const res = await ipc.claude.accounts.add(newName.trim()) as unknown as { error?: string; id?: string }
+      const res = await ipc.claude.accounts.add(newName.trim(), useDefault) as unknown as { error?: string; id?: string }
       if (res?.error) {
         setAddError(res.error)
         return
       }
       setNewName('')
+      setUseDefault(false)
       setShowAdd(false)
       await loadAccounts()
     } catch (err) {
@@ -263,20 +265,34 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
 
         {/* Adicionar conta */}
         {showAdd ? (
-          <div className="space-y-1.5">
+          <div className="space-y-2 bg-slate-800/40 border border-slate-700/50 rounded-lg p-3">
+            <input
+              value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') void addAccount(); if (e.key === 'Escape') { setShowAdd(false); setAddError('') } }}
+              placeholder="Nome da conta (ex: fasterdrible@gmail.com)"
+              autoFocus
+              className="w-full text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-600/60"
+            />
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={useDefault} onChange={e => setUseDefault(e.target.checked)}
+                className="accent-brand-500 w-3 h-3" />
+              <span className="text-[11px] text-slate-400">
+                Conta já autenticada no PC
+                <span className="ml-1 text-slate-600 font-mono">(~/.claude)</span>
+              </span>
+            </label>
+            {!useDefault && (
+              <p className="text-[10px] text-amber-400/80">
+                Nova conta — após adicionar, autentique no terminal com o comando exibido na lista.
+              </p>
+            )}
             <div className="flex items-center gap-2">
-              <input
-                value={newName} onChange={e => setNewName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') void addAccount(); if (e.key === 'Escape') { setShowAdd(false); setAddError('') } }}
-                placeholder="Nome da conta (ex: Conta 2)"
-                autoFocus
-                className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-600/60"
-              />
               <button onClick={() => void addAccount()} disabled={adding || !newName.trim()}
                 className="text-xs px-3 py-1.5 rounded-lg bg-brand-600/30 border border-brand-600/50 text-brand-300 hover:bg-brand-600/50 disabled:opacity-40 transition-colors font-medium">
                 {adding ? <Loader2 size={11} className="animate-spin" /> : 'Adicionar'}
               </button>
-              <button onClick={() => { setShowAdd(false); setAddError('') }} className="text-xs px-2 py-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+              <button onClick={() => { setShowAdd(false); setAddError(''); setUseDefault(false) }}
+                className="text-xs px-2 py-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition-colors">Cancelar</button>
             </div>
             {addError && (
               <p className="text-[10px] text-red-400 bg-red-900/20 border border-red-800/30 rounded px-2 py-1 font-mono break-all">{addError}</p>

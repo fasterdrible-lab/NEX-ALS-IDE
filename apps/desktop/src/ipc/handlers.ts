@@ -715,16 +715,19 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
   )
 
-  ipcMain.handle('claude:accounts:add', (_, data: { name: string }) =>
+  ipcMain.handle('claude:accounts:add', (_, data: { name: string; useDefault?: boolean }) =>
     wrapHandler(async () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const osModule = require('os') as typeof import('os')
       const id = crypto.randomUUID()
-      const slug = data.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20)
-      const configDir = process.platform === 'win32'
-        ? `${osModule.homedir()}\\.claude-${slug}-${id.slice(0, 6)}`
-        : `${osModule.homedir()}/.claude-${slug}-${id.slice(0, 6)}`
-      // Se for a primeira conta, já ativa
+      // useDefault=true → usa ~/.claude já autenticado; false → cria dir novo
+      const configDir = data.useDefault
+        ? (process.platform === 'win32'
+            ? `${osModule.homedir()}\\.claude`
+            : `${osModule.homedir()}/.claude`)
+        : (process.platform === 'win32'
+            ? `${osModule.homedir()}\\.claude-${data.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20)}-${id.slice(0, 6)}`
+            : `${osModule.homedir()}/.claude-${data.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20)}-${id.slice(0, 6)}`)
       const count = await db.$queryRawUnsafe(
         `SELECT COUNT(*) as n FROM claude_code_accounts`
       ) as Array<{ n: number }>
