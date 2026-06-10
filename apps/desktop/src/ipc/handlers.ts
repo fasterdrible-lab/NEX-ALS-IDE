@@ -607,9 +607,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { spawn } = require('child_process') as typeof import('child_process')
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const osModule = require('os') as typeof import('os')
+        const npmBin = process.platform === 'win32'
+          ? `${osModule.homedir()}\\AppData\\Roaming\\npm`
+          : `${osModule.homedir()}/.npm-global/bin:/usr/local/bin`
+        const spawnEnv = { ...process.env, PATH: `${npmBin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}` }
         const proc = spawn('claude', ['-p', prompt, '--output-format', 'text', '--no-color'], {
           shell: true,
-          env: { ...process.env },
+          env: spawnEnv,
         })
         claudeProcs.set(streamId, proc)
 
@@ -665,12 +671,27 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   // Claude Code — detecção local (sem API key)
   ipcMain.handle('claude:check', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { exec } = require('child_process') as typeof import('child_process')
+    const { spawn } = require('child_process') as typeof import('child_process')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const os = require('os') as typeof import('os')
     return new Promise<{ installed: boolean; version: string }>(resolve => {
-      exec('claude --version', { timeout: 8000 }, (err: Error | null, stdout: string) => {
-        if (err) resolve({ installed: false, version: '' })
-        else resolve({ installed: true, version: stdout.trim() })
+      // Inclui o diretório de binários globais do npm no PATH para Electron encontrar o CLI
+      const npmGlobalBin = process.platform === 'win32'
+        ? `${os.homedir()}\\AppData\\Roaming\\npm`
+        : `${os.homedir()}/.npm-global/bin:/usr/local/bin`
+      const env = { ...process.env, PATH: `${npmGlobalBin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}` }
+
+      const proc = spawn('claude', ['--version'], { shell: true, env, timeout: 8000 })
+      let output = ''
+      let errOutput = ''
+      proc.stdout?.on('data', (d: Buffer) => { output += d.toString() })
+      proc.stderr?.on('data', (d: Buffer) => { errOutput += d.toString() })
+      proc.on('close', (code: number | null) => {
+        const version = (output || errOutput).trim()
+        if (code === 0 && version) resolve({ installed: true, version })
+        else resolve({ installed: false, version: '' })
       })
+      proc.on('error', () => resolve({ installed: false, version: '' }))
     })
   })
 

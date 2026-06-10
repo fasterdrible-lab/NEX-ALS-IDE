@@ -264,6 +264,45 @@ O Modo Agente salva snapshots antes de cada modificação. Você pode restaurar 
 
 ---
 
+## Claude Code — usar sua conta Pro sem API Key
+
+Por padrão, a IDE usa **API Keys** para conversar com os modelos de IA — você paga por cada mensagem. Mas se você tem o plano **Claude Pro**, pode usar sua conta diretamente, sem API Key e sem cobrança extra por token.
+
+### Por que é diferente?
+
+| Modo | Como autentica | Cobrança |
+|------|---------------|----------|
+| API Key (Anthropic, OpenAI…) | Chave gerada no console do provedor | Paga por token usado |
+| Claude Code (conta) | Login com sua conta Claude.ai | Incluído no plano Pro |
+
+O **Claude Code** é um programa que a Anthropic disponibiliza para desenvolvedores. Quando você instala ele no seu computador e faz login com sua conta Pro, a IDE pode usar essa autenticação para enviar mensagens — sem precisar de API Key.
+
+### Como configurar (uma única vez)
+
+**Passo 1 — Instale o Claude Code no seu PC:**
+```
+npm install -g @anthropic-ai/claude-code
+```
+
+**Passo 2 — Faça login com sua conta:**
+```
+claude
+```
+Vai abrir o browser automaticamente. Faça login com a mesma conta que você usa no Claude.ai.
+
+**Passo 3 — Ative na IDE:**
+- Abra a IDE → vá em **Configurações** → seção **Provedores de IA**
+- O card **Claude Code** aparece no topo
+- Se aparecer "✓ Detectado" com a versão, clique em **Usar como padrão**
+
+**Pronto.** Todo o AI Hub, IDE chat e Squad passa a usar sua conta Pro.
+
+### O que acontece se o Claude Code não for encontrado?
+
+O card mostrará "Não encontrado" com instruções de instalação. Após instalar e reiniciar a IDE, clique no ícone de atualizar (↺) no card para verificar novamente.
+
+---
+
 ## O Squad — sua equipe de agentes de IA
 
 O **Squad** é a funcionalidade mais poderosa do NEX-ALS IDE. Em vez de conversar com um único agente de IA, você tem uma **equipe completa de 8 especialistas**, cada um com um papel diferente — como um time de desenvolvimento real.
@@ -411,5 +450,5 @@ Agente gera um bloco de ação
 
 ---
 
-*NEX-ALS IDE v3.10.0 — NEX-ALS*
+*NEX-ALS IDE v3.11.0 — NEX-ALS*
 *github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER*

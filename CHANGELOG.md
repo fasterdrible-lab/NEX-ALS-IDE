@@ -1,5 +1,35 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.11.0] — 2026-06-10
+
+### Adicionado — Claude Code como provedor de conta (sem API Key)
+
+Integração do Claude Code CLI instalado localmente como provedor de IA. Usa a conta Claude Pro do usuário via autenticação OAuth já existente no CLI — sem cobrar por token, sem precisar de API Key separada.
+
+#### Como funciona
+- O `ai:stream:start` detecta quando o provider é `claude-code` e roteia para um subprocess local em vez de chamar a API diretamente
+- O subprocess executa `claude -p "<prompt>" --output-format text --no-color` e transmite stdout como chunks de streaming para o renderer
+- O PATH do Electron é enriquecido com o diretório global do npm (`%APPDATA%\npm` no Windows) para garantir que o CLI seja encontrado
+- Todo o AI Hub, IDE chat e Squad funcionam transparentemente com a conta Pro
+
+#### Arquivos modificados
+- `apps/desktop/src/ipc/handlers.ts`
+  - `claudeProcs: Map` para rastrear subprocessos ativos
+  - `ai:stream:start` — rota para subprocess quando `effectiveProvider === 'claude-code'`; detecta provider padrão no banco se não informado
+  - `ai:stream:cancel` — cancela subprocess (`.kill()`) ou stream normal conforme o tipo
+  - `claude:check` — detecta se `claude` CLI está instalado e autenticado; usa `spawn` com `shell: true` e PATH enriquecido
+- `apps/desktop/src/preload.ts` — `claude:check` adicionado ao `ALLOWED_CHANNELS`
+- `apps/web/src/lib/ipc.ts` — `ipc.claude.check()` adicionado
+- `apps/web/src/pages/SettingsPage.tsx` — `ClaudeCodeCard`: detecta CLI, exibe versão e status, botão "Usar como padrão"
+
+#### Instalação (uma vez)
+```bash
+npm install -g @anthropic-ai/claude-code
+claude   # abre browser para login com conta Claude Pro
+```
+
+---
+
 ## [3.10.0] — 2026-06-10
 
 ### Adicionado — Squad: equipe de 8 agentes de IA com execução na VPS e Pipeline

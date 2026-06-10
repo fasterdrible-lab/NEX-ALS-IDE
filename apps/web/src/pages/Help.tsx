@@ -878,6 +878,59 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     ),
   },
 
+  // ── CLAUDE CODE (CONTA) ───────────────────────────────────────────────
+  {
+    id: 'claude-code-account',
+    icon: Terminal,
+    title: 'Claude Code — Usar conta Pro sem API Key',
+    color: 'bg-brand-600/20 text-brand-400',
+    content: (
+      <div className="space-y-4">
+        <p>Use sua assinatura Claude Pro diretamente na IDE — sem API Key separada, sem cobrança por token. A IDE detecta o Claude Code CLI instalado no seu PC e usa a autenticação existente.</p>
+
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="bg-slate-800/60 rounded-lg p-3 space-y-1">
+            <p className="text-slate-300 font-semibold">Modo API Key</p>
+            <p className="text-slate-500">Chave gerada no console</p>
+            <p className="text-amber-400">Cobra por token usado</p>
+          </div>
+          <div className="bg-brand-900/20 border border-brand-800/30 rounded-lg p-3 space-y-1">
+            <p className="text-brand-300 font-semibold">Claude Code (conta)</p>
+            <p className="text-slate-500">Login com conta Claude.ai</p>
+            <p className="text-emerald-400">Incluído no plano Pro ✓</p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Configuração — uma única vez</p>
+          <Step n={1}><span>Instale o Claude Code CLI no seu PC:</span><Block>{`npm install -g @anthropic-ai/claude-code`}</Block></Step>
+          <Step n={2}><span>Execute e autentique com sua conta Pro:</span><Block>{`claude`}</Block><span className="text-xs text-slate-500">Abre o browser automaticamente. Faça login com a conta Claude.ai do plano Pro.</span></Step>
+          <Step n={3}><span>Na IDE → <strong className="text-slate-100">Configurações → Provedores de IA</strong> → card <strong className="text-slate-100">Claude Code</strong> → clique <strong className="text-slate-100">Usar como padrão</strong>.</span></Step>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">O que muda após ativar</p>
+          <KV items={[
+            ['AI Hub', 'Usa conta Pro em todas as conversas — sem API Key'],
+            ['IDE chat', 'Mesmo comportamento, zero custo extra'],
+            ['Squad', 'Todos os 8 agentes usam a conta Pro automaticamente'],
+            ['Streaming', 'Texto aparece em tempo real igual ao modo API'],
+          ]}/>
+          <Info>O Claude Code v2.1+ já vem autenticado se você usou antes no VS Code. A IDE detecta automaticamente.</Info>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Solução de problemas</p>
+          <KV items={[
+            ['"Não encontrado"', 'Claude Code não está no PATH. Instale com npm install -g @anthropic-ai/claude-code e clique ↺'],
+            ['"Não autenticado"', 'Execute claude no terminal e faça login novamente'],
+            ['Resposta lenta', 'Normal na primeira mensagem — o CLI inicializa. As seguintes são rápidas'],
+          ]}/>
+        </div>
+      </div>
+    ),
+  },
+
   // ── SQUAD ─────────────────────────────────────────────────────────────
   {
     id: 'squad',
@@ -970,7 +1023,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            ['Versão', '3.10.0'],
+            ['Versão', '3.11.0'],
             ['Runtime', 'Electron + Node.js 22'],
             ['Interface', 'React 18 + Tailwind CSS'],
             ['Banco de dados', 'SQLite local (Prisma ORM)'],
@@ -1005,7 +1058,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.10.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de 8 agentes, Pipeline Homolog→Prod, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.11.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de 8 agentes, Pipeline Homolog→Prod, Claude Code (conta Pro sem API Key), Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}
