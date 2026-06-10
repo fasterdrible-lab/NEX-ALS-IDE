@@ -4,6 +4,15 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.11.0)
+
+- [x] **Claude Code como provedor de conta** — subprocess `claude` CLI; PATH enriquecido npm global bin Windows; `claude:check` IPC; `ClaudeCodeCard` em Settings; streaming sem API Key — 2026-06-10
+- [x] **CURRENT_STATE.md atualizado para v3.11.0** — Squad, Pipeline e Claude Code documentados — 2026-06-10
+
+## Concluídas recentemente (v3.10.0)
+
+- [x] **Squad — 8 agentes com ACTION tags e Pipeline** — SquadPage fullscreen; streaming por agente; blocos SHELL/WRITE_FILE/READ_FILE executados via SSH/SFTP; toggle Pipeline com gate homolog→prod; estados visuais do gate; `agents.ts`, `actions.ts`, `squad.service.ts` em `packages/core/src/squad/` — 2026-06-10
+
 ## Concluídas recentemente (v3.9.0)
 
 - [x] **Rename inline F2** — `selectedEntryRef` + `selectedPath` state; click/contextmenu atualizam ref; F2 no keydown abre rename inline sem context menu — 2026-06-04

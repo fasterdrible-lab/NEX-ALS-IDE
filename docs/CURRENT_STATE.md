@@ -1,17 +1,25 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
-**Data:** 2026-06-04
-**Versão:** 3.9.0
+**Data:** 2026-06-10
+**Versão:** 3.11.0
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**NEX-ALS IDE 3.9.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.11.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH, Pipeline homolog→prod), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
 - **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat IA (API direta ou claude -p); badge vermelho "Produção" na top bar.
 - **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
+
+## Squad (v3.10.0 + v3.11.0)
+
+- [x] **Squad** — página fullscreen com 8 agentes: Jarvis (PM/Claude), Friday (Dev/GPT), Fury (Pesquisa/Gemini), Shuri (UX/Claude), Pepper (Marketing/GPT), Vision (Growth/Gemini), Requis (Docs/Claude), Tester (QA/GPT)
+- [x] **Chat por agente** — streaming em tempo real; menção direta `@agente` no input redireciona para o agente mencionado
+- [x] **ACTION tags** — `SHELL`, `WRITE_FILE`, `READ_FILE` geradas pelo agente; botão Executar por bloco via SSH/SFTP na VPS selecionada; resultado inline (verde/vermelho)
+- [x] **Pipeline homolog → prod** — toggle no painel direito; gate âmbar pós-execução com Aprovar/Rejeitar; Aprovar executa na VPS Prod selecionada; estados visuais (âmbar/azul/verde/vermelho/cinza)
+- [x] **Claude Code como provedor** — `ai:stream:start` roteia para subprocess `claude` CLI quando provider = `claude-code`; PATH enriquecido com npm global bin; zero API Key / zero cobrança por token; `claude:check` detecta versão e status; `ClaudeCodeCard` em Configurações
 
 ## Funcionalidades do app base — todas concluídas
 
@@ -117,11 +125,12 @@
 3. **LSP** — requer `typescript-language-server` + WebSocket wrapper na VPS; configuração manual
 4. **DAP** — requer `node --inspect` na VPS + túnel 9229; sem breakpoints no Monaco
 5. **Chat multimodal** — Anthropic e Gemini suportam; outros providers recebem base64 no texto
-6. **Fingerprint SSH** — SHA-256 da chave bruta; não usa CA/known_hosts do sistema
+6. **Fingerprint SSH** — SHA-256 da chave bruta; não usa CA/known_hooks do sistema
+7. **Squad sessões** — conversas não persistidas no SQLite ainda; somem ao fechar a página
+8. **Squad delegação** — `@agente` na resposta exibe menção mas não dispara stream automático do agente citado
 
-## Próximo passo recomendado
+## Próximos passos
 
-Possíveis evoluções:
-- Autenticação interna multi-usuário
-- Testes E2E com Playwright
-- Suporte a WebSocket LSP para mais linguagens (Python, Rust, Go)
+- Squad: persistência de sessões/mensagens no SQLite
+- Squad: delegação automática quando agente menciona `@outro` na resposta
+- Testes E2E Playwright para página Squad
