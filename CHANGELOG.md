@@ -1,5 +1,32 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.12.0] — 2026-06-10
+
+### Adicionado — Múltiplas contas Claude Code com alternância rápida
+
+Suporte a N contas Claude Pro na mesma máquina. Cada conta tem seu próprio diretório de configuração isolado (`CLAUDE_CONFIG_DIR`). Trocar de conta é um clique — sem logout/login manual.
+
+#### Como funciona
+- Cada conta fica em `~/.claude-<nome>-<id>/` — completamente isolada
+- O spawn do CLI recebe `CLAUDE_CONFIG_DIR=<dir>` no ambiente, apontando para a conta ativa
+- `getActiveClaudeEnv()` — helper centralizado que resolve configDir da conta ativa e monta PATH correto; usado por `claude:check`, `ai:stream:start` e `squad:stream:start`
+- Tabela `claude_code_accounts` no SQLite: `id`, `name`, `configDir`, `isActive`, `createdAt`
+
+#### Fluxo para adicionar segunda conta
+1. Configurações → Claude Code → **Adicionar conta** → digitar nome (ex: "Conta 2")
+2. A IDE gera o `configDir` automaticamente e mostra o comando de autenticação
+3. No terminal: `CLAUDE_CONFIG_DIR="<dir>" claude` → fazer login com a segunda conta
+4. Clicar **Usar esta** para alternar — todos os streams (AI Hub, IDE chat, Squad) passam a usar a conta selecionada
+
+#### Arquivos modificados
+- `packages/db/src/index.ts` — tabela `claude_code_accounts`
+- `apps/desktop/src/ipc/handlers.ts` — `getActiveClaudeEnv()`, handlers `claude:accounts:*`, spawns atualizados
+- `apps/desktop/src/preload.ts` — novos canais autorizados
+- `apps/web/src/lib/ipc.ts` — `ipc.claude.accounts.*`
+- `apps/web/src/pages/SettingsPage.tsx` — `ClaudeCodeCard` redesenhado com lista de contas
+
+---
+
 ## [3.11.0] — 2026-06-10
 
 ### Adicionado — Claude Code como provedor de conta (sem API Key)
