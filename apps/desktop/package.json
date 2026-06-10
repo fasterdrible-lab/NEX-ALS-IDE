@@ -1,6 +1,6 @@
 {
   "name": "@cwm/desktop",
-  "version": "3.9.0",
+  "version": "3.11.0",
   "description": "NEX-ALS IDE — gerenciador de ambientes VPS com IDE integrado",
   "author": "NEX-ALS",
   "private": true,
@@ -52,7 +52,6 @@
           ]
         }
       ],
-      "icon": "build/icon.ico",
       "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
@@ -62,7 +61,6 @@
       "createStartMenuShortcut": true,
       "shortcutName": "NEX-ALS IDE",
       "deleteAppDataOnUninstall": false,
-      "installerHeaderIcon": "build/icon.ico",
       "license": "LICENSE.txt"
     },
     "files": [
