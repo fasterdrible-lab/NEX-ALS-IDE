@@ -38,6 +38,8 @@ const ALLOWED_CHANNELS = new Set([
   'squad:session:list', 'squad:session:create', 'squad:session:messages', 'squad:session:addMsg', 'squad:session:delete',
   'squad:stream:start', 'squad:stream:cancel', 'squad:stream:chunk', 'squad:action:execute',
   'claude:check',
+  'claude:accounts:list', 'claude:accounts:add', 'claude:accounts:setActive',
+  'claude:accounts:delete', 'claude:accounts:check',
 ])
 
 contextBridge.exposeInMainWorld('electron', {

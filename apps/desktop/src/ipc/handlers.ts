@@ -608,12 +608,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { spawn } = require('child_process') as typeof import('child_process')
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const osModule = require('os') as typeof import('os')
-        const npmBin = process.platform === 'win32'
-          ? `${osModule.homedir()}\\AppData\\Roaming\\npm`
-          : `${osModule.homedir()}/.npm-global/bin:/usr/local/bin`
-        const spawnEnv = { ...process.env, PATH: `${npmBin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}` }
+        const { spawnEnv } = await getActiveClaudeEnv()
         const proc = spawn('claude', ['-p', prompt, '--output-format', 'text', '--no-color'], {
           shell: true,
           env: spawnEnv,
@@ -631,7 +626,6 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         })
         proc.stderr?.on('data', (chunk: Buffer) => {
           const txt = chunk.toString()
-          // Apenas erros reais (não warnings normais do CLI)
           if (/not logged in|authentication|unauthorized/i.test(txt)) {
             try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'error', error: 'Não autenticado. Execute "claude" no terminal e faça login.' }) } catch { /* janela fechada */ }
             proc.kill()
@@ -670,21 +664,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   })
 
   // Claude Code — detecção local (sem API key)
-  ipcMain.handle('claude:check', () => {
+  ipcMain.handle('claude:check', async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { spawn } = require('child_process') as typeof import('child_process')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const os = require('os') as typeof import('os')
+    const { spawnEnv } = await getActiveClaudeEnv()
     return new Promise<{ installed: boolean; version: string }>(resolve => {
-      // Inclui o diretório de binários globais do npm no PATH para Electron encontrar o CLI
-      const npmGlobalBin = process.platform === 'win32'
-        ? `${os.homedir()}\\AppData\\Roaming\\npm`
-        : `${os.homedir()}/.npm-global/bin:/usr/local/bin`
-      const env = { ...process.env, PATH: `${npmGlobalBin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}` }
-
-      const proc = spawn('claude', ['--version'], { shell: true, env, timeout: 8000 })
-      let output = ''
-      let errOutput = ''
+      const proc = spawn('claude', ['--version'], { shell: true, env: spawnEnv, timeout: 8000 })
+      let output = ''; let errOutput = ''
       proc.stdout?.on('data', (d: Buffer) => { output += d.toString() })
       proc.stderr?.on('data', (d: Buffer) => { errOutput += d.toString() })
       proc.on('close', (code: number | null) => {
@@ -693,6 +679,107 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         else resolve({ installed: false, version: '' })
       })
       proc.on('error', () => resolve({ installed: false, version: '' }))
+    })
+  })
+
+  // ── Claude Code — múltiplas contas ──────────────────────────────────────
+  // Helper: retorna configDir e PATH da conta ativa (ou padrão ~/.claude)
+  async function getActiveClaudeEnv(): Promise<{ configDir: string; spawnEnv: NodeJS.ProcessEnv }> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const osModule = require('os') as typeof import('os')
+    const npmBin = process.platform === 'win32'
+      ? `${osModule.homedir()}\\AppData\\Roaming\\npm`
+      : `${osModule.homedir()}/.npm-global/bin:/usr/local/bin`
+    const sep = process.platform === 'win32' ? ';' : ':'
+    let configDir = ''
+    try {
+      const rows = await db.$queryRawUnsafe(
+        `SELECT configDir FROM claude_code_accounts WHERE isActive=1 LIMIT 1`
+      ) as Array<{ configDir: string }>
+      if (rows[0]) configDir = rows[0].configDir
+    } catch { /* tabela ainda não existe numa sessão antiga */ }
+    const spawnEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      PATH: `${npmBin}${sep}${process.env.PATH ?? ''}`,
+      ...(configDir ? { CLAUDE_CONFIG_DIR: configDir } : {}),
+    }
+    return { configDir, spawnEnv }
+  }
+
+  ipcMain.handle('claude:accounts:list', () =>
+    wrapHandler(async () => {
+      const rows = await db.$queryRawUnsafe(
+        `SELECT id, name, configDir, isActive, createdAt FROM claude_code_accounts ORDER BY createdAt ASC`
+      ) as Array<{ id: string; name: string; configDir: string; isActive: number; createdAt: string }>
+      return rows
+    })
+  )
+
+  ipcMain.handle('claude:accounts:add', (_, data: { name: string }) =>
+    wrapHandler(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const osModule = require('os') as typeof import('os')
+      const id = crypto.randomUUID()
+      const slug = data.name.toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 20)
+      const configDir = process.platform === 'win32'
+        ? `${osModule.homedir()}\\.claude-${slug}-${id.slice(0, 6)}`
+        : `${osModule.homedir()}/.claude-${slug}-${id.slice(0, 6)}`
+      // Se for a primeira conta, já ativa
+      const count = await db.$queryRawUnsafe(
+        `SELECT COUNT(*) as n FROM claude_code_accounts`
+      ) as Array<{ n: number }>
+      const isFirst = (count[0]?.n ?? 0) === 0
+      await db.$executeRawUnsafe(
+        `INSERT INTO claude_code_accounts (id, name, configDir, isActive) VALUES (?, ?, ?, ?)`,
+        id, data.name, configDir, isFirst ? 1 : 0
+      )
+      return { id, name: data.name, configDir, isActive: isFirst ? 1 : 0 }
+    })
+  )
+
+  ipcMain.handle('claude:accounts:setActive', (_, id: string) =>
+    wrapHandler(async () => {
+      await db.$executeRawUnsafe(`UPDATE claude_code_accounts SET isActive=0`)
+      await db.$executeRawUnsafe(`UPDATE claude_code_accounts SET isActive=1 WHERE id=?`, id)
+      return { success: true }
+    })
+  )
+
+  ipcMain.handle('claude:accounts:delete', (_, id: string) =>
+    wrapHandler(async () => {
+      await db.$executeRawUnsafe(`DELETE FROM claude_code_accounts WHERE id=?`, id)
+      // Se deletou a ativa, ativa a mais recente
+      await db.$executeRawUnsafe(
+        `UPDATE claude_code_accounts SET isActive=1 WHERE id=(SELECT id FROM claude_code_accounts ORDER BY createdAt DESC LIMIT 1) AND NOT EXISTS (SELECT 1 FROM claude_code_accounts WHERE isActive=1)`
+      )
+      return { success: true }
+    })
+  )
+
+  ipcMain.handle('claude:accounts:check', (_, configDir: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { spawn } = require('child_process') as typeof import('child_process')
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const osModule = require('os') as typeof import('os')
+    return new Promise<{ installed: boolean; version: string; authenticated: boolean }>(resolve => {
+      const npmBin = process.platform === 'win32'
+        ? `${osModule.homedir()}\\AppData\\Roaming\\npm`
+        : `${osModule.homedir()}/.npm-global/bin:/usr/local/bin`
+      const sep = process.platform === 'win32' ? ';' : ':'
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        PATH: `${npmBin}${sep}${process.env.PATH ?? ''}`,
+        CLAUDE_CONFIG_DIR: configDir,
+      }
+      const proc = spawn('claude', ['--version'], { shell: true, env, timeout: 8000 })
+      let output = ''; let errOutput = ''
+      proc.stdout?.on('data', (d: Buffer) => { output += d.toString() })
+      proc.stderr?.on('data', (d: Buffer) => { errOutput += d.toString() })
+      proc.on('close', (code: number | null) => {
+        const version = (output || errOutput).trim()
+        resolve({ installed: code === 0 && !!version, version: version || '', authenticated: code === 0 && !!version })
+      })
+      proc.on('error', () => resolve({ installed: false, version: '', authenticated: false }))
     })
   })
 
@@ -794,12 +881,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         const prompt = parts.join('\n') + `\nHuman: ${data.message}`
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { spawn } = require('child_process') as typeof import('child_process')
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const osModule = require('os') as typeof import('os')
-        const npmBin = process.platform === 'win32'
-          ? `${osModule.homedir()}\\AppData\\Roaming\\npm`
-          : `${osModule.homedir()}/.npm-global/bin:/usr/local/bin`
-        const spawnEnv = { ...process.env, PATH: `${npmBin}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}` }
+        const { spawnEnv } = await getActiveClaudeEnv()
         const proc = spawn('claude', ['-p', prompt, '--output-format', 'text', '--no-color'], { shell: true, env: spawnEnv })
         claudeProcs.set(streamId, proc)
         let doneSent = false

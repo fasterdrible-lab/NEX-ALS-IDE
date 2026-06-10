@@ -153,6 +153,13 @@ export async function initializeDatabase(): Promise<void> {
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY ("sessionId") REFERENCES "squad_sessions"("id") ON DELETE CASCADE
     )`,
+    `CREATE TABLE IF NOT EXISTS "claude_code_accounts" (
+      "id"        TEXT PRIMARY KEY,
+      "name"      TEXT NOT NULL,
+      "configDir" TEXT NOT NULL UNIQUE,
+      "isActive"  INTEGER NOT NULL DEFAULT 0,
+      "createdAt" TEXT NOT NULL DEFAULT (datetime('now'))
+    )`,
   ]
 
   for (const sql of ddl) {

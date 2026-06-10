@@ -114,26 +114,57 @@ const PROVIDERS: ProviderMeta[] = [
 
 // ── ClaudeCodeCard ───────────────────────────────────────────────────────────
 
+type ClaudeAccount = { id: string; name: string; configDir: string; isActive: number; createdAt: string }
+type AccountStatus = 'idle' | 'checking' | 'ok' | 'not_found'
+
 function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; onRefresh: () => void }) {
-  const [status, setStatus] = useState<'idle' | 'checking' | 'ok' | 'not_found'>('idle')
-  const [version, setVersion] = useState('')
+  const [accounts, setAccounts] = useState<ClaudeAccount[]>([])
+  const [accountStatuses, setAccountStatuses] = useState<Record<string, { status: AccountStatus; version: string }>>({})
+  const [newName, setNewName] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const config = configs.find(c => c.provider === 'claude-code')
   const isDefault = config?.isDefault ?? false
 
-  const check = useCallback(async () => {
-    setStatus('checking')
+  const loadAccounts = useCallback(async () => {
     try {
-      const res = await ipc.claude.check()
-      setStatus(res.installed ? 'ok' : 'not_found')
-      setVersion(res.version)
-    } catch {
-      setStatus('not_found')
-    }
+      const list = await ipc.claude.accounts.list()
+      setAccounts(list)
+      for (const acc of list) {
+        setAccountStatuses(prev => ({ ...prev, [acc.id]: { status: 'checking', version: '' } }))
+        ipc.claude.accounts.check(acc.configDir).then(res => {
+          setAccountStatuses(prev => ({ ...prev, [acc.id]: { status: res.authenticated ? 'ok' : 'not_found', version: res.version } }))
+        }).catch(() => {
+          setAccountStatuses(prev => ({ ...prev, [acc.id]: { status: 'not_found', version: '' } }))
+        })
+      }
+    } catch { /* ignora */ }
   }, [])
 
-  useEffect(() => { void check() }, [check])
+  useEffect(() => { void loadAccounts() }, [loadAccounts])
+
+  const addAccount = async () => {
+    if (!newName.trim()) return
+    setAdding(true)
+    try {
+      await ipc.claude.accounts.add(newName.trim())
+      setNewName('')
+      setShowAdd(false)
+      await loadAccounts()
+    } finally { setAdding(false) }
+  }
+
+  const setActive = async (id: string) => {
+    await ipc.claude.accounts.setActive(id)
+    await loadAccounts()
+  }
+
+  const deleteAccount = async (id: string) => {
+    await ipc.claude.accounts.delete(id)
+    await loadAccounts()
+  }
 
   const setAsDefault = async () => {
     setSaving(true)
@@ -151,10 +182,12 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
     } finally { setSaving(false) }
   }
 
+  const activeAcc = accounts.find(a => a.isActive === 1)
+  const activeStatus = activeAcc ? accountStatuses[activeAcc.id] : undefined
+
   return (
-    <div className={`border rounded-xl transition-colors ${
-      isDefault ? 'border-brand-600/60 bg-brand-950/20' : 'border-slate-700 bg-slate-900'
-    }`}>
+    <div className={`border rounded-xl transition-colors ${isDefault ? 'border-brand-600/60 bg-brand-950/20' : 'border-slate-700 bg-slate-900'}`}>
+      {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="p-2 rounded-lg bg-brand-600/20">
           <Terminal size={15} className="text-brand-400" />
@@ -162,63 +195,98 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-slate-100">Claude Code</span>
-            <span className="text-xs px-1.5 py-0.5 rounded font-medium text-brand-300 bg-brand-600/20">
-              Conta — sem API Key
-            </span>
-            {isDefault && (
-              <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium text-yellow-300 bg-yellow-600/20">
-                <Star size={10} /> Padrão
-              </span>
-            )}
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium text-brand-300 bg-brand-600/20">Conta — sem API Key</span>
+            {isDefault && <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium text-yellow-300 bg-yellow-600/20"><Star size={10} /> Padrão</span>}
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Usa o CLI instalado localmente com sua conta Claude Pro — sem cobrar por token
-          </p>
+          <p className="text-xs text-slate-500 mt-0.5">Alterne entre contas Claude Pro para contornar o limite de 5h</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {status === 'checking' && <Loader2 size={13} className="animate-spin text-slate-500" />}
-          {status === 'ok' && <span className="flex items-center gap-1 text-xs text-emerald-400"><Check size={11} /> Detectado</span>}
-          {status === 'not_found' && <span className="flex items-center gap-1 text-xs text-red-400"><AlertCircle size={11} /> Não encontrado</span>}
-          <button onClick={check} title="Verificar novamente" className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
+          {activeStatus?.status === 'checking' && <Loader2 size={13} className="animate-spin text-slate-500" />}
+          {activeStatus?.status === 'ok' && <span className="flex items-center gap-1 text-xs text-emerald-400"><Check size={11} /> Ativa</span>}
+          {activeStatus?.status === 'not_found' && <span className="flex items-center gap-1 text-xs text-amber-400"><AlertCircle size={11} /> Auth pendente</span>}
+          <button onClick={loadAccounts} title="Atualizar" className="p-1.5 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
             <RefreshCw size={12} />
           </button>
         </div>
       </div>
 
       <div className="px-4 pb-4 space-y-3 border-t border-slate-800 pt-3">
-        {status === 'ok' && (
-          <p className="text-xs text-emerald-400/80">
-            ✓ {version} — autenticado e pronto para uso
-          </p>
-        )}
-        {status === 'not_found' && (
-          <div className="bg-amber-900/20 border border-amber-800/30 rounded-lg px-3 py-2.5 space-y-1.5">
-            <p className="text-xs text-amber-300 font-semibold">Claude Code CLI não encontrado no PATH</p>
-            <p className="text-xs text-slate-400">Instale com:</p>
-            <code className="block text-xs text-emerald-300 bg-slate-800 px-2 py-1 rounded font-mono">
-              npm install -g @anthropic-ai/claude-code
-            </code>
-            <p className="text-xs text-slate-400">Depois autentique executando <code className="text-brand-300">claude</code> no terminal.</p>
+        {/* Lista de contas */}
+        {accounts.length === 0 ? (
+          <p className="text-xs text-slate-500">Nenhuma conta cadastrada. Adicione uma abaixo.</p>
+        ) : (
+          <div className="space-y-2">
+            {accounts.map(acc => {
+              const st = accountStatuses[acc.id]
+              const isAcc = acc.isActive === 1
+              return (
+                <div key={acc.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isAcc ? 'border-brand-600/40 bg-brand-950/20' : 'border-slate-700/50 bg-slate-800/40'}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-slate-200 truncate">{acc.name}</span>
+                      {isAcc && <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-600/30 text-brand-300 font-medium">ativa</span>}
+                    </div>
+                    <p className="text-[10px] text-slate-600 font-mono truncate mt-0.5">{acc.configDir}</p>
+                    {st?.status === 'ok' && <p className="text-[10px] text-emerald-400 mt-0.5">✓ {st.version} — autenticada</p>}
+                    {st?.status === 'not_found' && (
+                      <p className="text-[10px] text-amber-400 mt-0.5">
+                        Autentique: <code className="font-mono">CLAUDE_CONFIG_DIR="{acc.configDir}" claude</code>
+                      </p>
+                    )}
+                    {st?.status === 'checking' && <p className="text-[10px] text-slate-500 mt-0.5">verificando…</p>}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!isAcc && (
+                      <button onClick={() => void setActive(acc.id)}
+                        className="text-[10px] px-2 py-1 rounded bg-brand-600/20 border border-brand-600/30 text-brand-300 hover:bg-brand-600/40 transition-colors font-medium">
+                        Usar esta
+                      </button>
+                    )}
+                    <button onClick={() => void deleteAccount(acc.id)}
+                      className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition-colors">
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
-        <div className="flex items-center gap-3">
+
+        {/* Adicionar conta */}
+        {showAdd ? (
+          <div className="flex items-center gap-2">
+            <input
+              value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') void addAccount(); if (e.key === 'Escape') setShowAdd(false) }}
+              placeholder="Nome da conta (ex: Conta 2)"
+              autoFocus
+              className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-600/60"
+            />
+            <button onClick={() => void addAccount()} disabled={adding || !newName.trim()}
+              className="text-xs px-3 py-1.5 rounded-lg bg-brand-600/30 border border-brand-600/50 text-brand-300 hover:bg-brand-600/50 disabled:opacity-40 transition-colors font-medium">
+              {adding ? <Loader2 size={11} className="animate-spin" /> : 'Adicionar'}
+            </button>
+            <button onClick={() => setShowAdd(false)} className="text-xs px-2 py-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+          </div>
+        ) : (
+          <button onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors">
+            <Plus size={12} /> Adicionar conta
+          </button>
+        )}
+
+        {/* Usar como padrão */}
+        <div className="flex items-center gap-3 pt-1 border-t border-slate-800">
           {!isDefault ? (
-            <button
-              onClick={() => void setAsDefault()}
-              disabled={saving || status !== 'ok'}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-600/30 border border-brand-600/50 text-brand-300 hover:bg-brand-600/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-medium"
-            >
-              {saving ? <Loader2 size={11} className="animate-spin" /> : <Star size={11} />}
-              Usar como padrão
+            <button onClick={() => void setAsDefault()} disabled={saving || accounts.length === 0}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-600/30 border border-brand-600/50 text-brand-300 hover:bg-brand-600/50 disabled:opacity-40 transition-colors font-medium">
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <Star size={11} />} Usar como padrão
             </button>
           ) : (
-            <button
-              onClick={() => void removeDefault()}
-              disabled={saving}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-700/40 border border-slate-600/50 text-slate-400 hover:bg-slate-700/60 disabled:opacity-40 transition-colors"
-            >
-              {saving ? <Loader2 size={11} className="animate-spin" /> : <Zap size={11} />}
-              Remover como padrão
+            <button onClick={() => void removeDefault()} disabled={saving}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-700/40 border border-slate-600/50 text-slate-400 hover:bg-slate-700/60 disabled:opacity-40 transition-colors">
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <Zap size={11} />} Remover como padrão
             </button>
           )}
         </div>

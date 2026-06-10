@@ -317,6 +317,13 @@ export const ipc = {
   },
   claude: {
     check: () => invoke<{ installed: boolean; version: string }>('claude:check'),
+    accounts: {
+      list:      () => invoke<Array<{ id: string; name: string; configDir: string; isActive: number; createdAt: string }>>('claude:accounts:list'),
+      add:       (name: string) => invoke<{ id: string; name: string; configDir: string; isActive: number }>('claude:accounts:add', { name }),
+      setActive: (id: string) => invoke<{ success: boolean }>('claude:accounts:setActive', id),
+      delete:    (id: string) => invoke<{ success: boolean }>('claude:accounts:delete', id),
+      check:     (configDir: string) => invoke<{ installed: boolean; version: string; authenticated: boolean }>('claude:accounts:check', configDir),
+    },
   },
   auth: {
     status: () => invoke<{ user: AppUser | null; needsSetup: boolean; sessionRequired: boolean }>('auth:status'),
