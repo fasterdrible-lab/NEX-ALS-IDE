@@ -122,6 +122,7 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
   const [accountStatuses, setAccountStatuses] = useState<Record<string, { status: AccountStatus; version: string }>>({})
   const [newName, setNewName] = useState('')
   const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState('')
   const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -148,11 +149,18 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
   const addAccount = async () => {
     if (!newName.trim()) return
     setAdding(true)
+    setAddError('')
     try {
-      await ipc.claude.accounts.add(newName.trim())
+      const res = await ipc.claude.accounts.add(newName.trim()) as unknown as { error?: string; id?: string }
+      if (res?.error) {
+        setAddError(res.error)
+        return
+      }
       setNewName('')
       setShowAdd(false)
       await loadAccounts()
+    } catch (err) {
+      setAddError(String(err))
     } finally { setAdding(false) }
   }
 
@@ -255,19 +263,24 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
 
         {/* Adicionar conta */}
         {showAdd ? (
-          <div className="flex items-center gap-2">
-            <input
-              value={newName} onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') void addAccount(); if (e.key === 'Escape') setShowAdd(false) }}
-              placeholder="Nome da conta (ex: Conta 2)"
-              autoFocus
-              className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-600/60"
-            />
-            <button onClick={() => void addAccount()} disabled={adding || !newName.trim()}
-              className="text-xs px-3 py-1.5 rounded-lg bg-brand-600/30 border border-brand-600/50 text-brand-300 hover:bg-brand-600/50 disabled:opacity-40 transition-colors font-medium">
-              {adding ? <Loader2 size={11} className="animate-spin" /> : 'Adicionar'}
-            </button>
-            <button onClick={() => setShowAdd(false)} className="text-xs px-2 py-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <input
+                value={newName} onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void addAccount(); if (e.key === 'Escape') { setShowAdd(false); setAddError('') } }}
+                placeholder="Nome da conta (ex: Conta 2)"
+                autoFocus
+                className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-600/60"
+              />
+              <button onClick={() => void addAccount()} disabled={adding || !newName.trim()}
+                className="text-xs px-3 py-1.5 rounded-lg bg-brand-600/30 border border-brand-600/50 text-brand-300 hover:bg-brand-600/50 disabled:opacity-40 transition-colors font-medium">
+                {adding ? <Loader2 size={11} className="animate-spin" /> : 'Adicionar'}
+              </button>
+              <button onClick={() => { setShowAdd(false); setAddError('') }} className="text-xs px-2 py-1.5 rounded-lg text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+            </div>
+            {addError && (
+              <p className="text-[10px] text-red-400 bg-red-900/20 border border-red-800/30 rounded px-2 py-1 font-mono break-all">{addError}</p>
+            )}
           </div>
         ) : (
           <button onClick={() => setShowAdd(true)}
