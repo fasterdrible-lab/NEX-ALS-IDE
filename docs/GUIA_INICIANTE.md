@@ -264,6 +264,130 @@ O Modo Agente salva snapshots antes de cada modificação. Você pode restaurar 
 
 ---
 
+## O Squad — sua equipe de agentes de IA
+
+O **Squad** é a funcionalidade mais poderosa do NEX-ALS IDE. Em vez de conversar com um único agente de IA, você tem uma **equipe completa de 8 especialistas**, cada um com um papel diferente — como um time de desenvolvimento real.
+
+Acesse pelo botão **Squad** na barra lateral esquerda.
+
+---
+
+### Os 8 agentes
+
+| Agente | Papel | IA usada | Para que serve |
+|--------|-------|----------|----------------|
+| **Jarvis** 🎯 | PM / Orquestrador | Claude | Coordena o time, define prioridades, delega tarefas |
+| **Friday** 👩‍💻 | Desenvolvedora | GPT | Escreve e refatora código |
+| **Fury** 🔍 | Pesquisa de Mercado | Gemini | Analisa concorrência, dados e tendências |
+| **Shuri** 🎨 | UX / Design | Claude | Cria especificações de interface e fluxos de usuário |
+| **Pepper** 📣 | Marketing / Brand | GPT | Cria textos, copy e estratégias de comunicação |
+| **Vision** 📊 | Growth / Métricas | Gemini | Analisa funil, métricas e estratégias de crescimento |
+| **Requis** 📋 | Documentação | Claude | Documenta requisitos técnicos com critérios de aceite |
+| **Tester** 🧪 | QA / Testes | GPT | Cria planos de teste e identifica bugs |
+
+---
+
+### Como usar o Squad
+
+**1. Selecionar o agente**
+Clique no nome do agente no painel esquerdo. A conversa começa com aquele especialista.
+
+**2. Direcionar para um agente específico**
+Digite `@nome` no início da mensagem:
+```
+@friday cria uma função que valida CPF em TypeScript
+@shuri qual o melhor fluxo para tela de cadastro?
+```
+
+**3. Delegação automática**
+Se o Jarvis mencionar `@friday` na resposta dele, o Friday entra automaticamente na conversa e responde a tarefa delegada. Você vê isso acontecer na tela — cada resposta mostra de quem veio a delegação.
+
+---
+
+### Blocos de ação — quando a IA executa diretamente na VPS
+
+Quando um agente (principalmente Friday e Tester) precisa executar algo no servidor, ele gera um **bloco de ação** — uma caixa especial com um botão **Executar**.
+
+Existem 3 tipos de blocos:
+
+| Tipo | Cor | O que faz |
+|------|-----|-----------|
+| **SHELL** | Amarelo | Executa um comando no terminal da VPS |
+| **WRITE** | Azul | Cria ou sobrescreve um arquivo na VPS |
+| **READ** | Cinza | Lê o conteúdo de um arquivo da VPS |
+
+**Exemplo real:** Friday gera um bloco SHELL para instalar dependências:
+```
+npm install
+```
+Você clica **Executar** → o comando roda no servidor → o resultado aparece embaixo do bloco.
+
+**Importante:** O bloco só executa quando você clicar. A IA nunca age sozinha sem sua confirmação.
+
+---
+
+### Pipeline — protegendo o servidor de produção
+
+O **Pipeline** é um modo de segurança para quem tem dois servidores: um de **Homolog** (testes) e um de **Produção** (o real, onde os usuários acessam).
+
+**O que é Homolog?**
+Um servidor igual ao de produção, mas que ninguém usa. Serve para testar mudanças antes de aplicar no servidor real. Se algo quebrar no Homolog, nenhum usuário é afetado.
+
+**Como ativar o Pipeline:**
+
+1. No painel direito, ative o toggle **PIPELINE**
+2. Selecione o **VPS Alvo** (seletor de cima) como seu servidor de **Homolog**
+3. Selecione o **VPS Prod** (seletor que aparece ao ativar) como seu servidor de **Produção**
+
+**Como funciona na prática:**
+
+```
+Agente gera um bloco de ação
+         ↓
+[Executar] → roda no servidor Homolog
+         ↓
+    Deu certo?
+    ✓ Sim → aparece o botão [Aprovar]
+    ✗ Não → erro aparece em vermelho, produção intocada
+         ↓
+[Aprovar] → roda o mesmo comando no servidor de Produção
+[Rejeitar] → cancela, nada muda no servidor de Produção
+```
+
+**Estados do Pipeline (o que cada cor significa):**
+
+| Cor | Mensagem | O que significa |
+|-----|----------|-----------------|
+| Âmbar | "✓ Homolog OK — Deploy em Prod?" | Homolog passou. Aguardando sua aprovação. |
+| Azul | "Executando em Prod…" | Rodando no servidor de produção agora. |
+| Verde | "✓ Deploy em Prod concluído" | Tudo certo. Produção atualizada. |
+| Vermelho | "✗ Falhou em Prod" | Algo deu errado na produção. Verifique o log. |
+| Cinza | "— Deploy rejeitado" | Você clicou Rejeitar. Produção intocada. |
+
+**Atenção:** Se o Pipeline estiver ativado mas o campo "VPS Prod" estiver em "— VPS Prod —" (nenhuma opção selecionada), o botão Aprovar não vai executar nada. Selecione um servidor de produção antes de usar.
+
+---
+
+### Resumo rápido do painel direito do Squad
+
+```
+┌─────────────────────────────────┐
+│  VPS ALVO                       │  ← onde os comandos rodam
+│  [ VPS-1 (Homolog)          ▼]  │
+│                                 │
+│  PIPELINE              [toggle] │  ← ativa/desativa modo seguro
+│  Após homolog OK, confirme      │
+│  deploy em Prod:                │
+│  [ VPS-2 (Produção)         ▼]  │  ← aparece só com Pipeline ON
+│                                 │
+│  HISTÓRICO                      │  ← conversas anteriores
+│  🎯 Jarvis   "olá"              │
+│  👩‍💻 Friday  "como montar..."    │
+└─────────────────────────────────┘
+```
+
+---
+
 ## Glossário rápido
 
 | Termo | Significado simples |
@@ -279,8 +403,13 @@ O Modo Agente salva snapshots antes de cada modificação. Você pode restaurar 
 | Fingerprint | "Impressão digital" do servidor para verificar autenticidade |
 | Snapshot | Cópia de segurança de um arquivo antes de modificar |
 | Streaming | Resposta da IA aparecendo palavra por palavra, em tempo real |
+| Squad | Equipe de 8 agentes de IA especialistas integrada ao IDE |
+| Delegação | Quando um agente encaminha uma tarefa automaticamente para outro |
+| Bloco de ação | Caixa gerada pela IA com um comando pronto para executar na VPS |
+| Homolog | Servidor de teste — igual à produção, mas sem usuários reais |
+| Pipeline | Modo que exige confirmação manual antes de executar em produção |
 
 ---
 
-*NEX-ALS IDE v3.3.1 — NEX-ALS*
+*NEX-ALS IDE v3.10.0 — NEX-ALS*
 *github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER*

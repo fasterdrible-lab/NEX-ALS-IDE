@@ -1,5 +1,44 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.10.0] — 2026-06-10
+
+### Adicionado — Squad: equipe de 8 agentes de IA com execução na VPS e Pipeline
+
+#### Página Squad (`apps/web/src/pages/SquadPage.tsx`)
+- 8 agentes especializados: Jarvis (PM/Claude), Friday (Dev/GPT), Fury (Pesquisa/Gemini), Shuri (UX/Claude), Pepper (Marketing/GPT), Vision (Growth/Gemini), Requis (Docs/Claude), Tester (QA/GPT)
+- Chat com streaming em tempo real por agente; histórico de sessões persistido em SQLite
+- Delegação automática: quando um agente menciona `@outro` na resposta, o segundo agente é invocado automaticamente (profundidade máxima 1, evita loops)
+- Menção direta no input: `@friday implementa X` redireciona para Friday sem trocar o agente ativo manualmente
+- Layout 3 painéis: lista de agentes (esquerda), chat central, configurações + histórico (direita)
+
+#### Blocos de ação ACTION tags
+- Friday e Tester podem gerar blocos executáveis: `SHELL`, `WRITE_FILE`, `READ_FILE`
+- Botão "Executar" por bloco — executa via SSH/SFTP na VPS selecionada
+- Resultado do comando aparece inline embaixo do bloco (verde = ok, vermelho = erro)
+- Conteúdo ACTION é removido do texto da mensagem antes de exibir (fica só o bloco visual)
+
+#### Modo Pipeline (homolog → confirmação → produção)
+- Toggle "PIPELINE" no painel direito — ao ativar, exibe seletor de VPS de Produção
+- Fluxo: Executar no Homolog → se OK, gate âmbar com botões Aprovar / Rejeitar → Aprovar executa em Prod
+- Estados visuais do gate: âmbar (pendente), azul (executando), verde (concluído), vermelho (falha), cinza (rejeitado)
+- Proteção: se o campo VPS Prod estiver vazio ("— VPS Prod —"), o Aprovar não executa nada
+
+#### Infraestrutura
+- `packages/core/src/squad/agents.ts` — personalidades, prompts e ACTION_INSTRUCTIONS dos 8 agentes
+- `packages/core/src/squad/actions.ts` — `parseActions()` e `stripActions()` para processar ACTION tags
+- `packages/core/src/squad/squad.service.ts` — serviço de streaming usando AiService existente
+- `packages/db/src/index.ts` — tabelas `squad_sessions` e `squad_messages` criadas via DDL no `initializeDatabase()`
+- `apps/desktop/src/ipc/handlers.ts` — handlers: `squad:session:*`, `squad:stream:*`, `squad:action:execute`
+- `apps/desktop/src/preload.ts` — canais Squad adicionados ao `ALLOWED_CHANNELS`
+- `apps/web/src/lib/ipc.ts` — namespace `ipc.squad.*` no renderer; guard null para `window.electron`
+- `apps/desktop/src/main.ts` — `setupCSP()` movida para `if (app.isPackaged)` (dev mode sem bloqueio de scripts Vite)
+- `apps/web/src/App.tsx` — `ErrorBoundary` adicionado para capturar erros de render sem crashar o app
+
+#### Documentação
+- `docs/GUIA_INICIANTE.md` — seção Squad adicionada: agentes, blocos de ação, Pipeline, glossário expandido
+
+---
+
 ## [3.9.0] — 2026-06-04
 
 ### Adicionado — Melhorias incrementais no IDE

@@ -54,6 +54,12 @@ interface StreamHandler {
 type ActionType = 'shell' | 'write_file' | 'read_file'
 interface ActionBlock { id: string; type: ActionType; cwd?: string; path?: string; content: string }
 type ActionState = { status: 'idle' | 'running' | 'ok' | 'error'; output?: string }
+type PipelineGate = {
+  action: ActionBlock
+  homologOutput: string
+  status: 'pending' | 'approved' | 'deploying' | 'done' | 'rejected' | 'failed'
+  prodOutput?: string
+}
 
 function parseActions(text: string): ActionBlock[] {
   const blocks: ActionBlock[] = []
@@ -103,6 +109,9 @@ export default function SquadPage() {
   const [vpsList, setVpsList] = useState<VpsItem[]>([])
   const [selectedVpsId, setSelectedVpsId] = useState<string>('')
   const [actionStates, setActionStates] = useState<Record<string, ActionState>>({})
+  const [pipelineMode, setPipelineMode] = useState(false)
+  const [prodVpsId, setProdVpsId] = useState<string>('')
+  const [pipelineGates, setPipelineGates] = useState<Record<string, PipelineGate>>({})
 
   const endRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -123,6 +132,7 @@ export default function SquadPage() {
     ipc.vps.list().then(list => {
       setVpsList(list as VpsItem[])
       if (list.length > 0) setSelectedVpsId((list[0] as VpsItem).id)
+      if (list.length > 1) setProdVpsId((list[1] as VpsItem).id)
     }).catch(console.error)
   }, [])
 
@@ -347,9 +357,32 @@ export default function SquadPage() {
     try {
       const res = await ipc.squad.action.execute({ type: action.type, content: action.content, cwd: action.cwd, path: action.path, vpsId: selectedVpsId })
       setActionStates(prev => ({ ...prev, [action.id]: { status: 'ok', output: res.output } }))
+      if (pipelineMode && prodVpsId && prodVpsId !== selectedVpsId) {
+        setPipelineGates(prev => ({ ...prev, [action.id]: { action, homologOutput: res.output, status: 'pending' } }))
+      }
     } catch (err) {
       setActionStates(prev => ({ ...prev, [action.id]: { status: 'error', output: err instanceof Error ? err.message : String(err) } }))
     }
+  }
+
+  async function approvePipeline(actionId: string) {
+    const gate = pipelineGates[actionId]
+    if (!gate || !prodVpsId) return
+    setPipelineGates(prev => ({ ...prev, [actionId]: { ...gate, status: 'deploying' } }))
+    try {
+      const res = await ipc.squad.action.execute({ type: gate.action.type, content: gate.action.content, cwd: gate.action.cwd, path: gate.action.path, vpsId: prodVpsId })
+      setPipelineGates(prev => ({ ...prev, [actionId]: { ...gate, status: 'done', prodOutput: res.output } }))
+    } catch (err) {
+      setPipelineGates(prev => ({ ...prev, [actionId]: { ...gate, status: 'failed', prodOutput: err instanceof Error ? err.message : String(err) } }))
+    }
+  }
+
+  function rejectPipeline(actionId: string) {
+    setPipelineGates(prev => {
+      const gate = prev[actionId]
+      if (!gate) return prev
+      return { ...prev, [actionId]: { ...gate, status: 'rejected' } }
+    })
   }
 
   const meta = AGENT_META[activeAgent]
@@ -522,6 +555,35 @@ export default function SquadPage() {
                                 <pre className={`text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto ${st.status === 'error' ? 'text-red-400' : 'text-green-400'}`}>{st.output}</pre>
                               </div>
                             )}
+                            {/* Pipeline gate — inside the card */}
+                            {pipelineMode && (() => {
+                              const gate = pipelineGates[action.id]
+                              if (!gate) return null
+                              const prodName = vpsList.find(v => v.id === prodVpsId)?.name ?? 'Prod'
+                              return (
+                                <div className={`px-3 py-2 border-t flex items-center justify-between gap-3 ${
+                                  gate.status === 'pending' ? 'border-amber-700/40 bg-amber-950/20' :
+                                  gate.status === 'deploying' ? 'border-blue-700/40 bg-blue-950/20' :
+                                  gate.status === 'done' ? 'border-green-700/40 bg-green-950/20' :
+                                  gate.status === 'failed' ? 'border-red-700/40 bg-red-950/20' :
+                                  'border-slate-700/40 bg-slate-800/30'
+                                }`}>
+                                  <div className="min-w-0 flex-1">
+                                    {gate.status === 'pending' && <p className="text-xs text-amber-300 font-semibold">✓ Homolog OK — Deploy em <span className="font-bold">{prodName}</span>?</p>}
+                                    {gate.status === 'deploying' && <span className="text-xs text-blue-300 flex items-center gap-1.5"><Loader2 size={11} className="animate-spin" />Executando em {prodName}…</span>}
+                                    {gate.status === 'done' && <p className="text-xs text-green-300 font-semibold">✓ Deploy em {prodName} concluído{gate.prodOutput ? ` — ${gate.prodOutput.slice(0,60)}` : ''}</p>}
+                                    {gate.status === 'failed' && <p className="text-xs text-red-300 font-semibold">✗ Falhou em {prodName}: {gate.prodOutput?.slice(0,80)}</p>}
+                                    {gate.status === 'rejected' && <p className="text-xs text-slate-500">— Deploy rejeitado</p>}
+                                  </div>
+                                  {gate.status === 'pending' && (
+                                    <div className="flex gap-2 shrink-0">
+                                      <button onClick={() => void approvePipeline(action.id)} className="text-xs px-3 py-1 rounded-lg bg-green-700/30 border border-green-600/50 text-green-300 hover:bg-green-700/50 transition-colors font-semibold">Aprovar</button>
+                                      <button onClick={() => rejectPipeline(action.id)} className="text-xs px-3 py-1 rounded-lg bg-slate-700/30 border border-slate-600/50 text-slate-400 hover:bg-slate-700/50 transition-colors">Rejeitar</button>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </div>
                         )
                       })}
@@ -595,6 +657,42 @@ export default function SquadPage() {
             </select>
           )}
         </div>
+        {/* Pipeline mode toggle */}
+        <div className="px-4 py-3 border-b border-slate-800 space-y-2">
+          <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pipeline</span>
+            <button
+              onClick={() => setPipelineMode(v => !v)}
+              className={`relative w-9 h-5 rounded-full border transition-colors ${
+                pipelineMode ? 'bg-brand-600/40 border-brand-600/60' : 'bg-slate-700/50 border-slate-600/50'
+              }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full transition-transform ${
+                pipelineMode ? 'translate-x-4 bg-brand-400' : 'translate-x-0 bg-slate-500'
+              }`} />
+            </button>
+          </label>
+          {pipelineMode && (
+            <>
+              <p className="text-[10px] text-slate-500">Após homolog OK, confirme deploy em Prod:</p>
+              {vpsList.length === 0 ? (
+                <p className="text-[10px] text-slate-600">Nenhuma VPS cadastrada</p>
+              ) : (
+                <select
+                  value={prodVpsId}
+                  onChange={e => setProdVpsId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-600"
+                >
+                  <option value="">— VPS Prod —</option>
+                  {vpsList.map(v => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+              )}
+            </>
+          )}
+        </div>
+
         <div className="px-4 py-2 border-b border-slate-800">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Histórico</h3>
         </div>
