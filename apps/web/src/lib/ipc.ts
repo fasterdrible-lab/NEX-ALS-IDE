@@ -283,6 +283,38 @@ export const ipc = {
     getEnabled: () => invoke<{ enabled: boolean }>('notifications:getEnabled'),
     setEnabled: (enabled: boolean) => invoke<{ success: boolean }>('notifications:setEnabled', { enabled }),
   },
+  squad: {
+    session: {
+      list: () => invoke<Array<{
+        id: string; title: string; agentName: string
+        projectId: string | null; vpsId: string | null
+        createdAt: string; updatedAt: string
+      }>>('squad:session:list'),
+      create: (data: { agentName: string; title: string }) =>
+        invoke<{ id: string; title: string; agentName: string; createdAt: string; updatedAt: string }>('squad:session:create', data),
+      messages: (id: string) =>
+        invoke<Array<{
+          id: string; sessionId: string; agentName: string
+          role: string; content: string; delegatedBy: string | null; createdAt: string
+        }>>('squad:session:messages', { id }),
+      addMsg: (data: { sessionId: string; agentName: string; role: string; content: string; delegatedBy: string | null }) =>
+        invoke<{ id: string }>('squad:session:addMsg', data),
+      delete: (id: string) => invoke<void>('squad:session:delete', id),
+    },
+    stream: {
+      start: (data: { agent: string; message: string; history: Array<{ role: string; content: string }>; projectContext?: string; providerOverride?: string }) =>
+        invoke<{ streamId: string }>('squad:stream:start', data),
+      cancel: (streamId: string) => invoke<{ success: boolean }>('squad:stream:cancel', streamId),
+      onChunk: (cb: (chunk: { type: string; delta?: string; error?: string; streamId: string }) => void) => {
+        if (!window.electron) return () => {}
+        return window.electron.on('squad:stream:chunk', cb as (...args: unknown[]) => void)
+      },
+    },
+    action: {
+      execute: (data: { type: string; content: string; cwd?: string; path?: string; vpsId: string }) =>
+        invoke<{ output: string }>('squad:action:execute', data),
+    },
+  },
   auth: {
     status: () => invoke<{ user: AppUser | null; needsSetup: boolean; sessionRequired: boolean }>('auth:status'),
     setup: (username: string, password: string) => invoke<{ user: AppUser }>('auth:setup', { username, password }),

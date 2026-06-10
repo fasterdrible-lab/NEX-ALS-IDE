@@ -20,7 +20,9 @@ import {
   ProjectMemoryService,
   NotificationMonitor,
   AuthService,
+  SquadService,
   type AppUser,
+  type AgentName,
 } from '@cwm/core'
 
 function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
@@ -60,6 +62,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const terminalSessions = new Map<string, TerminalSession>()
   const tunnelSvc = new TunnelService()
   const aiSvc = new AiService()
+  const squadSvc = new SquadService(aiSvc)
   const memorySvc = new ProjectMemoryService()
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
@@ -599,6 +602,105 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('memory:delete', (_, id: string) => wrapHandler(() => memorySvc.delete(id)))
   ipcMain.handle('memory:build',  (_, data: { vpsId?: string | null; projectId?: string | null }) =>
     wrapHandler(() => memorySvc.buildBlock(data?.vpsId, data?.projectId)))
+
+  // ── Squad — Fábrica de Agentes ───────────────────────────────────────────
+  ipcMain.handle('squad:session:list', () =>
+    wrapHandler(() => {
+      requireAuth()
+      return db.squadSession.findMany({ orderBy: { updatedAt: 'desc' }, take: 50 })
+    })
+  )
+
+  ipcMain.handle('squad:session:create', (_, data: { agentName: string; title: string }) =>
+    wrapHandler(() => {
+      requireAuth()
+      return db.squadSession.create({ data: { agentName: data.agentName, title: data.title } })
+    })
+  )
+
+  ipcMain.handle('squad:session:messages', (_, { id }: { id: string }) =>
+    wrapHandler(() => {
+      requireAuth()
+      return db.squadMessage.findMany({ where: { sessionId: id }, orderBy: { createdAt: 'asc' } })
+    })
+  )
+
+  ipcMain.handle('squad:session:addMsg', (_, data: {
+    sessionId: string
+    agentName: string
+    role: string
+    content: string
+    delegatedBy: string | null
+  }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const msg = await db.squadMessage.create({ data })
+      await db.squadSession.update({ where: { id: data.sessionId }, data: { updatedAt: new Date() } })
+      return msg
+    })
+  )
+
+  ipcMain.handle('squad:session:delete', (_, id: string) =>
+    wrapHandler(() => { requireAuth(); return db.squadSession.delete({ where: { id } }) })
+  )
+
+  ipcMain.handle('squad:stream:start', (event, data: {
+    agent: AgentName
+    message: string
+    history: Array<{ role: string; content: string }>
+    projectContext?: string
+    providerOverride?: string
+  }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const targetWin = BrowserWindow.fromWebContents(event.sender)
+      const session = await squadSvc.startAgentStream(
+        data.agent,
+        data.message,
+        data.history ?? [],
+        chunk => {
+          try { targetWin?.webContents.send('squad:stream:chunk', chunk) } catch { /* janela fechada */ }
+        },
+        { projectContext: data.projectContext, providerOverride: data.providerOverride }
+      )
+      return { streamId: session.streamId }
+    })
+  )
+
+  ipcMain.handle('squad:stream:cancel', (_, streamId: string) => {
+    squadSvc.cancelStream(streamId)
+    return { success: true }
+  })
+
+  ipcMain.handle('squad:action:execute', (_, data: {
+    type: string; content: string; cwd?: string; path?: string; vpsId: string
+  }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      if (data.type === 'shell') {
+        const cmd = data.cwd ? `cd ${JSON.stringify(data.cwd)} && ${data.content}` : data.content
+        const output = await terminal.exec(data.vpsId, cmd, 30000)
+        return { output }
+      }
+      if (data.type === 'write_file') {
+        if (!data.path) throw new Error('path é obrigatório para write_file')
+        const sess = await sftpService.openSession(data.vpsId)
+        try {
+          await sess.writeFile(data.path, data.content)
+          return { output: `✓ Arquivo escrito: ${data.path}` }
+        } finally { sess.destroy() }
+      }
+      if (data.type === 'read_file') {
+        if (!data.path) throw new Error('path é obrigatório para read_file')
+        const sess = await sftpService.openSession(data.vpsId)
+        try {
+          const content = await sess.readFile(data.path)
+          return { output: content }
+        } finally { sess.destroy() }
+      }
+      throw new Error(`Tipo desconhecido: ${data.type}`)
+    })
+  )
 
   // ToolExecutor — confirmação de ação perigosa (main → renderer → main)
   ipcMain.handle('tool:confirmRequest', () => undefined) // placeholder; respondido via tool:confirmResponse

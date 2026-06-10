@@ -79,3 +79,31 @@ model LaunchHistory {
 
   @@map("launch_history")
 }
+
+model SquadSession {
+  id        String   @id @default(cuid())
+  title     String   @default("Nova sessão")
+  agentName String
+  projectId String?
+  vpsId     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages SquadMessage[]
+
+  @@map("squad_sessions")
+}
+
+model SquadMessage {
+  id          String   @id @default(cuid())
+  sessionId   String
+  agentName   String
+  role        String
+  content     String
+  delegatedBy String?
+  createdAt   DateTime @default(now())
+
+  session SquadSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("squad_messages")
+}

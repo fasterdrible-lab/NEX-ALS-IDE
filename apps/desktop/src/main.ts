@@ -192,7 +192,7 @@ function createIdeWindow(vpsId: string, vpsName: string): void {
 }
 
 app.whenReady().then(async () => {
-  setupCSP()
+  if (app.isPackaged) setupCSP()
   setDatabasePath()
   await initializeDatabase()
   createWindow()

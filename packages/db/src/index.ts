@@ -134,6 +134,25 @@ export async function initializeDatabase(): Promise<void> {
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS "squad_sessions" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "title" TEXT NOT NULL DEFAULT 'Nova sessão',
+      "agentName" TEXT NOT NULL,
+      "projectId" TEXT,
+      "vpsId" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS "squad_messages" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "sessionId" TEXT NOT NULL,
+      "agentName" TEXT NOT NULL,
+      "role" TEXT NOT NULL,
+      "content" TEXT NOT NULL,
+      "delegatedBy" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY ("sessionId") REFERENCES "squad_sessions"("id") ON DELETE CASCADE
+    )`,
   ]
 
   for (const sql of ddl) {

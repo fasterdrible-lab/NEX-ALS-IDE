@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Server, FolderOpen, Rocket,
-  Settings, Activity, BotMessageSquare, BookOpen, BarChart3, History, Sparkles, LogOut, User,
+  Settings, Activity, BotMessageSquare, BookOpen, BarChart3, History, Sparkles, Users, LogOut, User,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -31,14 +31,21 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* AI HUB — destaque */}
-        <div className="px-2 pt-2">
+        {/* AI HUB + SQUAD — destaques */}
+        <div className="px-2 pt-2 space-y-1">
           <button
             onClick={() => navigate('/ai-hub')}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-purple-900/30 border border-purple-700/40 text-purple-300 hover:bg-purple-900/60 transition-colors"
           >
             <Sparkles size={15} className="shrink-0"/>
             AI HUB
+          </button>
+          <button
+            onClick={() => navigate('/squad')}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-brand-900/30 border border-brand-700/40 text-brand-300 hover:bg-brand-900/60 transition-colors"
+          >
+            <Users size={15} className="shrink-0"/>
+            SQUAD
           </button>
         </div>
 

@@ -35,6 +35,8 @@ const ALLOWED_CHANNELS = new Set([
   'notifications:getEnabled', 'notifications:setEnabled',
   'auth:status', 'auth:setup', 'auth:login', 'auth:logout', 'auth:currentUser',
   'auth:users:list', 'auth:users:create', 'auth:users:delete', 'auth:users:changePassword',
+  'squad:session:list', 'squad:session:create', 'squad:session:messages', 'squad:session:addMsg', 'squad:session:delete',
+  'squad:stream:start', 'squad:stream:cancel', 'squad:stream:chunk', 'squad:action:execute',
 ])
 
 contextBridge.exposeInMainWorld('electron', {
