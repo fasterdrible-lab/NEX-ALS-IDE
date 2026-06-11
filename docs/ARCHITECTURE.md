@@ -1,4 +1,4 @@
-# ARCHITECTURE.md — NEX-ALS IDE v3.9.0
+# ARCHITECTURE.md — NEX-ALS IDE v3.16.1
 
 ## Arquitetura geral
 
@@ -563,4 +563,142 @@ handleLocalDiff():
 UI: botão "Diff" (GitCommitIcon) na top bar
   Condicional: isLocal && activeFile && !activeFile.imageDataUrl
   Posição: entre badge LOCAL e aba de arquivos
+```
+
+## Squad — Arquitetura (v3.10.0+)
+
+### Módulos
+
+```
+packages/core/src/squad/
+  actions.ts   ← ActionType = 'shell' | 'write_file' | 'read_file' | 'read_dir'
+               ← SquadAction, ActionResult, parseActions(text) → SquadAction[]
+  agents.ts    ← AgentName, AgentConfig, AGENTS (8 configs), ACTION_INSTRUCTIONS
+               ← buildSystemPrompt(agentName, projectContext?, localPath?, isAutonomous?)
+
+apps/web/src/pages/SquadPage.tsx  ← página fullscreen, toda a lógica UI
+```
+
+### Agentes
+
+| Nome | Papel | Provider padrão |
+|---|---|---|
+| Jarvis | Orquestrador / PM | Claude Code |
+| Friday | Desenvolvedor | GPT |
+| Fury | Pesquisa / Intelligence | Gemini |
+| Shuri | UX / Design | Claude Code |
+| Pepper | Marketing | GPT |
+| Vision | Growth | Gemini |
+| Requis | Documentação | Claude Code |
+| Tester | QA | GPT |
+
+### ACTION Tags — execução local vs VPS
+
+```
+Texto do agente contém blocos:
+  [ACTION:SHELL cmd="npm install"][/ACTION]
+  [ACTION:WRITE_FILE path="src/foo.ts"]conteúdo[/ACTION]
+  [ACTION:READ_FILE path="src/foo.ts"][/ACTION]
+  [ACTION:READ_DIR path="C:\pasta"][/ACTION]
+
+parseActions(text) → SquadAction[]
+
+Execução via IPC squad:action:execute(action):
+
+  vpsId === '__local__':
+    SHELL     → child_process.exec(cmd, { cwd: localPath || homedir(), shell:true })
+    WRITE_FILE→ fs.mkdir(dir, { recursive:true }) → fs.writeFile(path, content, 'utf-8')
+    READ_FILE → fs.stat(path):
+                  if isDirectory() → fs.readdir({ withFileTypes:true }) → lista [DIR]/[ARQ]
+                  else → fs.readFile(path, 'utf-8')
+    READ_DIR  → fs.readdir(path, { withFileTypes:true }) → lista [DIR]/[ARQ] com resolved path
+
+  vpsId !== '__local__' (modo VPS via SSH):
+    SHELL     → terminal.exec(vpsId, cmd, timeout)
+    WRITE_FILE→ sftp.writeFile(vpsId, path, content)
+    READ_FILE → sftp.readFile(vpsId, path)
+    READ_DIR  → terminal.exec(vpsId, `ls -la "${path}"`, 10000)
+```
+
+### Loop Autônomo — fluxo
+
+```
+handleSend(msg, targetAgent)
+    ↓ rootAgentRef.current = targetAgent   ← grava quem iniciou
+    ↓ streamAgent(targetAgent, msg, sid)
+    ↓ se autonomousMode → autonomousLoop(sid)
+
+autonomousLoop(sid):
+  while !stop && iter < maxAutoIterRef.current:
+    lastBubble = último bubble de agente não-streaming
+
+    se /[PRONTO]|[DONE]|[CONCLUÍDO]/i → para + bubble sistema "Tarefa concluída"
+
+    hasActions = lastBubble.actions?.length > 0
+    isRoot     = lastBubble.agentName === rootAgentRef.current
+
+    se !hasActions && isRoot    → para (root sem ações = conclusão natural)
+    se !hasActions && !isRoot   → streamAgent(rootAgent, "agentes delegados concluíram...")
+                                  (síntese: delegado sem ações dispara root)
+    se hasActions:
+      results = await executeActionsAuto(actions)
+      rastreia no report { reads, writes, shells, errors, filesWritten }
+      streamAgent(rootAgent, resultLines.join('\n'))   ← SEMPRE retorna ao root
+
+  após loop (se iter > 0):
+    bubble sistema com relatório:
+      📊 N iteração(ões) · N leituras · N escritas · N shells · N erros
+      📄 Arquivos escritos: [lista]
+```
+
+**Padrão `maxAutoIterRef`:** `maxAutoIter` state (para UI) + `maxAutoIterRef.current` (para uso dentro do loop async). Sincronizados por `useEffect(() => { maxAutoIterRef.current = maxAutoIter }, [maxAutoIter])`. Necessário porque closures JavaScript capturam o valor de `state` no momento da criação do loop — o ref garante leitura do valor atual.
+
+### Knowledge Base — arquitetura de persistência
+
+```
+interface KnowledgeBase {
+  projeto: string   // nome, objetivo, linguagem
+  stack: string     // frameworks, libs, ferramentas
+  estrutura: string // pastas, módulos, convenções de arquivo
+  status: string    // tarefas em andamento, bugs conhecidos
+  convencoes: string// naming, padrões de código, commits
+  regras: string    // regras de negócio, restrições, SLAs
+  agentes: string   // papéis e instruções específicas por agente
+  notas: string     // observações livres
+}
+
+localStorage['squad_knowledge_bases']: Record<string, KnowledgeBase>
+  chave = localPath || '__global__'
+
+useEffect([localPath]) → setKb(loadKB(localPath || '__global__'))
+  Recarrega a KB ao trocar de projeto
+
+buildKBString(kb) → string
+  Itera sobre seções preenchidas (value.trim() !== '')
+  Formata como: "## LABEL\ncontent\n\n"
+  Injetado no system prompt de todos os agentes da sessão
+
+syncKBFromProject():
+  candidates: README.md→projeto, CURRENT_STATE.md→status,
+              TASKS.md→status, ARCHITECTURE.md→estrutura
+  Para cada candidate: ipc.squad.action.execute({ type:'read_file', vpsId:'__local__', path })
+  Se read_file retornar pasta detectada → ignora
+  Preenche updates{}; se seção já preenchida (status) → concatena com separador
+  Trunca em 3000 chars por seção; setKb + saveKB
+```
+
+### IPC Squad
+
+```
+squad:stream:start   ← { agentName, messages, systemPrompt, provider, model,
+                          localPath?, autonomousMode?, vpsId? }
+                     → chunks SSE: { type:'text_delta'|'error'|'done', delta?, streamId }
+
+squad:stream:cancel  ← streamId
+squad:action:execute ← SquadAction (com vpsId, cwd?)  → ActionResult
+squad:sessions:list  → SquadSession[]
+squad:sessions:create← { title }  → SquadSession
+squad:messages:list  ← sessionId  → SquadMessage[]
+squad:messages:save  ← { sessionId, role, agentName, content }  → SquadMessage
+squad:sessions:delete← sessionId  → void
 ```

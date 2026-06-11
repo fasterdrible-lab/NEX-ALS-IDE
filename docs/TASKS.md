@@ -4,6 +4,17 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.15.8 → v3.16.1)
+
+- [x] **Squad: READ_DIR + auto-detecção de diretório em READ_FILE** — nova `ActionType` `'read_dir'`; handler local com `fs.readdir({ withFileTypes: true })` retorna lista `[DIR]/[ARQ]`; `read_file` local faz `fs.stat` e se for diretório lista conteúdo ao invés de erro; handler VPS usa `ls -la`; `ACTION_INSTRUCTIONS` adicionadas a Jarvis e Shuri — v3.15.8 · 2026-06-11
+- [x] **Squad: instruções anti-loop no modo autônomo** — system prompt do modo autônomo proíbe reler arquivos já no histórico; exige `READ_DIR` antes de `READ_FILE` em pastas; lista ações disponíveis explicitamente; exige `[PRONTO]` ao concluir — v3.15.8 · 2026-06-11
+- [x] **Squad: Base de Conhecimento estruturada** — interface `KnowledgeBase` com 8 seções (projeto, stack, estrutura, status, convenções, regras, agentes, notas); substitui campo livre "Contexto do Projeto"; accordeon no painel direito; 3 templates prontos (Next.js SaaS, Node.js API, React+Vite); persistência `localStorage`; `buildKBString()` gera contexto formatado — v3.15.9 · 2026-06-11
+- [x] **Squad: KB isolada por projeto** — `localStorage['squad_knowledge_bases']` como `Record<string, KnowledgeBase>` keyed por `localPath || '__global__'`; `useEffect([localPath])` recarrega KB ao trocar pasta; badge roxo com nome da pasta — v3.16.0 · 2026-06-11
+- [x] **Squad: rootAgentRef — delegação autônoma corrigida** — `rootAgentRef` (useRef) gravado no `handleSend`; loop autônomo sempre envia resultados ao agente raiz independente de qual agente delegado executou ações; agente delegado sem ações dispara síntese com root ao invés de parar — v3.16.0 · 2026-06-11
+- [x] **Squad: botão Sincronizar KB** — `syncKBFromProject()` lê `README.md`/`CURRENT_STATE.md`/`TASKS.md`/`ARCHITECTURE.md` via `ipc.squad.action.execute({ type: 'read_file', vpsId: '__local__' })`; auto-detecta separador de caminho; preenche seções projeto/status/estrutura da KB; spinner durante sincronização — v3.16.1 · 2026-06-11
+- [x] **Squad: iterações autônomas configuráveis** — `maxAutoIter` state (padrão 30, range 5–200); input numérico visível quando modo autônomo ativo; `maxAutoIterRef` padrão ref+state sincronizados por `useEffect` para uso correto dentro de loops async — v3.16.1 · 2026-06-11
+- [x] **Squad: relatório final do ciclo autônomo** — bubble de sistema ao final do loop com contadores: iterações, leituras, escritas, shells, erros, lista de arquivos escritos — v3.16.1 · 2026-06-11
+
 ## Concluídas recentemente (v3.15.2 → v3.15.7)
 
 - [x] **Squad: "Erro ao processar resposta" com Claude Code** — stderr acumulado em buffer; erro enviado apenas ao fechar com código ≠ 0 e sem stdout; regex de auth refinada; UI passa `chunk.error` real ao invés de mensagem genérica — v3.15.2 · 2026-06-11

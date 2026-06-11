@@ -1,7 +1,7 @@
 # AGENTE.md — NEX-ALS IDE
 
-**Repositório:** https://github.com/fasterdrible-lab/HEXAGON-IDE.git
-**Remote local:** `git remote set-url origin https://github.com/fasterdrible-lab/HEXAGON-IDE.git`
+**Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
+**Remote local:** `git remote set-url origin https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git`
 
 ## O que o projeto faz
 
@@ -202,21 +202,56 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`V.1.5.0` — **Backlog zerado.** NEX-ALS IDE completo com todas as features P0→P3 implementadas. Split editor, TypeScript LSP, port forwarding SSH, DAP debug remoto, packaging Windows, testes Vitest, import/export de configurações, SSH passphrase, auto-update. Ver `docs/CURRENT_STATE.md`.
+`v3.16.1` — **NEX-ALS IDE completo + Squad com modo autônomo.** IDE com Monaco/xterm/SFTP/Git. NEX-ALS AI HUB com 6 providers + Claude Code. Squad com 8 agentes, ACTION tags, modo autônomo (loop até N iterações com `rootAgentRef` garantindo orquestração centralizada), Base de Conhecimento estruturada por projeto (8 seções, 3 templates, sincronização automática com README/CURRENT_STATE/ARCHITECTURE). Ver `docs/CURRENT_STATE.md`.
 
-## Uso do Chat Claude
+## Squad — visão geral
 
-| Situação | Recomendação |
-|---|---|
-| Analisar erro | Cole o **texto** do erro, não print |
-| Corrigir arquivo aberto | Abra o arquivo → descreva o problema → clique Aplicar |
-| Criar novo arquivo | Peça ao Claude → clique "Salvar como…" → informe o caminho |
-| Projeto local (OneDrive) | Claude recebe árvore + docs automaticamente |
-| Print/screenshot | Ctrl+V cola a imagem; processamento visual não garantido no `claude -p` |
+8 agentes especializados com streaming em tempo real, delegação automática e execução de ações:
+
+| Agente | Papel | Provider |
+|---|---|---|
+| Jarvis | PM / Orquestrador | Claude |
+| Friday | Engenheira de Software | GPT |
+| Fury | Pesquisa de Mercado | Gemini |
+| Shuri | UX / Design | Claude |
+| Pepper | Marketing / Brand | GPT |
+| Vision | Growth / Métricas | Gemini |
+| Requis | Documentação | Claude |
+| Tester | QA / Testes | GPT |
+
+### ACTION tags suportadas
+
+```
+[ACTION:SHELL cwd="C:\pasta"]comando[/ACTION]
+[ACTION:READ_FILE path="C:\pasta\arquivo.ts"][/ACTION]
+[ACTION:READ_DIR path="C:\pasta"][/ACTION]
+[ACTION:WRITE_FILE path="C:\pasta\arquivo.ts"]conteúdo[/ACTION]
+```
+
+- Execução local (`vpsId: '__local__'`) — `child_process.exec` / `fs.*`
+- Execução remota (VPS) — SSH terminal.exec / SFTP
+- `read_file` em diretório → auto-redireciona para listagem
+
+### Modo autônomo
+
+- Toggle "Auto" na barra do agente ativo
+- Limite configurável (5–200 iterações, padrão 30)
+- `rootAgentRef` sempre devolve resultados ao orquestrador raiz (Jarvis)
+- Agente delegado sem ações → síntese com root ao invés de parar
+- Stop conditions: tag `[PRONTO]` / `[DONE]` / `[CONCLUÍDO]`, sem ações do root, limite atingido
+- Relatório final ao término: iterações, arquivos escritos, leituras, comandos, erros
+
+### Base de Conhecimento
+
+- Persistida por projeto em `localStorage` (chave = `localPath` ou `__global__`)
+- 8 seções estruturadas: Projeto, Stack, Estrutura de arquivos, Status atual, Convenções, Regras do squad, Habilidades dos agentes, Notas técnicas
+- 3 templates prontos: Next.js SaaS, Node.js API, React+Vite
+- Botão "Sincronizar": lê `README.md` / `CURRENT_STATE.md` / `TASKS.md` / `ARCHITECTURE.md` do projeto e preenche as seções automaticamente
+- Injetada como `projectContext` no system prompt de todos os agentes da sessão
 
 ## Próxima tarefa
 
-Features P3 (split editor, LSP remoto, port forwarding) ou features de app (testes, packaging). Ver `docs/TASKS.md`.
+Ver `docs/TASKS.md` — seção "Em andamento".
 
 ## Regras obrigatórias
 
@@ -228,8 +263,8 @@ Features P3 (split editor, LSP remoto, port forwarding) ou features de app (test
 6. Atualizar TASKS.md ao concluir ou iniciar tarefas
 7. Atualizar CURRENT_STATE.md ao mudar estado do projeto
 8. Atualizar ARCHITECTURE.md ao mudar decisões técnicas
-9. Sincronizar versão nos 3 `package.json` (raiz, desktop, web)
-10. Remote git aponta para `https://github.com/fasterdrible-lab/HEXAGON-IDE.git`
+9. Sincronizar versão nos 3 `package.json` (raiz, desktop, web) + `Layout.tsx` badge
+10. Remote git aponta para `https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git`
 
 ## Tabela de arquivos de risco
 
@@ -315,6 +350,28 @@ git pull
 
 ### debug:* (IDE-18)
 - `debug:openDevTools` — abre janela Electron com Chrome DevTools (DAP via WebSocket)
+
+### squad:*
+- `squad:stream:start` — inicia stream de agente (provider, agente, mensagem, histórico, contexto, localPath, autonomous)
+- `squad:stream:cancel` — cancela stream ativo
+- `squad:session:create` — cria sessão no SQLite
+- `squad:session:list` — lista sessões
+- `squad:session:delete` — exclui sessão + mensagens
+- `squad:session:loadMsgs` — carrega mensagens de uma sessão
+- `squad:session:addMsg` — persiste mensagem
+- `squad:action:execute` — executa ACTION tag (shell/read_file/read_dir/write_file) local ou VPS
+
+### claude:*
+- `claude:check` — verifica versão e status do CLI claude
+- `claude:accounts:list` — lista contas Claude Code cadastradas
+- `claude:accounts:create` — cadastra nova conta (gera configDir isolado)
+- `claude:accounts:setActive` — ativa conta (define CLAUDE_CONFIG_DIR)
+- `claude:accounts:check` — verifica credenciais (.credentials.json)
+- `claude:accounts:delete` — remove conta
+- `claude:usage` — lê email + plano da conta ativa
+
+### shell:*
+- `shell:openExternal` — abre URL no navegador padrão (allowlist: claude.ai, anthropic.com)
 
 ### config:*
 - `config:export` — salva backup JSON com VPS/projetos/contas (dialog de salvar)
