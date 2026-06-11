@@ -51,7 +51,7 @@ interface StreamHandler {
 }
 
 // ── ACTION tags ──────────────────────────────────────────────────────────────
-type ActionType = 'shell' | 'write_file' | 'read_file'
+type ActionType = 'shell' | 'write_file' | 'read_file' | 'read_dir'
 interface ActionBlock { id: string; type: ActionType; cwd?: string; path?: string; content: string }
 type ActionState = { status: 'idle' | 'running' | 'ok' | 'error'; output?: string }
 type PipelineGate = {
@@ -748,8 +748,8 @@ export default function SquadPage() {
                     <div className="mt-2 space-y-2">
                       {bubble.actions.map(action => {
                         const st = actionStates[action.id] ?? { status: 'idle' }
-                        const label = action.type === 'shell' ? 'SHELL' : action.type === 'write_file' ? 'WRITE' : 'READ'
-                        const labelColor = action.type === 'shell' ? 'text-yellow-400 bg-yellow-900/30 border-yellow-700/40' : action.type === 'write_file' ? 'text-blue-400 bg-blue-900/30 border-blue-700/40' : 'text-slate-400 bg-slate-800 border-slate-700/40'
+                        const label = action.type === 'shell' ? 'SHELL' : action.type === 'write_file' ? 'WRITE' : action.type === 'read_dir' ? 'DIR' : 'READ'
+                        const labelColor = action.type === 'shell' ? 'text-yellow-400 bg-yellow-900/30 border-yellow-700/40' : action.type === 'write_file' ? 'text-blue-400 bg-blue-900/30 border-blue-700/40' : action.type === 'read_dir' ? 'text-cyan-400 bg-cyan-900/30 border-cyan-700/40' : 'text-slate-400 bg-slate-800 border-slate-700/40'
                         return (
                           <div key={action.id} className="border border-slate-700/50 rounded-xl overflow-hidden bg-slate-900/60">
                             <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800/60 border-b border-slate-700/40">

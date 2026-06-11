@@ -929,13 +929,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       function buildSystemPrompt(base: string): string {
         let sys = base
         if (data.localPath) {
-          sys += `\n\nEXECUÇÃO LOCAL ATIVA (Windows PC):\n- Pasta base do projeto: ${data.localPath}\n- Use SEMPRE caminhos Windows em ACTION tags. Exemplos:\n  [ACTION:READ_FILE path="${data.localPath}\\src\\index.ts"][/ACTION]\n  [ACTION:SHELL cwd="${data.localPath}"]npm install[/ACTION]\n- NÃO use caminhos Linux (/home/...) — o código roda diretamente no PC do usuário.`
+          sys += `\n\nEXECUÇÃO LOCAL ATIVA (Windows PC):\n- Pasta base do projeto: ${data.localPath}\n- Use SEMPRE caminhos Windows em ACTION tags. Exemplos:\n  [ACTION:READ_DIR path="${data.localPath}"][/ACTION] — lista arquivos da raiz do projeto\n  [ACTION:READ_FILE path="${data.localPath}\\src\\index.ts"][/ACTION]\n  [ACTION:SHELL cwd="${data.localPath}"]npm install[/ACTION]\n- Use READ_DIR para explorar a estrutura antes de READ_FILE\n- NÃO use caminhos Linux (/home/...) — o código roda diretamente no PC do usuário.`
         }
         if (data.projectContext) {
           sys += `\n\nCONTEXTO DO PROJETO:\n${data.projectContext}`
         }
         if (data.autonomous) {
-          sys += `\n\nMODO AUTÔNOMO ATIVO:\nVocê está em execução autônoma — sem interação humana entre iterações. Siga estas regras obrigatórias:\n1. Use ACTION tags para cada passo de execução, um passo por vez.\n2. Analise os resultados retornados e continue trabalhando iterativamente.\n3. Quando a tarefa estiver 100% concluída, inclua [PRONTO] na sua resposta final.\n4. Não faça perguntas — tome decisões com o contexto disponível.\n5. Não aguarde confirmação — execute e reporte o resultado.`
+          sys += `\n\nMODO AUTÔNOMO ATIVO — regras obrigatórias:\n1. Cada iteração DEVE produzir progresso concreto: código escrito, arquivo criado/modificado, ou comando executado com resultado.\n2. PROIBIDO reler arquivos que já estão no histórico desta conversa — use o conteúdo já retornado.\n3. Use READ_DIR para explorar pastas antes de READ_FILE — nunca READ_FILE em um caminho de pasta.\n4. ACTION:SHELL deve conter apenas comandos executáveis reais (npm, git, node, dir, etc.) — nunca frases em português.\n5. Um ACTION por resposta — aguarde o resultado antes do próximo passo.\n6. Quando concluir 100% da tarefa, inclua [PRONTO] na resposta final.\n7. Não faça perguntas — decida com o contexto disponível e continue.\n\nACÕES DISPONÍVEIS:\n[ACTION:READ_DIR path="C:\\\\pasta"][/ACTION] — lista arquivos de uma pasta\n[ACTION:READ_FILE path="C:\\\\pasta\\\\arquivo.ts"][/ACTION] — lê um arquivo específico\n[ACTION:WRITE_FILE path="C:\\\\pasta\\\\arquivo.ts"]conteúdo[/ACTION] — cria/sobrescreve arquivo\n[ACTION:SHELL cwd="C:\\\\pasta"]comando[/ACTION] — executa comando no terminal`
         }
         return sys
       }
@@ -1050,8 +1050,22 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         if (data.type === 'read_file') {
           if (!data.path) throw new Error('path é obrigatório para read_file')
           const resolved = resolveLocalPath(data.path, data.cwd)
+          const stat = await fs.stat(resolved)
+          if (stat.isDirectory()) {
+            // agente tentou ler uma pasta — lista o conteúdo automaticamente
+            const entries = await fs.readdir(resolved, { withFileTypes: true })
+            const lines = entries.map(e => `${e.isDirectory() ? '[DIR] ' : '[ARQ]'} ${e.name}`)
+            return { output: `[Pasta detectada — listando conteúdo]\n${resolved}\n${lines.join('\n')}` }
+          }
           const content = await fs.readFile(resolved, 'utf-8')
           return { output: content }
+        }
+        if (data.type === 'read_dir') {
+          if (!data.path) throw new Error('path é obrigatório para read_dir')
+          const resolved = resolveLocalPath(data.path, data.cwd)
+          const entries = await fs.readdir(resolved, { withFileTypes: true })
+          const lines = entries.map(e => `${e.isDirectory() ? '[DIR] ' : '[ARQ]'} ${e.name}`)
+          return { output: `${resolved}\n${lines.join('\n')}` }
         }
         if (data.type === 'write_file') {
           if (!data.path) throw new Error('path é obrigatório para write_file')
@@ -1084,6 +1098,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           const content = await sess.readFile(data.path)
           return { output: content }
         } finally { sess.destroy() }
+      }
+      if (data.type === 'read_dir') {
+        if (!data.path) throw new Error('path é obrigatório para read_dir')
+        const output = await terminal.exec(data.vpsId, `ls -la ${JSON.stringify(data.path)}`, 10000)
+        return { output }
       }
       throw new Error(`Tipo desconhecido: ${data.type}`)
     })

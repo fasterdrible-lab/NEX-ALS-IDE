@@ -1,4 +1,4 @@
-export type ActionType = 'shell' | 'write_file' | 'read_file'
+export type ActionType = 'shell' | 'write_file' | 'read_file' | 'read_dir'
 
 export interface ActionBlock {
   id: string

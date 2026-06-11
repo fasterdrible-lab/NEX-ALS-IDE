@@ -1,5 +1,18 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.15.8] — 2026-06-11
+
+### Corrigido — Squad modo autônomo: READ_DIR + anti-loop
+
+- **`read_dir` como action type** — agentes agora podem usar `[ACTION:READ_DIR path="..."][/ACTION]` para listar o conteúdo de uma pasta antes de tentar ler arquivos específicos
+- **Auto-detecção de diretório em `read_file`** — se o agente chamar `READ_FILE` em um caminho que é uma pasta, o sistema detecta automaticamente via `fs.stat` e lista o conteúdo ao invés de retornar erro
+- **Instruções do modo autônomo melhoradas** — adicionadas regras anti-loop: PROIBIDO reler arquivos já no histórico; cada iteração deve produzir progresso concreto; SHELL só aceita comandos reais
+- **`READ_DIR` no system prompt** — instruções de execução local e modo autônomo agora ensinam o agente a usar `READ_DIR` para explorar a estrutura antes de READ_FILE
+- **`ACTION_INSTRUCTIONS` adicionadas a Jarvis e Shuri** — esses agentes também podem executar ações de leitura/escrita agora
+- Versão: `3.15.7` → `3.15.8`
+
+---
+
 ## [3.15.7] — 2026-06-11
 
 ### Adicionado — Squad: botão "Conta Claude" com modal de uso
