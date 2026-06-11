@@ -91,7 +91,7 @@ export default function Layout() {
             </div>
           )}
           <div>
-            <p className="text-xs text-slate-600">v3.15.9</p>
+            <p className="text-xs text-slate-600">v3.16.0</p>
             <p className="text-xs text-slate-700 mt-0.5">NEX-ALS</p>
           </div>
         </div>

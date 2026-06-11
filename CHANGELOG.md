@@ -1,5 +1,24 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.16.0] — 2026-06-11
+
+### Melhorado — Squad: KB por projeto + delegação autônoma corrigida
+
+**Base de Conhecimento por projeto:**
+- KB agora é isolada por projeto: cada `localPath` tem seu próprio slot no localStorage (`squad_knowledge_bases`)
+- Ao trocar de pasta (localPath), a KB carrega automaticamente o contexto daquele projeto
+- Badge com nome da pasta ativa exibido no cabeçalho da KB
+- Sem localPath selecionado → usa slot global `__global__`
+
+**Delegação autônoma corrigida:**
+- `rootAgentRef` agora armazena o agente que iniciou a sessão (ex: Jarvis)
+- Após qualquer ação executada (mesmo de agente delegado), o resultado SEMPRE retorna ao agente raiz
+- Quando agente delegado finaliza sem ações → mensagem de síntese enviada ao agente raiz ao invés de parar o loop
+- O orquestrador (Jarvis) permanece no controle durante todo o ciclo autônomo
+- Versão: `3.15.9` → `3.16.0`
+
+---
+
 ## [3.15.9] — 2026-06-11
 
 ### Adicionado — Squad: Base de Conhecimento estruturada

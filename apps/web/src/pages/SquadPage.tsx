@@ -62,9 +62,10 @@ interface KnowledgeBase {
   notas: string
 }
 const KB_DEFAULT: KnowledgeBase = { projeto: '', stack: '', estrutura: '', status: '', convencoes: '', regras: '', agentes: '', notas: '' }
-const KB_LS_KEY = 'squad_knowledge_base'
-function loadKB(): KnowledgeBase { try { const r = localStorage.getItem(KB_LS_KEY); return r ? { ...KB_DEFAULT, ...JSON.parse(r) } : KB_DEFAULT } catch { return KB_DEFAULT } }
-function saveKB(kb: KnowledgeBase) { try { localStorage.setItem(KB_LS_KEY, JSON.stringify(kb)) } catch {} }
+const KB_LS_KEY = 'squad_knowledge_bases'
+function loadAllKBs(): Record<string, KnowledgeBase> { try { const r = localStorage.getItem(KB_LS_KEY); return r ? JSON.parse(r) : {} } catch { return {} } }
+function loadKB(projectKey: string): KnowledgeBase { const all = loadAllKBs(); return all[projectKey] ? { ...KB_DEFAULT, ...all[projectKey] } : KB_DEFAULT }
+function saveKB(projectKey: string, kb: KnowledgeBase) { try { localStorage.setItem(KB_LS_KEY, JSON.stringify({ ...loadAllKBs(), [projectKey]: kb })) } catch {} }
 function buildKBString(kb: KnowledgeBase): string {
   const sections: [string, string][] = [
     ['PROJETO', kb.projeto], ['STACK', kb.stack], ['ESTRUTURA DE ARQUIVOS', kb.estrutura],
@@ -171,7 +172,7 @@ export default function SquadPage() {
   const [prodVpsId, setProdVpsId] = useState<string>('')
   const [pipelineGates, setPipelineGates] = useState<Record<string, PipelineGate>>({})
   // Knowledge Base + local execution
-  const [kb, setKb] = useState<KnowledgeBase>(loadKB)
+  const [kb, setKb] = useState<KnowledgeBase>(() => loadKB('__global__'))
   const [kbOpen, setKbOpen] = useState(false)
   const [kbSection, setKbSection] = useState<keyof KnowledgeBase | null>(null)
   const projectContext = useMemo(() => buildKBString(kb), [kb])
@@ -203,6 +204,7 @@ export default function SquadPage() {
   const stopRequestedRef = useRef(false)
   const autoIterRef = useRef(0)
   const activeAgentRef = useRef<AgentName>('jarvis')
+  const rootAgentRef = useRef<AgentName>('jarvis')
 
   const setAndRefBubbles = useCallback((updater: (prev: ChatBubble[]) => ChatBubble[]) => {
     setBubbles(prev => {
@@ -244,6 +246,8 @@ export default function SquadPage() {
 
   useEffect(() => { autonomousModeRef.current = autonomousMode }, [autonomousMode])
   useEffect(() => { activeAgentRef.current = activeAgent }, [activeAgent])
+  // Reload KB when project (localPath) changes
+  useEffect(() => { setKb(loadKB(localPath || '__global__')) }, [localPath])
 
   function startDrag(side: 'left' | 'right', e: React.MouseEvent) {
     dragState.current = { side, startX: e.clientX, startW: side === 'left' ? leftWidth : rightWidth }
@@ -461,6 +465,7 @@ export default function SquadPage() {
       sessionId: sid, agentName: 'user', role: 'user', content: text, delegatedBy: null,
     }).catch(console.error)
 
+    rootAgentRef.current = targetAgent
     await streamAgent(targetAgent, message, sid, undefined, 0)
 
     if (autonomousModeRef.current) {
@@ -539,15 +544,33 @@ export default function SquadPage() {
     autoIterRef.current = 0
     try {
       while (!stopRequestedRef.current && autoIterRef.current < MAX_AUTO_ITER) {
-        const lastBubble = [...bubblesRef.current].reverse().find(b => b.type === 'agent' && !b.isStreaming)
+        const agentBubbles = bubblesRef.current.filter(b => b.type === 'agent' && !b.isStreaming)
+        const lastBubble = agentBubbles.at(-1)
         if (!lastBubble) break
 
+        // Stop if ANY agent concluded
         if (/\[PRONTO\]|\[DONE\]|\[CONCLUÍDO\]/i.test(lastBubble.content)) {
           setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '✅ Tarefa concluída pelo agente' }])
           break
         }
 
-        if (!lastBubble.actions || lastBubble.actions.length === 0) break
+        const hasActions = (lastBubble.actions?.length ?? 0) > 0
+        const isRootBubble = lastBubble.agentName === rootAgentRef.current
+
+        if (!hasActions) {
+          // Delegated agent finished without actions — ask root to synthesize
+          if (isRootBubble) break
+          autoIterRef.current++
+          setAutoIteration(autoIterRef.current)
+          setAndRefBubbles(prev => [...prev, {
+            id: crypto.randomUUID(), type: 'system',
+            content: `⚙️ Iteração ${autoIterRef.current} — síntese com ${AGENT_META[rootAgentRef.current].label}…`,
+          }])
+          await streamAgent(rootAgentRef.current,
+            'Os agentes delegados concluíram suas sub-tarefas. Analise o que foi feito e determine o próximo passo concreto. Se a tarefa principal estiver 100% completa, inclua [PRONTO].',
+            sid, undefined, 0)
+          continue
+        }
 
         autoIterRef.current++
         setAutoIteration(autoIterRef.current)
@@ -565,7 +588,8 @@ export default function SquadPage() {
         }
         lines.push('\nAnalise os resultados e continue trabalhando. Se concluiu tudo, inclua [PRONTO] na resposta.')
 
-        await streamAgent(activeAgentRef.current, lines.join('\n'), sid, undefined, 0)
+        // Always return results to the ROOT agent (orchestrator)
+        await streamAgent(rootAgentRef.current, lines.join('\n'), sid, undefined, 0)
       }
       if (!stopRequestedRef.current && autoIterRef.current >= MAX_AUTO_ITER) {
         setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: `⚠️ Limite de ${MAX_AUTO_ITER} iterações atingido` }])
@@ -946,6 +970,11 @@ export default function SquadPage() {
             <div className="flex items-center gap-1.5">
               <BookOpen size={12} className="text-violet-400 shrink-0" />
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Base de Conhecimento</span>
+              {localPath ? (
+                <span className="text-[9px] text-violet-400/70 bg-violet-400/10 border border-violet-400/20 rounded px-1.5 py-0.5 truncate max-w-[80px]" title={localPath}>
+                  {localPath.split(/[\\/]/).at(-1)}
+                </span>
+              ) : null}
               {projectContext && (
                 <span className="text-[9px] text-green-400 bg-green-400/10 border border-green-400/20 rounded px-1.5 py-0.5 font-medium">ativo</span>
               )}
@@ -962,12 +991,12 @@ export default function SquadPage() {
                 {Object.entries(KB_TEMPLATES).map(([name, tmpl]) => (
                   <button
                     key={name}
-                    onClick={() => { const nk = { ...kb, ...tmpl }; setKb(nk); saveKB(nk) }}
+                    onClick={() => { const nk = { ...kb, ...tmpl }; setKb(nk); saveKB(localPath || '__global__', nk) }}
                     className="text-[10px] px-2 py-0.5 rounded border border-slate-700 text-slate-400 hover:border-violet-600/60 hover:text-violet-300 transition-colors"
                   >{name}</button>
                 ))}
                 <button
-                  onClick={() => { setKb(KB_DEFAULT); saveKB(KB_DEFAULT) }}
+                  onClick={() => { setKb(KB_DEFAULT); saveKB(localPath || '__global__', KB_DEFAULT) }}
                   className="text-[10px] px-2 py-0.5 rounded border border-red-900/40 text-red-500/60 hover:border-red-500/50 hover:text-red-400 transition-colors ml-auto"
                 >Limpar</button>
               </div>
@@ -993,7 +1022,7 @@ export default function SquadPage() {
                     {open && (
                       <textarea
                         value={val}
-                        onChange={e => { const nk = { ...kb, [key]: e.target.value }; setKb(nk); saveKB(nk) }}
+                        onChange={e => { const nk = { ...kb, [key]: e.target.value }; setKb(nk); saveKB(localPath || '__global__', nk) }}
                         placeholder={placeholder}
                         rows={4}
                         className="w-full bg-slate-900/80 border-t border-slate-800 px-2.5 py-2 text-xs text-slate-200 placeholder-slate-700 resize-none focus:outline-none focus:bg-slate-900 transition-colors leading-relaxed"
