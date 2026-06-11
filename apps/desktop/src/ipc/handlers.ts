@@ -1,6 +1,6 @@
 import { getPrismaClient } from '@cwm/db'
 import type { IpcMain } from 'electron'
-import { BrowserWindow, dialog, clipboard, nativeImage, Notification } from 'electron'
+import { BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -30,6 +30,30 @@ function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
   return fn().catch((err: unknown) => ({
     error: err instanceof Error ? err.message : String(err),
   }))
+}
+
+async function fetchClaudeUsage(accessToken: string, _orgId: string): Promise<Record<string, unknown> | null> {
+  const https = await import('node:https')
+  return new Promise(resolve => {
+    const req = https.default.get({
+      hostname: 'claude.ai',
+      path: '/api/bootstrap',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        'User-Agent': 'NEX-ALS-IDE/1.0',
+      },
+      timeout: 6000,
+    }, res => {
+      let buf = ''
+      res.on('data', (c: Buffer) => { buf += c.toString() })
+      res.on('end', () => {
+        try { resolve(JSON.parse(buf)) } catch { resolve(null) }
+      })
+    })
+    req.on('error', () => resolve(null))
+    req.on('timeout', () => { req.destroy(); resolve(null) })
+  })
 }
 
 export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMonitor?: NotificationMonitor): void {
@@ -608,34 +632,49 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { spawn } = require('child_process') as typeof import('child_process')
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const osAi = require('os') as typeof import('os')
         const { spawnEnv } = await getActiveClaudeEnv()
-        const proc = spawn('claude', ['-p', prompt, '--output-format', 'text', '--no-color'], {
+        // cwd = home para evitar sandbox do Claude CLI bloquear acesso
+        const proc = spawn('claude', ['-p', '--output-format', 'text'], {
           shell: true,
           env: spawnEnv,
+          cwd: osAi.homedir(),
         })
+        proc.stdin?.write(prompt, 'utf-8')
+        proc.stdin?.end()
         claudeProcs.set(streamId, proc)
 
         let doneSent = false
+        let hasStdout = false
+        let stderrBuf = ''
+        const sendErr = (msg: string) => {
+          if (doneSent) return; doneSent = true
+          claudeProcs.delete(streamId)
+          try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'error', error: msg }) } catch { /* janela fechada */ }
+        }
         const sendDone = () => {
           if (doneSent) return; doneSent = true
           claudeProcs.delete(streamId)
           try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'done' }) } catch { /* janela fechada */ }
         }
         proc.stdout?.on('data', (chunk: Buffer) => {
+          hasStdout = true
           try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'text_delta', delta: chunk.toString() }) } catch { /* janela fechada */ }
         })
-        proc.stderr?.on('data', (chunk: Buffer) => {
-          const txt = chunk.toString()
-          if (/not logged in|authentication|unauthorized/i.test(txt)) {
-            try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'error', error: 'Não autenticado. Execute "claude" no terminal e faça login.' }) } catch { /* janela fechada */ }
-            proc.kill()
+        proc.stderr?.on('data', (chunk: Buffer) => { stderrBuf += chunk.toString() })
+        proc.on('close', (code: number) => {
+          if (code !== 0 && !hasStdout) {
+            const isAuth = /not logged in|session expired|please log in|unauthorized/i.test(stderrBuf)
+            sendErr(isAuth
+              ? 'Não autenticado. Execute "claude" no terminal e faça login.'
+              : `claude CLI encerrou com erro (código ${code})${stderrBuf ? ': ' + stderrBuf.slice(0, 200) : ''}`
+            )
+          } else {
+            sendDone()
           }
         })
-        proc.on('close', sendDone)
-        proc.on('error', (err: Error) => {
-          try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'error', error: `claude CLI não encontrado: ${err.message}` }) } catch { /* janela fechada */ }
-          sendDone()
-        })
+        proc.on('error', (err: Error) => sendErr(`claude CLI não encontrado: ${err.message}`))
 
         return { streamId }
       }
@@ -909,30 +948,48 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         const prompt = parts.join('\n') + `\nHuman: ${data.message}`
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { spawn } = require('child_process') as typeof import('child_process')
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const osM = require('os') as typeof import('os')
         const { spawnEnv } = await getActiveClaudeEnv()
-        const proc = spawn('claude', ['-p', prompt, '--output-format', 'text', '--no-color'], { shell: true, env: spawnEnv })
+        // cwd = pasta do projeto (modo local) ou home — sandbox do Claude CLI permite acesso ao cwd
+        // --add-dir garante acesso mesmo quando claude já foi iniciado em outro diretório
+        const spawnCwd = data.localPath || osM.homedir()
+        const args = ['-p', '--output-format', 'text']
+        if (data.localPath) args.push('--add-dir', data.localPath)
+        const proc = spawn('claude', args, { shell: true, env: spawnEnv, cwd: spawnCwd })
+        proc.stdin?.write(prompt, 'utf-8')
+        proc.stdin?.end()
         claudeProcs.set(streamId, proc)
         let doneSent = false
+        let hasStdout = false
+        let stderrBuf = ''
+        const sendErr = (msg: string) => {
+          if (doneSent) return; doneSent = true
+          claudeProcs.delete(streamId)
+          try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'error', error: msg }) } catch { /* janela fechada */ }
+        }
         const sendDone = () => {
           if (doneSent) return; doneSent = true
           claudeProcs.delete(streamId)
           try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'done' }) } catch { /* janela fechada */ }
         }
         proc.stdout?.on('data', (chunk: Buffer) => {
+          hasStdout = true
           try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'text_delta', delta: chunk.toString() }) } catch { /* janela fechada */ }
         })
-        proc.stderr?.on('data', (chunk: Buffer) => {
-          const txt = chunk.toString()
-          if (/not logged in|authentication|unauthorized/i.test(txt)) {
-            try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'error', error: 'Não autenticado. Execute "claude" no terminal e faça login.' }) } catch { /* janela fechada */ }
-            proc.kill()
+        proc.stderr?.on('data', (chunk: Buffer) => { stderrBuf += chunk.toString() })
+        proc.on('close', (code: number) => {
+          if (code !== 0 && !hasStdout) {
+            const isAuth = /not logged in|session expired|please log in|unauthorized/i.test(stderrBuf)
+            sendErr(isAuth
+              ? 'Não autenticado. Execute "claude" no terminal e faça login.'
+              : `claude CLI encerrou com erro (código ${code})${stderrBuf ? ': ' + stderrBuf.slice(0, 200) : ''}`
+            )
+          } else {
+            sendDone()
           }
         })
-        proc.on('close', sendDone)
-        proc.on('error', (err: Error) => {
-          try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'error', error: `claude CLI não encontrado: ${err.message}` }) } catch { /* janela fechada */ }
-          sendDone()
-        })
+        proc.on('error', (err: Error) => sendErr(`claude CLI não encontrado: ${err.message}`))
         return { streamId }
       }
 
@@ -1198,6 +1255,49 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       return authSvc.changePassword(id, newPassword)
     })
   )
+
+  // ── shell:openExternal ───────────────────────────────────────────────────────
+  ipcMain.handle('shell:openExternal', async (_, url: string) => {
+    if (typeof url !== 'string') return { error: 'URL inválida' }
+    const allowed = ['https://claude.ai/', 'https://www.anthropic.com/']
+    if (!allowed.some(p => url.startsWith(p))) return { error: 'URL não permitida' }
+    await shell.openExternal(url)
+    return { success: true }
+  })
+
+  // ── claude:usage — lê credenciais + tenta buscar uso via API claude.ai ───────
+  ipcMain.handle('claude:usage', async () => {
+    try {
+      const rows = await db.$queryRawUnsafe(
+        `SELECT configDir FROM claude_code_accounts WHERE isActive=1 LIMIT 1`
+      ) as Array<{ configDir: string }>
+      if (!rows.length) return { error: 'Nenhuma conta Claude ativa' }
+      const { configDir } = rows[0]
+
+      let cred: Record<string, unknown> | null = null
+      for (const p of [path.join(configDir, '.credentials.json'), path.join(configDir, 'credentials.json')]) {
+        try { cred = JSON.parse(await fs.readFile(p, 'utf-8')); break } catch { /* próximo */ }
+      }
+      if (!cred) return { error: 'Credenciais não encontradas. Execute "claude" no terminal para fazer login.' }
+
+      const acct = (cred.claudeAiOauthAccount as Record<string, unknown>) ?? {}
+      const tok = cred.claudeAiOauthToken
+      const accessToken = typeof tok === 'string' ? tok
+        : ((tok as Record<string, unknown>)?.accessToken as string ?? '')
+      const email   = (acct.emailAddress  as string) ?? ''
+      const plan    = (acct.planType      as string) ?? ''
+      const orgId   = (acct.organizationId as string) ?? ''
+
+      let usageData: Record<string, unknown> | null = null
+      if (accessToken) {
+        usageData = await fetchClaudeUsage(accessToken, orgId).catch(() => null)
+      }
+
+      return { email, plan, orgId, usageData }
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
+    }
+  })
 
   // ── Notificações de sistema ──────────────────────────────────────────────────
   ipcMain.handle('notifications:getEnabled', () => ({ enabled: notificationsEnabled }))

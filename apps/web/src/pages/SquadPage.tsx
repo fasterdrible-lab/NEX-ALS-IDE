@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronUp, FileText, Monitor } from 'lucide-react'
+import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 
 // ── Agent metadata (UI only) ─────────────────────────────────────────────────
@@ -47,7 +47,7 @@ interface SessionItem {
 interface StreamHandler {
   bubbleId: string
   onDone: () => void
-  onError: () => void
+  onError: (msg?: string) => void
 }
 
 // ── ACTION tags ──────────────────────────────────────────────────────────────
@@ -118,10 +118,21 @@ export default function SquadPage() {
   const [executionMode, setExecutionMode] = useState<'vps' | 'local'>('vps')
   const [localPath, setLocalPath] = useState('')
 
+  const [leftWidth, setLeftWidth] = useState(208)
+  const [rightWidth, setRightWidth] = useState(240)
+  const [autoScroll, setAutoScroll] = useState(true)
+  const [showUsage, setShowUsage] = useState(false)
+  const [usageInfo, setUsageInfo] = useState<{
+    email?: string; plan?: string; usageData?: Record<string, unknown> | null; error?: string
+  } | null>(null)
+  const [usageLoading, setUsageLoading] = useState(false)
+
   const endRef = useRef<HTMLDivElement>(null)
+  const chatScrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const bubblesRef = useRef<ChatBubble[]>([])
   const streamHandlers = useRef<Map<string, StreamHandler>>(new Map())
+  const dragState = useRef<{ side: 'left' | 'right'; startX: number; startW: number } | null>(null)
 
   const setAndRefBubbles = useCallback((updater: (prev: ChatBubble[]) => ChatBubble[]) => {
     setBubbles(prev => {
@@ -143,8 +154,61 @@ export default function SquadPage() {
 
   // Auto-scroll
   useEffect(() => {
+    if (autoScroll) endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [bubbles, autoScroll])
+
+  // Resizable panels — global mouse listeners
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const d = dragState.current
+      if (!d) return
+      const delta = e.clientX - d.startX
+      if (d.side === 'left') setLeftWidth(Math.max(160, Math.min(320, d.startW + delta)))
+      else setRightWidth(Math.max(160, Math.min(360, d.startW - delta)))
+    }
+    const onUp = () => { dragState.current = null; document.body.style.cursor = '' }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [])
+
+  function startDrag(side: 'left' | 'right', e: React.MouseEvent) {
+    dragState.current = { side, startX: e.clientX, startW: side === 'left' ? leftWidth : rightWidth }
+    document.body.style.cursor = 'col-resize'
+    e.preventDefault()
+  }
+
+  function handleChatScroll() {
+    const el = chatScrollRef.current
+    if (!el) return
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    setAutoScroll(atBottom)
+  }
+
+  function scrollToBottom() {
+    setAutoScroll(true)
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [bubbles])
+  }
+
+  function clearChat() {
+    if (isStreaming) return
+    setBubbles([])
+    bubblesRef.current = []
+    setSessionId(null)
+  }
+
+  async function fetchUsage() {
+    setUsageLoading(true)
+    setUsageInfo(null)
+    try {
+      const data = await ipc.claude.usage()
+      setUsageInfo(data)
+    } catch (err) {
+      setUsageInfo({ error: String(err) })
+    } finally {
+      setUsageLoading(false)
+    }
+  }
 
   // Single global stream chunk listener
   useEffect(() => {
@@ -165,7 +229,7 @@ export default function SquadPage() {
 
       if (chunk.type === 'error') {
         streamHandlers.current.delete(chunk.streamId)
-        handler.onError()
+        handler.onError(chunk.error)
       }
     })
     return unsub
@@ -266,12 +330,12 @@ export default function SquadPage() {
               resolve()
             }
           },
-          onError: () => {
+          onError: (msg?: string) => {
             setIsStreaming(false)
             setActiveStreamId(null)
             setAndRefBubbles(prev =>
               prev.map(b => b.id === bubbleId
-                ? { ...b, isStreaming: false, content: b.content || '❌ Erro ao processar resposta' }
+                ? { ...b, isStreaming: false, content: b.content || `❌ ${msg || 'Erro ao processar resposta'}` }
                 : b
               )
             )
@@ -396,13 +460,29 @@ export default function SquadPage() {
     })
   }
 
+  async function deleteSession(id: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (isStreaming) return
+    try {
+      await ipc.squad.session.delete(id)
+      setSessions(prev => prev.filter(s => s.id !== id))
+      if (sessionId === id) {
+        setBubbles([])
+        bubblesRef.current = []
+        setSessionId(null)
+      }
+    } catch (err) {
+      console.error('deleteSession failed:', err)
+    }
+  }
+
   const meta = AGENT_META[activeAgent]
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden">
 
       {/* ── Left panel — Agents ──────────────────────────────────────────────── */}
-      <aside className="w-52 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
+      <aside className="bg-slate-900 border-r border-slate-800 flex flex-col shrink-0" style={{ width: leftWidth }}>
         <div className="flex items-center gap-2 px-4 py-[15px] border-b border-slate-800">
           <button
             onClick={() => navigate('/')}
@@ -447,6 +527,12 @@ export default function SquadPage() {
         </div>
       </aside>
 
+      {/* Drag handle — left */}
+      <div
+        onMouseDown={e => startDrag('left', e)}
+        className="w-1 shrink-0 cursor-col-resize bg-slate-800 hover:bg-brand-600/60 transition-colors select-none"
+      />
+
       {/* ── Center panel — Chat ──────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
 
@@ -465,17 +551,27 @@ export default function SquadPage() {
               </span>
             )}
           </div>
-          <button
-            onClick={newSession}
-            disabled={isStreaming}
-            className="text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40 px-2 py-1 rounded hover:bg-slate-800 transition-colors"
-          >
-            + Nova sessão
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={clearChat}
+              disabled={isStreaming || bubbles.length === 0}
+              title="Limpar conversa"
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40 px-2 py-1 rounded hover:bg-slate-800 transition-colors"
+            >
+              <Eraser size={11} /> Limpar
+            </button>
+            <button
+              onClick={newSession}
+              disabled={isStreaming}
+              className="text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40 px-2 py-1 rounded hover:bg-slate-800 transition-colors"
+            >
+              + Nova sessão
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div ref={chatScrollRef} onScroll={handleChatScroll} className="flex-1 overflow-y-auto p-6 space-y-4 relative">
           {bubbles.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3 select-none">
               <Bot size={40} className="text-slate-800" />
@@ -605,6 +701,17 @@ export default function SquadPage() {
             )
           })}
           <div ref={endRef} />
+          {/* Botão Acompanhar — aparece quando o usuário rola para cima */}
+          {!autoScroll && (
+            <div className="sticky bottom-2 flex justify-center pointer-events-none">
+              <button
+                onClick={scrollToBottom}
+                className="pointer-events-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-slate-800/90 border border-slate-600 text-slate-300 hover:bg-slate-700 shadow-lg transition-colors backdrop-blur-sm"
+              >
+                <ArrowDown size={11} /> Acompanhar
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Input */}
@@ -647,8 +754,14 @@ export default function SquadPage() {
         </div>
       </div>
 
+      {/* Drag handle — right */}
+      <div
+        onMouseDown={e => startDrag('right', e)}
+        className="w-1 shrink-0 cursor-col-resize bg-slate-800 hover:bg-brand-600/60 transition-colors select-none"
+      />
+
       {/* ── Right panel ─────────────────────────────────────────────────────── */}
-      <aside className="w-60 bg-slate-900 border-l border-slate-800 flex flex-col shrink-0">
+      <aside className="bg-slate-900 border-l border-slate-800 flex flex-col shrink-0" style={{ width: rightWidth }}>
 
         {/* Project context — collapsible */}
         <div className="border-b border-slate-800">
@@ -790,8 +903,16 @@ export default function SquadPage() {
           </div>
         )}
 
-        <div className="px-4 py-2 border-b border-slate-800">
+        <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between">
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Histórico</h3>
+          <button
+            onClick={() => { setShowUsage(true); void fetchUsage() }}
+            title="Ver conta e uso Claude"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] bg-blue-900/30 border border-blue-700/40 text-blue-400 hover:bg-blue-900/50 transition-colors"
+          >
+            <User2 size={11} />
+            Uso
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sessions.length === 0 && (
@@ -800,27 +921,110 @@ export default function SquadPage() {
           {sessions.map(s => {
             const sm = AGENT_META[s.agentName as AgentName] ?? AGENT_META.jarvis
             return (
-              <button
+              <div
                 key={s.id}
-                onClick={() => void loadSession(s)}
-                disabled={isStreaming}
-                className={`w-full text-left px-4 py-3 hover:bg-slate-800 transition-colors border-b border-slate-800/50 disabled:opacity-50 ${
+                className={`group relative border-b border-slate-800/50 ${
                   s.id === sessionId ? 'bg-slate-800/60' : ''
                 }`}
               >
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-sm leading-none">{sm.emoji}</span>
-                  <span className={`text-[11px] font-semibold ${sm.colorClass}`}>{sm.label}</span>
-                </div>
-                <p className="text-xs text-slate-400 truncate">{s.title}</p>
-                <p className="text-[10px] text-slate-600 mt-0.5">
-                  {new Date(s.createdAt).toLocaleDateString('pt-BR')}
-                </p>
-              </button>
+                <button
+                  onClick={() => void loadSession(s)}
+                  disabled={isStreaming}
+                  className="w-full text-left px-4 py-3 pr-8 hover:bg-slate-800 transition-colors disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-sm leading-none">{sm.emoji}</span>
+                    <span className={`text-[11px] font-semibold ${sm.colorClass}`}>{sm.label}</span>
+                  </div>
+                  <p className="text-xs text-slate-400 truncate">{s.title}</p>
+                  <p className="text-[10px] text-slate-600 mt-0.5">
+                    {new Date(s.createdAt).toLocaleDateString('pt-BR')}
+                  </p>
+                </button>
+                <button
+                  onClick={e => void deleteSession(s.id, e)}
+                  disabled={isStreaming}
+                  title="Excluir conversa"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition-all disabled:pointer-events-none"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             )
           })}
         </div>
       </aside>
+
+      {/* ── Modal: Conta & Uso Claude ─────────────────────────────────── */}
+      {showUsage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowUsage(false)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-80 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <User2 size={14} className="text-blue-400" />
+                Conta Claude
+              </h2>
+              <button
+                onClick={() => setShowUsage(false)}
+                className="text-slate-600 hover:text-slate-300 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {usageLoading && (
+              <div className="flex items-center gap-2 text-slate-500 text-sm py-6 justify-center">
+                <Loader2 size={15} className="animate-spin" />
+                Carregando…
+              </div>
+            )}
+
+            {!usageLoading && usageInfo && (
+              <div className="space-y-3">
+                {usageInfo.error ? (
+                  <p className="text-xs text-red-400 leading-relaxed">{usageInfo.error}</p>
+                ) : (
+                  <>
+                    <div className="bg-slate-800/60 rounded-xl px-4 py-3">
+                      <p className="text-sm text-slate-100 font-medium">{usageInfo.email || '—'}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 capitalize">
+                        {(usageInfo.plan || 'plan').replace(/_/g, ' ')}
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Para ver uso detalhado da sessão (5h) e semanal, abra o painel da conta no site.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => void fetchUsage()}
+                disabled={usageLoading}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={10} className={usageLoading ? 'animate-spin' : ''} />
+                Atualizar
+              </button>
+              <button
+                onClick={() => void ipc.shell.openExternal('https://claude.ai/settings')}
+                className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-900/30 border border-blue-700/40 text-blue-300 hover:bg-blue-900/50 transition-colors"
+              >
+                <ExternalLink size={10} />
+                Abrir claude.ai
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,5 +1,68 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.15.7] — 2026-06-11
+
+### Adicionado — Squad: botão "Conta Claude" com modal de uso
+
+- Novo botão 👤 no cabeçalho do painel "Histórico" (lado direito do Squad)
+- Abre modal **Conta Claude** com:
+  - Email e plano lidos do `.credentials.json` da conta ativa
+  - Botão "Atualizar" para recarregar os dados
+  - Botão "Abrir claude.ai" que abre `claude.ai/settings` no navegador padrão (via `shell.openExternal`)
+- Handler IPC `claude:usage` no main process: lê conta ativa do banco → lê credentials → tenta buscar dados adicionais via `claude.ai/api/bootstrap` com o token OAuth
+- Handler IPC `shell:openExternal` com allowlist de domínios permitidos (`claude.ai`, `anthropic.com`)
+- Versão: `3.15.6` → `3.15.7`
+
+---
+
+## [3.15.2] — 2026-06-11
+
+### Corrigido — Squad/AI HUB: "Erro ao processar resposta" com Claude Code
+
+- **Causa raiz**: a regex `/authentication/i` no handler de stderr do claude CLI correspondia a mensagens de progresso legítimas (ex: "Initializing authentication context…"), fazendo o processo ser morto antes de produzir qualquer resposta
+- **Fix em `ai:stream:start` e `squad:stream:start`** — stderr é agora acumulado em buffer; o erro só é enviado ao renderer **após** o processo fechar com código != 0 **e sem nenhum output em stdout
+- Se houve stdout (resposta parcial), envia `done` normalmente
+- Mensagem de erro exibe o conteúdo real do stderr (até 200 chars) para facilitar diagnóstico
+- Regex de auth refinada: `/not logged in|session expired|please log in|unauthorized/i` (sem `authentication` isolado)
+
+### Adicionado — Squad: botão excluir conversa
+
+- Botão 🗑 aparece ao passar o mouse sobre qualquer sessão no painel "Histórico" (lado direito)
+- Clique exclui a sessão do banco e remove da lista; se era a sessão ativa, limpa o chat
+- Não interfere com o clique principal (carregar sessão) graças a `stopPropagation`
+- Desabilitado durante streaming para evitar conflitos
+
+---
+
+## [3.15.1] — 2026-06-11
+
+### Adicionado — Testes E2E Playwright para página Squad
+
+- Novo arquivo `e2e/tests/05-squad.spec.ts` com **14 testes** cobrindo a SquadPage fullscreen
+- **Navegação** — botão SQUAD na sidebar navega para a página Squad (sem Layout)
+- **Painel de agentes** — verifica presença dos 8 agentes (Jarvis, Friday, Fury, Shuri, Pepper, Vision, Requis, Tester)
+- **Agente ativo** — header mostra Jarvis por padrão; troca de agente atualiza o `h2` do header
+- **Chat vazio** — mensagem placeholder "Selecione um agente e envie sua mensagem" visível
+- **Input e botão enviar** — textarea visível com placeholder correto; botão Send desabilitado quando vazio e habilitado ao digitar
+- **Nova sessão** — botão visível e funcional; reinicia o chat
+- **Toggle Execução** — botões VPS e Local visíveis; modo Local exibe campo de pasta
+- **Contexto do Projeto** — painel collapsível; textarea aparece ao abrir; indicador verde "Contexto ativo" ao preencher
+- **Histórico** — mensagem "Nenhuma sessão ainda." em DB limpo
+- **Botão Voltar** — navega de volta ao Dashboard (Layout com `<main>`)
+
+---
+
+## [3.15.0] — 2026-06-10
+
+### Corrigido — Claude Code: continuidade de conversa restaurada
+
+- **`ai:stream:start` e `squad:stream:start`** — prompt com histórico da conversa agora é passado via **stdin** ao processo `claude -p` em vez de argumento CLI
+- Antes: `spawn('claude', ['-p', prompt, ...], { shell: true })` — qualquer caractere especial no histórico (aspas, backticks, barras, newlines de blocos de código) era corrompido pelo shell do Windows, fazendo o Claude receber um prompt mutilado e responder sem contexto
+- Após o fix: `spawn('claude', ['-p', ...], { shell: false })` + `proc.stdin.write(prompt)` — o conteúdo chega intacto independente de qualquer caractere especial
+- DeepSeek e outros providers via API não eram afetados (histórico trafegava em JSON HTTP)
+
+---
+
 ## [3.14.0] — 2026-06-10
 
 ### Adicionado — Squad: Contexto de Projeto + Execução Local

@@ -1,19 +1,19 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
-**Data:** 2026-06-10
-**Versão:** 3.14.0
+**Data:** 2026-06-11
+**Versão:** 3.15.7
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**NEX-ALS IDE 3.14.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, Contexto de Projeto, Pipeline homolog→prod, Execução Local), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.15.7** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, Contexto de Projeto, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
 - **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat IA (API direta ou claude -p); badge vermelho "Produção" na top bar.
 - **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
 
-## Squad (v3.10.0 + v3.11.0)
+## Squad (v3.10.0 → v3.15.7)
 
 - [x] **Squad** — página fullscreen com 8 agentes: Jarvis (PM/Claude), Friday (Dev/GPT), Fury (Pesquisa/Gemini), Shuri (UX/Claude), Pepper (Marketing/GPT), Vision (Growth/Gemini), Requis (Docs/Claude), Tester (QA/GPT)
 - [x] **Chat por agente** — streaming em tempo real; menção direta `@agente` no input redireciona para o agente mencionado
@@ -25,6 +25,12 @@
 - [x] **Pipeline homolog → prod** — toggle no painel direito (modo VPS apenas); gate âmbar pós-execução com Aprovar/Rejeitar; Aprovar executa na VPS Prod selecionada; estados visuais (âmbar/azul/verde/vermelho/cinza)
 - [x] **Claude Code como provedor** — `ai:stream:start` roteia para subprocess `claude` CLI quando provider = `claude-code`; PATH enriquecido com npm global bin; zero API Key / zero cobrança por token; `claude:check` detecta versão e status; `ClaudeCodeCard` em Configurações
 - [x] **Múltiplas contas Claude Code** — tabela `claude_code_accounts` (SQLite); N contas isoladas via `CLAUDE_CONFIG_DIR`; alternância com um clique; conta já autenticada (`~/.claude`) ou nova com dir gerado automaticamente; verificação real via `.credentials.json`; comando PowerShell com botão copiar (v3.12.0–v3.13.0)
+- [x] **Correções de estabilidade Squad** (v3.15.2–v3.15.4) — stderr acumulado em buffer (sem falso-positivo de autenticação); `shell: true` para execução de `.cmd` no Windows; removido `--no-color` (não suportado em claude 2.1.170); `cwd: localPath || homedir()` + flag `--add-dir` para sandbox de segurança do CLI
+- [x] **Painéis redimensionáveis** (v3.15.5) — drag handles entre painéis esquerdo/centro/direito; `leftWidth` e `rightWidth` via `useRef` + `mousemove`/`mouseup` globais; min/max por painel
+- [x] **Botão Limpar chat** (v3.15.5) — limpa bubbles + sessionId; desabilitado durante streaming
+- [x] **Botão Acompanhar** (v3.15.5) — auto-scroll com `onScroll` handler; botão sticky aparece quando usuário rola para cima
+- [x] **Botão excluir conversa** (v3.15.2) — ícone 🗑 no hover de cada sessão no histórico; `stopPropagation` para não disparar load
+- [x] **Conta Claude — modal de uso** (v3.15.7) — botão "Uso" azul no header Histórico; modal lê email+plano de `.credentials.json` da conta ativa; botão "Abrir claude.ai" via `shell:openExternal`; IPC `claude:usage` + `shell:openExternal` com allowlist de domínios
 
 ## Funcionalidades do app base — todas concluídas
 
@@ -40,7 +46,7 @@
 - [x] **SSH passphrase** — `sshPassword` vira passphrase quando há chave privada; Windows SSH agent via named pipe
 - [x] **Auto-update** — `electron-updater`; verifica GitHub Releases em produção
 - [x] **Packaging** — `pnpm package:win` → NSIS installer + portable .exe
-- [x] **Testes** — Vitest: 18 testes unitários (`@cwm/config` + `@cwm/core`) + Playwright E2E: 29 testes (launch, navigation, VPS CRUD, settings)
+- [x] **Testes** — Vitest: 18 testes unitários (`@cwm/config` + `@cwm/core`) + Playwright E2E: **43 testes** (launch, navigation, VPS CRUD, settings, Squad)
 
 ## Funcionalidades do NEX-ALS IDE — todas concluídas
 
@@ -138,5 +144,4 @@
 
 ## Próximos passos
 
-- Testes E2E Playwright para página Squad
 - Suporte a WebSocket LSP para mais linguagens (Python, Rust, Go)

@@ -4,6 +4,22 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.15.2 → v3.15.7)
+
+- [x] **Squad: "Erro ao processar resposta" com Claude Code** — stderr acumulado em buffer; erro enviado apenas ao fechar com código ≠ 0 e sem stdout; regex de auth refinada; UI passa `chunk.error` real ao invés de mensagem genérica — v3.15.2 · 2026-06-11
+- [x] **Squad: botão excluir conversa** — ícone 🗑 no hover de cada sessão; `stopPropagation`; remove do banco e da lista; se sessão ativa, limpa o chat — v3.15.2 · 2026-06-11
+- [x] **Fix `shell: true`** — `.cmd` npm binaries no Windows precisam de shell para receber stdin; Claude CLI spawned com `shell: true` — v3.15.3 · 2026-06-11
+- [x] **Fix `--no-color`** — flag não suportada em claude 2.1.170; removida de ambos os spawn paths (`squad:stream:start` e `ai:stream:start`) — v3.15.3 · 2026-06-11
+- [x] **Fix Claude CLI security sandbox** — `cwd` era o diretório do Electron (sem acesso ao projeto); corrigido para `cwd: data.localPath || homedir()` + flag `--add-dir data.localPath` — v3.15.4 · 2026-06-11
+- [x] **Squad: painéis redimensionáveis** — drag handles entre os 3 painéis; `dragState` via `useRef`; listeners `mousemove`/`mouseup` globais no `window`; min/max por lado — v3.15.5 · 2026-06-11
+- [x] **Squad: botão Limpar** — limpa bubbles + bubblesRef + sessionId; ícone Eraser; desabilitado sem conteúdo ou durante streaming — v3.15.5 · 2026-06-11
+- [x] **Squad: botão Acompanhar** — `autoScroll` state; `handleChatScroll` detecta distância ao fundo < 80px; botão sticky `ArrowDown` aparece quando usuário rola para cima — v3.15.5 · 2026-06-11
+- [x] **Squad: modal Conta Claude** — botão "Uso" (azul, com ícone `User2`) no header Histórico; modal mostra email + plano lidos de `.credentials.json` da conta ativa; botão "Abrir claude.ai" via `shell:openExternal`; IPC handlers `claude:usage` e `shell:openExternal` com allowlist de domínios — v3.15.7 · 2026-06-11
+
+## Concluídas recentemente (v3.15.1)
+
+- [x] **Testes E2E Playwright para página Squad** — `e2e/tests/05-squad.spec.ts` com 14 testes cobrindo: navegação, 8 agentes no painel, header do agente ativo, troca de agente, mensagem vazia do chat, textarea de input, botão enviar (disabled/enabled), Nova sessão, toggle VPS/Local, pasta local, toggle Contexto do Projeto, indicador de contexto ativo, histórico vazio, botão Voltar — 2026-06-11
+
 ## Concluídas recentemente (v3.13.0)
 
 - [x] **Squad: fallback para provider padrão quando sem API Key** — `squad:stream:start` verifica API Key do provider preferido do agente; cai no padrão (claude-code) se não tiver — 2026-06-10

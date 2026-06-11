@@ -315,8 +315,16 @@ export const ipc = {
         invoke<{ output: string }>('squad:action:execute', data),
     },
   },
+  shell: {
+    openExternal: (url: string) => invoke<{ success: boolean; error?: string }>('shell:openExternal', url),
+  },
   claude: {
     check: () => invoke<{ installed: boolean; version: string }>('claude:check'),
+    usage: () => invoke<{
+      email?: string; plan?: string; orgId?: string
+      usageData?: Record<string, unknown> | null
+      error?: string
+    }>('claude:usage'),
     accounts: {
       list:      () => invoke<Array<{ id: string; name: string; configDir: string; isActive: number; createdAt: string }>>('claude:accounts:list'),
       add:       (name: string, useDefault?: boolean) => invoke<{ id: string; name: string; configDir: string; isActive: number }>('claude:accounts:add', { name, useDefault }),
