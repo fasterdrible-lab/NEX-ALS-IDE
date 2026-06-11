@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw, BookOpen, Sparkles } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 
 // ── Agent metadata (UI only) ─────────────────────────────────────────────────
@@ -48,6 +48,64 @@ interface StreamHandler {
   bubbleId: string
   onDone: () => void
   onError: (msg?: string) => void
+}
+
+// ── Knowledge Base ────────────────────────────────────────────────────────────
+interface KnowledgeBase {
+  projeto: string
+  stack: string
+  estrutura: string
+  status: string
+  convencoes: string
+  regras: string
+  agentes: string
+  notas: string
+}
+const KB_DEFAULT: KnowledgeBase = { projeto: '', stack: '', estrutura: '', status: '', convencoes: '', regras: '', agentes: '', notas: '' }
+const KB_LS_KEY = 'squad_knowledge_base'
+function loadKB(): KnowledgeBase { try { const r = localStorage.getItem(KB_LS_KEY); return r ? { ...KB_DEFAULT, ...JSON.parse(r) } : KB_DEFAULT } catch { return KB_DEFAULT } }
+function saveKB(kb: KnowledgeBase) { try { localStorage.setItem(KB_LS_KEY, JSON.stringify(kb)) } catch {} }
+function buildKBString(kb: KnowledgeBase): string {
+  const sections: [string, string][] = [
+    ['PROJETO', kb.projeto], ['STACK', kb.stack], ['ESTRUTURA DE ARQUIVOS', kb.estrutura],
+    ['STATUS ATUAL', kb.status], ['CONVENÇÕES', kb.convencoes],
+    ['REGRAS DO SQUAD', kb.regras], ['HABILIDADES DOS AGENTES', kb.agentes], ['NOTAS TÉCNICAS', kb.notas],
+  ]
+  const filled = sections.filter(([, v]) => v.trim())
+  return filled.length === 0 ? '' : filled.map(([k, v]) => `## ${k}\n${v.trim()}`).join('\n\n')
+}
+const KB_SECTIONS: { key: keyof KnowledgeBase; label: string; placeholder: string }[] = [
+  { key: 'projeto',     label: 'Projeto',               placeholder: 'O que é, objetivo, usuários-alvo…' },
+  { key: 'stack',       label: 'Stack',                  placeholder: 'Framework, banco, libs, versões…' },
+  { key: 'estrutura',   label: 'Estrutura de arquivos',  placeholder: 'Caminhos-chave: apps/web/ → frontend\napps/api/ → API\npackages/db/ → schema…' },
+  { key: 'status',      label: 'Status atual',           placeholder: 'Fase concluída, próxima tarefa, o que está pendente…' },
+  { key: 'convencoes',  label: 'Convenções',             placeholder: 'Padrões de código, naming, estrutura de componentes…' },
+  { key: 'regras',      label: 'Regras do squad',        placeholder: 'Jarvis: lê CURRENT_STATE primeiro\nFriday: TypeScript strict…' },
+  { key: 'agentes',     label: 'Habilidades dos agentes',placeholder: 'Instruções específicas por agente…' },
+  { key: 'notas',       label: 'Notas técnicas',         placeholder: 'Gotchas, configs especiais, limitações conhecidas…' },
+]
+const KB_TEMPLATES: Record<string, Partial<KnowledgeBase>> = {
+  'Next.js SaaS': {
+    stack: 'Frontend: Next.js 15 App Router + Tailwind CSS\nAPI: Next.js API Routes\nBanco: MySQL + Drizzle ORM\nFila: Redis + BullMQ\nStorage: Cloudflare R2 (AWS SDK v3)\nMonorepo: Turborepo + pnpm\nTypeScript strict',
+    estrutura: 'apps/web/     → Next.js frontend\napps/api/     → API Routes\napps/workers/ → BullMQ workers\npackages/db/  → Drizzle schema + client\npackages/queue/ → BullMQ config\npackages/storage/ → StorageService\ndocs/ → CURRENT_STATE.md, TASKS.md, ARCHITECTURE.md',
+    convencoes: '- TypeScript strict (sem any)\n- Singletons com lazy proxy (não falham no build Next.js)\n- export const dynamic = "force-dynamic" em rotas API\n- Imports absolutos (@/ ou @easy-sub/)\n- Componentes em PascalCase, hooks em camelCase',
+    regras: '- Jarvis: ler CURRENT_STATE.md e TASKS.md antes de qualquer ação\n- Friday: TypeScript strict, sem any, sempre testa o caminho feliz\n- Shuri: gerar spec de UX antes de Friday implementar\n- Todos: um READ_FILE por arquivo, nunca reler o mesmo no mesmo ciclo\n- Use READ_DIR para explorar pasta antes de READ_FILE',
+    notas: '- pnpm install requer --ignore-scripts nesta máquina\n- Singletons são lazy proxies para evitar erros no build Next.js\n- Rotas API usam export const dynamic = "force-dynamic"',
+  },
+  'Node.js API': {
+    stack: 'Runtime: Node.js 22 LTS\nFramework: Express / Fastify\nBanco: PostgreSQL + Prisma\nValidação: Zod\nTypeScript strict\nTestes: Vitest',
+    estrutura: 'src/routes/     → rotas HTTP\nsrc/services/   → lógica de negócio\nsrc/middleware/  → auth, logging, validação\nsrc/types/       → interfaces e schemas Zod\ntests/           → testes unitários',
+    convencoes: '- TypeScript strict (sem any)\n- Zod para validação de input nas rotas\n- Nunca expor stack trace ao cliente\n- Logging estruturado com pino\n- Handlers async sempre com try/catch',
+    regras: '- Friday: implementar rota + service + validação juntos\n- Tester: teste para toda rota nova (happy path + edge cases)\n- Requis: documentar endpoints com JSDoc',
+    notas: '',
+  },
+  'React + Vite': {
+    stack: 'Framework: React 18 + Vite\nEstilo: Tailwind CSS\nRoteamento: React Router 6\nEstado: Zustand ou Context\nTypeScript strict',
+    estrutura: 'src/components/  → componentes reutilizáveis\nsrc/pages/       → páginas (por rota)\nsrc/hooks/       → hooks customizados\nsrc/lib/         → utilitários\nsrc/types/       → interfaces TypeScript',
+    convencoes: '- Componentes em PascalCase\n- Hooks em camelCase com prefixo use\n- Props tipadas com interface (não type para props de componentes)\n- Evitar any — usar unknown + type guard',
+    regras: '- Shuri: spec de componente antes de Friday implementar\n- Friday: componentes stateless quando possível, state no nível certo',
+    notas: '',
+  },
 }
 
 // ── ACTION tags ──────────────────────────────────────────────────────────────
@@ -112,9 +170,11 @@ export default function SquadPage() {
   const [pipelineMode, setPipelineMode] = useState(false)
   const [prodVpsId, setProdVpsId] = useState<string>('')
   const [pipelineGates, setPipelineGates] = useState<Record<string, PipelineGate>>({})
-  // Project context + local execution
-  const [projectContext, setProjectContext] = useState('')
-  const [contextOpen, setContextOpen] = useState(false)
+  // Knowledge Base + local execution
+  const [kb, setKb] = useState<KnowledgeBase>(loadKB)
+  const [kbOpen, setKbOpen] = useState(false)
+  const [kbSection, setKbSection] = useState<keyof KnowledgeBase | null>(null)
+  const projectContext = useMemo(() => buildKBString(kb), [kb])
   const [executionMode, setExecutionMode] = useState<'vps' | 'local'>('vps')
   const [localPath, setLocalPath] = useState('')
 
@@ -877,30 +937,78 @@ export default function SquadPage() {
       <aside className="bg-slate-900 border-l border-slate-800 flex flex-col shrink-0" style={{ width: rightWidth }}>
 
         {/* Project context — collapsible */}
+        {/* ── Knowledge Base ─────────────────────────────────── */}
         <div className="border-b border-slate-800">
           <button
-            onClick={() => setContextOpen(v => !v)}
+            onClick={() => setKbOpen(v => !v)}
             className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-slate-800/40 transition-colors"
           >
             <div className="flex items-center gap-1.5">
-              <FileText size={12} className="text-slate-500 shrink-0" />
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Contexto do Projeto</span>
-            </div>
-            {contextOpen ? <ChevronUp size={12} className="text-slate-600" /> : <ChevronDown size={12} className="text-slate-600" />}
-          </button>
-          {contextOpen && (
-            <div className="px-3 pb-3">
-              <textarea
-                value={projectContext}
-                onChange={e => setProjectContext(e.target.value)}
-                placeholder="Cole aqui o README, arquitetura, stack técnica… Todos os agentes usarão este contexto automaticamente."
-                rows={6}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-brand-600 transition-colors leading-relaxed"
-              />
+              <BookOpen size={12} className="text-violet-400 shrink-0" />
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Base de Conhecimento</span>
               {projectContext && (
-                <p className="text-[10px] text-green-500 mt-1 flex items-center gap-1">
-                  <CheckCircle size={9} /> Contexto ativo ({projectContext.length} chars)
+                <span className="text-[9px] text-green-400 bg-green-400/10 border border-green-400/20 rounded px-1.5 py-0.5 font-medium">ativo</span>
+              )}
+            </div>
+            {kbOpen ? <ChevronUp size={12} className="text-slate-600" /> : <ChevronDown size={12} className="text-slate-600" />}
+          </button>
+          {kbOpen && (
+            <div className="px-3 pb-4 space-y-1">
+              {/* Templates */}
+              <div className="flex flex-wrap gap-1 pb-2 border-b border-slate-800/80">
+                <span className="text-[10px] text-slate-600 flex items-center gap-1 mr-0.5">
+                  <Sparkles size={8} /> Templates:
+                </span>
+                {Object.entries(KB_TEMPLATES).map(([name, tmpl]) => (
+                  <button
+                    key={name}
+                    onClick={() => { const nk = { ...kb, ...tmpl }; setKb(nk); saveKB(nk) }}
+                    className="text-[10px] px-2 py-0.5 rounded border border-slate-700 text-slate-400 hover:border-violet-600/60 hover:text-violet-300 transition-colors"
+                  >{name}</button>
+                ))}
+                <button
+                  onClick={() => { setKb(KB_DEFAULT); saveKB(KB_DEFAULT) }}
+                  className="text-[10px] px-2 py-0.5 rounded border border-red-900/40 text-red-500/60 hover:border-red-500/50 hover:text-red-400 transition-colors ml-auto"
+                >Limpar</button>
+              </div>
+
+              {/* Accordion sections */}
+              {KB_SECTIONS.map(({ key, label, placeholder }) => {
+                const val = kb[key]
+                const open = kbSection === key
+                return (
+                  <div key={key} className="rounded-lg border border-slate-800 overflow-hidden">
+                    <button
+                      onClick={() => setKbSection(prev => prev === key ? null : key)}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-slate-800/60 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-semibold text-slate-400">{label}</span>
+                        {val.trim() && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+                        )}
+                      </div>
+                      {open ? <ChevronUp size={10} className="text-slate-600 shrink-0" /> : <ChevronDown size={10} className="text-slate-600 shrink-0" />}
+                    </button>
+                    {open && (
+                      <textarea
+                        value={val}
+                        onChange={e => { const nk = { ...kb, [key]: e.target.value }; setKb(nk); saveKB(nk) }}
+                        placeholder={placeholder}
+                        rows={4}
+                        className="w-full bg-slate-900/80 border-t border-slate-800 px-2.5 py-2 text-xs text-slate-200 placeholder-slate-700 resize-none focus:outline-none focus:bg-slate-900 transition-colors leading-relaxed"
+                      />
+                    )}
+                  </div>
+                )
+              })}
+
+              {projectContext ? (
+                <p className="text-[10px] text-green-500 pt-1 flex items-center gap-1">
+                  <CheckCircle size={9} /> {projectContext.length} chars injetados em todos os agentes
                 </p>
+              ) : (
+                <p className="text-[10px] text-slate-600 pt-1">Preencha as seções para dar contexto ao squad.</p>
               )}
             </div>
           )}

@@ -1,5 +1,20 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.15.9] — 2026-06-11
+
+### Adicionado — Squad: Base de Conhecimento estruturada
+
+- **"Contexto do Projeto" substituído por "Base de Conhecimento"** — painel com 8 seções estruturadas em accordion:
+  - Projeto, Stack, Estrutura de arquivos, Status atual, Convenções, Regras do squad, Habilidades dos agentes, Notas técnicas
+- **Templates prontos** — 3 templates pré-preenchidos com um clique: Next.js SaaS, Node.js API, React + Vite
+- **Persistência em localStorage** — base de conhecimento salva entre sessões (sem banco, sem sync)
+- **Indicador visual por seção** — ponto violeta se a seção tem conteúdo; badge "ativo" verde no cabeçalho
+- **Anti-loop por design** — seção "Status atual" e "Estrutura de arquivos" eliminam a necessidade dos agentes explorarem o projeto do zero a cada iteração
+- **Seção "Habilidades dos agentes"** — instruções por agente (ex: "Jarvis: lê CURRENT_STATE.md primeiro") injetadas no system prompt
+- Versão: `3.15.8` → `3.15.9`
+
+---
+
 ## [3.15.8] — 2026-06-11
 
 ### Corrigido — Squad modo autônomo: READ_DIR + anti-loop

@@ -1,12 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-06-11
-**Versão:** 3.15.8
+**Versão:** 3.15.9
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**NEX-ALS IDE 3.15.8** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, Contexto de Projeto, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.15.9** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, Contexto de Projeto, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
@@ -27,6 +27,7 @@
 - [x] **Múltiplas contas Claude Code** — tabela `claude_code_accounts` (SQLite); N contas isoladas via `CLAUDE_CONFIG_DIR`; alternância com um clique; conta já autenticada (`~/.claude`) ou nova com dir gerado automaticamente; verificação real via `.credentials.json`; comando PowerShell com botão copiar (v3.12.0–v3.13.0)
 - [x] **Correções de estabilidade Squad** (v3.15.2–v3.15.4) — stderr acumulado em buffer (sem falso-positivo de autenticação); `shell: true` para execução de `.cmd` no Windows; removido `--no-color` (não suportado em claude 2.1.170); `cwd: localPath || homedir()` + flag `--add-dir` para sandbox de segurança do CLI
 - [x] **READ_DIR + anti-loop autônomo** (v3.15.8) — nova action `READ_DIR` para listar pastas; auto-detecção de diretório em `READ_FILE` (lista conteúdo ao invés de erro); instruções anti-loop no modo autônomo; `ACTION_INSTRUCTIONS` adicionadas a Jarvis e Shuri
+- [x] **Base de Conhecimento** (v3.15.9) — substitui campo livre "Contexto do Projeto" por 8 seções estruturadas (projeto, stack, estrutura, status, convenções, regras, habilidades, notas); 3 templates prontos (Next.js SaaS, Node.js API, React+Vite); persistência localStorage; indicador visual por seção
 - [x] **Painéis redimensionáveis** (v3.15.5) — drag handles entre painéis esquerdo/centro/direito; `leftWidth` e `rightWidth` via `useRef` + `mousemove`/`mouseup` globais; min/max por painel
 - [x] **Botão Limpar chat** (v3.15.5) — limpa bubbles + sessionId; desabilitado durante streaming
 - [x] **Botão Acompanhar** (v3.15.5) — auto-scroll com `onScroll` handler; botão sticky aparece quando usuário rola para cima
