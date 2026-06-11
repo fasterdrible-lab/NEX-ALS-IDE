@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Server, FolderOpen, Rocket,
-  Settings, Activity, BotMessageSquare, BookOpen, BarChart3, History, Sparkles, Users, LogOut, User,
+  Settings, Activity, BotMessageSquare, BookOpen, BarChart3, History, Sparkles, Users, LogOut, User, BookMarked,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -14,6 +14,7 @@ const navItems = [
   { to: '/history', label: 'Histórico', icon: History },
   { to: '/settings', label: 'Configurações', icon: Settings },
   { to: '/diagnostics', label: 'Diagnóstico', icon: Activity },
+  { to: '/knowledge', label: 'Conhecimento', icon: BookMarked },
   { to: '/help', label: 'Manual', icon: BookOpen },
 ]
 

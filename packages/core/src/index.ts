@@ -13,3 +13,4 @@ export { ProjectMemoryService, type MemoryBlock } from './ai/hub/project-memory.
 export { NotificationMonitor, type NotificationAlert } from './notifications/notification-monitor.js'
 export { AuthService, type AppUser, type UserRole } from './auth/auth.service.js'
 export { SquadService, AGENTS, AGENT_NAMES, type AgentName, type AgentConfig } from './squad/index.js'
+export { KnowledgeService } from './knowledge/knowledge.service.js'

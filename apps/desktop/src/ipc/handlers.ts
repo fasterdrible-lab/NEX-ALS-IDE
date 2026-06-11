@@ -22,6 +22,7 @@ import {
   AuthService,
   SquadService,
   AGENTS,
+  KnowledgeService,
   type AppUser,
   type AgentName,
 } from '@cwm/core'
@@ -88,6 +89,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const tunnelSvc = new TunnelService()
   const aiSvc = new AiService()
   const squadSvc = new SquadService(aiSvc)
+  const knowledgeSvc = new KnowledgeService()
   const memorySvc = new ProjectMemoryService()
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
@@ -610,11 +612,22 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         } catch { /* ignora */ }
       }
 
+      // Injeta KB global no system prompt (quando não vazio)
+      const kbCtx = await knowledgeSvc.buildContext().catch(() => '')
+      const systemPromptWithKB = kbCtx && data.systemPrompt
+        ? `${data.systemPrompt as string}\n\n${kbCtx}`
+        : kbCtx
+          ? kbCtx
+          : (data.systemPrompt as string | undefined)
+      const dataWithKB = systemPromptWithKB
+        ? { ...data, systemPrompt: systemPromptWithKB }
+        : data
+
       // ── Rota Claude Code (conta, sem API key) ──────────────────────────────
       if (effectiveProvider === 'claude-code') {
         const streamId = crypto.randomUUID()
-        const msgs = (data.messages ?? []) as Array<{ role: string; content: unknown }>
-        const sys = data.systemPrompt as string | undefined
+        const msgs = (dataWithKB.messages ?? []) as Array<{ role: string; content: unknown }>
+        const sys = dataWithKB.systemPrompt as string | undefined
 
         // Monta prompt para `claude -p` incluindo histórico
         const parts: string[] = []
@@ -681,7 +694,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
       // ── Rota padrão (API Key) ──────────────────────────────────────────────
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const session = await aiSvc.startStream(data as any, chunk => {
+      const session = await aiSvc.startStream(dataWithKB as any, chunk => {
         try { targetWin?.webContents.send('ai:stream:chunk', chunk) } catch { /* janela fechada */ }
         if (chunk.type === 'error' && notificationsEnabled && Notification.isSupported()) {
           if (!targetWin?.isFocused()) {
@@ -925,9 +938,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         }
       } catch { /* ignora — usa preferredProvider */ }
 
+      // Carrega KB global uma vez por stream
+      const globalKBContext = await knowledgeSvc.buildContext().catch(() => '')
+
       // Monta system prompt com contexto de projeto e/ou execução local
       function buildSystemPrompt(base: string): string {
         let sys = base
+        if (globalKBContext) {
+          sys += `\n\n${globalKBContext}`
+        }
         if (data.localPath) {
           sys += `\n\nEXECUÇÃO LOCAL ATIVA (Windows PC):\n- Pasta base do projeto: ${data.localPath}\n- Use SEMPRE caminhos Windows em ACTION tags. Exemplos:\n  [ACTION:READ_DIR path="${data.localPath}"][/ACTION] — lista arquivos da raiz do projeto\n  [ACTION:READ_FILE path="${data.localPath}\\src\\index.ts"][/ACTION]\n  [ACTION:SHELL cwd="${data.localPath}"]npm install[/ACTION]\n- Use READ_DIR para explorar a estrutura antes de READ_FILE\n- NÃO use caminhos Linux (/home/...) — o código roda diretamente no PC do usuário.`
         }
@@ -1339,4 +1358,34 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     } catch { /* silent */ }
     return { success: true }
   })
+
+  // ── Base de Conhecimento ─────────────────────────────────────────────────────
+  ipcMain.handle('knowledge:list', () =>
+    wrapHandler(() => knowledgeSvc.list())
+  )
+
+  ipcMain.handle('knowledge:create', (_, data: unknown) =>
+    wrapHandler(() => {
+      requireAdmin()
+      return knowledgeSvc.create(data as Parameters<typeof knowledgeSvc.create>[0])
+    })
+  )
+
+  ipcMain.handle('knowledge:update', (_, { id, ...data }: { id: string } & Record<string, unknown>) =>
+    wrapHandler(() => {
+      requireAdmin()
+      return knowledgeSvc.update(id, data as Parameters<typeof knowledgeSvc.update>[1])
+    })
+  )
+
+  ipcMain.handle('knowledge:delete', (_, id: string) =>
+    wrapHandler(() => {
+      requireAdmin()
+      return knowledgeSvc.delete(id)
+    })
+  )
+
+  ipcMain.handle('knowledge:context', () =>
+    wrapHandler(() => knowledgeSvc.buildContext())
+  )
 }

@@ -41,6 +41,7 @@ const ALLOWED_CHANNELS = new Set([
   'claude:accounts:list', 'claude:accounts:add', 'claude:accounts:setActive',
   'claude:accounts:delete', 'claude:accounts:check',
   'shell:openExternal',
+  'knowledge:list', 'knowledge:create', 'knowledge:update', 'knowledge:delete', 'knowledge:context',
 ])
 
 contextBridge.exposeInMainWorld('electron', {

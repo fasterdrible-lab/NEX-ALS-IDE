@@ -90,6 +90,25 @@ export type LaunchHistory = z.infer<typeof LaunchHistorySchema> & {
   project?: Project
 }
 
+export const KNOWLEDGE_CATEGORIES = ['geral', 'arquitetura', 'padrões', 'bibliotecas', 'convenções', 'snippets', 'regras', 'stack'] as const
+export type KnowledgeCategory = typeof KNOWLEDGE_CATEGORIES[number]
+
+export const KnowledgeEntrySchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1, 'Título é obrigatório'),
+  content: z.string().min(1, 'Conteúdo é obrigatório'),
+  category: z.enum(KNOWLEDGE_CATEGORIES).default('geral'),
+  tags: z.string().default(''),
+  isActive: z.boolean().default(true),
+})
+
+export type KnowledgeEntry = z.infer<typeof KnowledgeEntrySchema> & {
+  id: string
+  createdAt: Date
+  updatedAt: Date
+}
+export type KnowledgeEntryInput = z.infer<typeof KnowledgeEntrySchema>
+
 export interface TestConnectionResult {
   success: boolean
   message: string

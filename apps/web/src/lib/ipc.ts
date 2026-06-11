@@ -6,7 +6,10 @@ import type {
   TestConnectionResult, DiagnosticResults, ClaudeCheckResult,
   GitStatus, GitCommit,
   AiProviderConfig, AiChatInput,
+  KnowledgeEntry, KnowledgeEntryInput, KnowledgeCategory,
 } from '@cwm/config'
+
+export type { KnowledgeEntry, KnowledgeEntryInput, KnowledgeCategory }
 
 export type { GitStatus, GitCommit }
 export type { GitFileStatus } from '@cwm/config'
@@ -347,5 +350,12 @@ export const ipc = {
       changePassword: (id: string, newPassword: string) =>
         invoke<void>('auth:users:changePassword', { id, newPassword }),
     },
+  },
+  knowledge: {
+    list:    () => invoke<KnowledgeEntry[]>('knowledge:list'),
+    create:  (data: KnowledgeEntryInput) => invoke<KnowledgeEntry>('knowledge:create', data),
+    update:  (id: string, data: Partial<KnowledgeEntryInput>) => invoke<KnowledgeEntry>('knowledge:update', { id, ...data }),
+    delete:  (id: string) => invoke<void>('knowledge:delete', id),
+    context: () => invoke<string>('knowledge:context'),
   },
 }

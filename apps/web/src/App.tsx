@@ -45,6 +45,7 @@ import IncidentModePage from './pages/IncidentModePage'
 import DeployAssistantPage from './pages/DeployAssistantPage'
 import LoginPage from './pages/LoginPage'
 import SetupPage from './pages/SetupPage'
+import KnowledgePage from './pages/KnowledgePage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 function AppRoutes() {
@@ -74,6 +75,7 @@ function AppRoutes() {
         <Route path="monitor" element={<MonitorPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="help" element={<Help />} />
+        <Route path="knowledge" element={<KnowledgePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
 

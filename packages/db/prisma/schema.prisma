@@ -107,3 +107,16 @@ model SquadMessage {
 
   @@map("squad_messages")
 }
+
+model KnowledgeEntry {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  category  String   @default("geral")
+  tags      String   @default("")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("knowledge_entries")
+}
