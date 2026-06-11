@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw, BookOpen, Sparkles } from 'lucide-react'
+import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw, BookOpen, Sparkles, RotateCw, BarChart2 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 
 // ── Agent metadata (UI only) ─────────────────────────────────────────────────
@@ -192,7 +192,9 @@ export default function SquadPage() {
   const [autonomousMode, setAutonomousMode] = useState(false)
   const [isAutonomousRunning, setIsAutonomousRunning] = useState(false)
   const [autoIteration, setAutoIteration] = useState(0)
-  const MAX_AUTO_ITER = 30
+  const [maxAutoIter, setMaxAutoIter] = useState(30)
+  const maxAutoIterRef = useRef(30)
+  const [syncingKB, setSyncingKB] = useState(false)
 
   const endRef = useRef<HTMLDivElement>(null)
   const chatScrollRef = useRef<HTMLDivElement>(null)
@@ -246,6 +248,7 @@ export default function SquadPage() {
 
   useEffect(() => { autonomousModeRef.current = autonomousMode }, [autonomousMode])
   useEffect(() => { activeAgentRef.current = activeAgent }, [activeAgent])
+  useEffect(() => { maxAutoIterRef.current = maxAutoIter }, [maxAutoIter])
   // Reload KB when project (localPath) changes
   useEffect(() => { setKb(loadKB(localPath || '__global__')) }, [localPath])
 
@@ -512,6 +515,40 @@ export default function SquadPage() {
     if (activeStreamId) ipc.squad.stream.cancel(activeStreamId).catch(console.error)
   }
 
+  async function syncKBFromProject() {
+    if (!localPath || syncingKB) return
+    setSyncingKB(true)
+    const sep = localPath.includes('\\') ? '\\' : '/'
+    const join = (...parts: string[]) => parts.join(sep).replace(/[\\/]+/g, sep)
+    const candidates: [string, keyof KnowledgeBase][] = [
+      [join(localPath, 'README.md'),                 'projeto'],
+      [join(localPath, 'readme.md'),                 'projeto'],
+      [join(localPath, 'docs', 'CURRENT_STATE.md'),  'status'],
+      [join(localPath, 'CURRENT_STATE.md'),          'status'],
+      [join(localPath, 'docs', 'TASKS.md'),          'status'],
+      [join(localPath, 'docs', 'ARCHITECTURE.md'),   'estrutura'],
+      [join(localPath, 'ARCHITECTURE.md'),           'estrutura'],
+    ]
+    const updates: Partial<KnowledgeBase> = {}
+    for (const [filePath, section] of candidates) {
+      if (updates[section]) continue // already got this section
+      try {
+        const res = await ipc.squad.action.execute({ type: 'read_file', content: '', path: filePath, vpsId: '__local__' })
+        if (res.output && !res.output.startsWith('[Pasta detectada')) {
+          updates[section] = section === 'status' && updates.status
+            ? `${updates.status}\n\n---\n\n${res.output.slice(0, 2000)}`
+            : res.output.slice(0, 3000)
+        }
+      } catch { /* file missing, skip */ }
+    }
+    if (Object.keys(updates).length > 0) {
+      const nk = { ...kb, ...updates }
+      setKb(nk)
+      saveKB(localPath || '__global__', nk)
+    }
+    setSyncingKB(false)
+  }
+
   async function executeActionsAuto(actions: ActionBlock[]): Promise<Array<{ type: string; desc: string; output: string; ok: boolean }>> {
     const results: Array<{ type: string; desc: string; output: string; ok: boolean }> = []
     for (const action of actions) {
@@ -542,8 +579,9 @@ export default function SquadPage() {
     setIsAutonomousRunning(true)
     stopRequestedRef.current = false
     autoIterRef.current = 0
+    const report = { reads: 0, writes: 0, shells: 0, errors: 0, filesWritten: [] as string[] }
     try {
-      while (!stopRequestedRef.current && autoIterRef.current < MAX_AUTO_ITER) {
+      while (!stopRequestedRef.current && autoIterRef.current < maxAutoIterRef.current) {
         const agentBubbles = bubblesRef.current.filter(b => b.type === 'agent' && !b.isStreaming)
         const lastBubble = agentBubbles.at(-1)
         if (!lastBubble) break
@@ -585,14 +623,27 @@ export default function SquadPage() {
         const lines: string[] = [`[RESULTADO DAS AÇÕES — iteração ${autoIterRef.current}]`]
         for (const r of results) {
           lines.push(`\n${r.type.toUpperCase()}${r.desc ? ` (${r.desc})` : ''}:\n${r.ok ? '✅ Sucesso' : '❌ Erro'}\n${r.output.slice(0, 2000)}`)
+          if (r.type === 'read_file' || r.type === 'read_dir') report.reads++
+          else if (r.type === 'write_file') { report.writes++; if (r.ok && r.desc) report.filesWritten.push(r.desc.replace('path:', '').trim()) }
+          else if (r.type === 'shell') report.shells++
+          if (!r.ok) report.errors++
         }
         lines.push('\nAnalise os resultados e continue trabalhando. Se concluiu tudo, inclua [PRONTO] na resposta.')
 
         // Always return results to the ROOT agent (orchestrator)
         await streamAgent(rootAgentRef.current, lines.join('\n'), sid, undefined, 0)
       }
-      if (!stopRequestedRef.current && autoIterRef.current >= MAX_AUTO_ITER) {
-        setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: `⚠️ Limite de ${MAX_AUTO_ITER} iterações atingido` }])
+      if (!stopRequestedRef.current && autoIterRef.current >= maxAutoIterRef.current) {
+        setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: `⚠️ Limite de ${maxAutoIterRef.current} iterações atingido` }])
+      }
+      // Relatório final do ciclo
+      if (autoIterRef.current > 0) {
+        const parts: string[] = [`📊 Ciclo autônomo concluído — ${autoIterRef.current} iteração(ões)`]
+        if (report.filesWritten.length > 0) parts.push(`✏️ Arquivos criados/modificados: ${report.filesWritten.join(', ')}`)
+        if (report.reads > 0) parts.push(`📖 Leituras: ${report.reads}`)
+        if (report.shells > 0) parts.push(`⚡ Comandos: ${report.shells}`)
+        if (report.errors > 0) parts.push(`⚠️ ${report.errors} erro(s)`)
+        setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: parts.join('  ·  ') }])
       }
     } finally {
       setIsAutonomousRunning(false)
@@ -730,7 +781,7 @@ export default function SquadPage() {
             {isAutonomousRunning && (
               <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium ml-2">
                 <Zap size={11} className="animate-pulse" />
-                autônomo · {autoIteration}/{MAX_AUTO_ITER}
+                autônomo · {autoIteration}/{maxAutoIter}
               </span>
             )}
           </div>
@@ -748,6 +799,17 @@ export default function SquadPage() {
               <Bot size={10} />
               Auto
             </button>
+            {autonomousMode && (
+              <input
+                type="number"
+                min={5} max={200}
+                value={maxAutoIter}
+                onChange={e => setMaxAutoIter(Math.max(5, Math.min(200, Number(e.target.value))))}
+                disabled={isAutonomousRunning}
+                title="Limite de iterações do modo autônomo"
+                className="w-12 text-center text-[10px] bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 focus:outline-none focus:border-green-600 disabled:opacity-40"
+              />
+            )}
             <button
               onClick={clearChat}
               disabled={isStreaming || isAutonomousRunning || bubbles.length === 0}
@@ -983,10 +1045,21 @@ export default function SquadPage() {
           </button>
           {kbOpen && (
             <div className="px-3 pb-4 space-y-1">
-              {/* Templates */}
+              {/* Sincronizar + Templates */}
               <div className="flex flex-wrap gap-1 pb-2 border-b border-slate-800/80">
-                <span className="text-[10px] text-slate-600 flex items-center gap-1 mr-0.5">
-                  <Sparkles size={8} /> Templates:
+                {localPath && (
+                  <button
+                    onClick={syncKBFromProject}
+                    disabled={syncingKB}
+                    title="Preencher KB com README, CURRENT_STATE e ARCHITECTURE do projeto"
+                    className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border border-violet-700/50 text-violet-400 hover:border-violet-500 hover:text-violet-300 transition-colors disabled:opacity-50"
+                  >
+                    <RotateCw size={9} className={syncingKB ? 'animate-spin' : ''} />
+                    {syncingKB ? 'Sincronizando…' : 'Sincronizar'}
+                  </button>
+                )}
+                <span className="text-[10px] text-slate-600 flex items-center gap-1">
+                  <Sparkles size={8} />
                 </span>
                 {Object.entries(KB_TEMPLATES).map(([name, tmpl]) => (
                   <button

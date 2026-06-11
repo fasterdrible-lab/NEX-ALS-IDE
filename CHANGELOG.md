@@ -1,5 +1,27 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.16.1] — 2026-06-11
+
+### Adicionado — Squad: Sincronizar KB, iterações configuráveis, relatório final
+
+**Sincronizar KB do projeto (Task 1):**
+- Botão "Sincronizar" na Base de Conhecimento (aparece quando há pasta local selecionada)
+- Lê automaticamente: `README.md` → seção Projeto; `docs/CURRENT_STATE.md` ou `CURRENT_STATE.md` → Status atual; `docs/TASKS.md` → appenda no Status; `docs/ARCHITECTURE.md` ou `ARCHITECTURE.md` → Estrutura de arquivos
+- Ícone giratório durante carregamento; ignora arquivos ausentes silenciosamente
+- Trunca conteúdo em 3000 chars por seção
+
+**Iterações configuráveis (Task 3):**
+- Input numérico (5–200) aparece ao lado do botão "Auto" quando modo autônomo está ativo
+- Valor padrão: 30; persiste no estado da sessão
+- `maxAutoIterRef` garante que o valor correto é usado mesmo dentro de loops async
+
+**Relatório final do ciclo (Task 2):**
+- Bubble de sistema ao fim de cada ciclo autônomo: N iterações · arquivos criados · leituras · comandos · erros
+- Exibido para qualquer razão de parada (concluído, limite atingido, sem ações)
+- Versão: `3.16.0` → `3.16.1`
+
+---
+
 ## [3.16.0] — 2026-06-11
 
 ### Melhorado — Squad: KB por projeto + delegação autônoma corrigida

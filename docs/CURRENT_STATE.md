@@ -1,12 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-06-11
-**Versão:** 3.16.0
+**Versão:** 3.16.1
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**NEX-ALS IDE 3.16.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, Contexto de Projeto, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.16.1** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, Contexto de Projeto, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
@@ -28,7 +28,8 @@
 - [x] **Correções de estabilidade Squad** (v3.15.2–v3.15.4) — stderr acumulado em buffer (sem falso-positivo de autenticação); `shell: true` para execução de `.cmd` no Windows; removido `--no-color` (não suportado em claude 2.1.170); `cwd: localPath || homedir()` + flag `--add-dir` para sandbox de segurança do CLI
 - [x] **READ_DIR + anti-loop autônomo** (v3.15.8) — nova action `READ_DIR` para listar pastas; auto-detecção de diretório em `READ_FILE` (lista conteúdo ao invés de erro); instruções anti-loop no modo autônomo; `ACTION_INSTRUCTIONS` adicionadas a Jarvis e Shuri
 - [x] **Base de Conhecimento** (v3.15.9) — substitui campo livre "Contexto do Projeto" por 8 seções estruturadas (projeto, stack, estrutura, status, convenções, regras, habilidades, notas); 3 templates prontos (Next.js SaaS, Node.js API, React+Vite); persistência localStorage; indicador visual por seção
-- [x] **KB por projeto + delegação autônoma** (v3.16.0) — KB isolada por `localPath` no localStorage; badge com nome da pasta; troca de projeto recarrega KB; `rootAgentRef` garante que resultados sempre retornam ao orquestrador (Jarvis); delegado sem ações dispara síntese com root ao invés de parar
+- [x] **KB por projeto + delegação autônoma** (v3.16.0) — KB isolada por localPath; rootAgentRef garante orquestrador no controle
+- [x] **Sincronizar KB + iterações configuráveis + relatório final** (v3.16.1) — botão Sincronizar lê README/CURRENT_STATE/ARCHITECTURE; input 5–200 iterações; bubble de relatório ao fim do ciclo — KB isolada por `localPath` no localStorage; badge com nome da pasta; troca de projeto recarrega KB; `rootAgentRef` garante que resultados sempre retornam ao orquestrador (Jarvis); delegado sem ações dispara síntese com root ao invés de parar
 - [x] **Painéis redimensionáveis** (v3.15.5) — drag handles entre painéis esquerdo/centro/direito; `leftWidth` e `rightWidth` via `useRef` + `mousemove`/`mouseup` globais; min/max por painel
 - [x] **Botão Limpar chat** (v3.15.5) — limpa bubbles + sessionId; desabilitado durante streaming
 - [x] **Botão Acompanhar** (v3.15.5) — auto-scroll com `onScroll` handler; botão sticky aparece quando usuário rola para cima
