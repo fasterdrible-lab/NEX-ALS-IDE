@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Server, FolderOpen, Rocket,
@@ -5,6 +6,7 @@ import {
   Sparkles, Users, LogOut, User, BookMarked,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import logoUrl from '/logo-nexals.png'
 
 const navItems = [
   { to: '/',            label: 'Dashboard',     icon: LayoutDashboard, end: true },
@@ -22,6 +24,7 @@ const navItems = [
 export default function Layout() {
   const navigate = useNavigate()
   const { user, logout, sessionRequired } = useAuth()
+  const [logoError, setLogoError] = useState(false)
 
   return (
     <div className="flex h-full">
@@ -48,23 +51,25 @@ export default function Layout() {
           style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
         >
           {/* Logo */}
-          <div className="relative shrink-0">
-            <img
-              src="/logo-nexals.png"
-              alt="NEX-ALS"
-              className="w-9 h-9 rounded-lg object-cover"
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-            />
-            {/* Fallback hexagon if no image */}
-            <div
-              className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold absolute inset-0"
-              style={{
-                background: 'linear-gradient(135deg, #C4912E, #F2C879)',
-                color: '#080612',
-              }}
-            >
-              ⬡
-            </div>
+          <div className="shrink-0">
+            {!logoError ? (
+              <img
+                src={logoUrl}
+                alt="NEX-ALS"
+                className="w-9 h-9 rounded-lg object-cover"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <div
+                className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold"
+                style={{
+                  background: 'linear-gradient(135deg, #C4912E, #F2C879)',
+                  color: '#080612',
+                }}
+              >
+                ⬡
+              </div>
+            )}
           </div>
 
           <div className="leading-tight min-w-0">
