@@ -903,6 +903,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     projectContext?: string
     localPath?: string
     providerOverride?: string
+    autonomous?: boolean
   }) =>
     wrapHandler(async () => {
       requireAuth()
@@ -932,6 +933,9 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         }
         if (data.projectContext) {
           sys += `\n\nCONTEXTO DO PROJETO:\n${data.projectContext}`
+        }
+        if (data.autonomous) {
+          sys += `\n\nMODO AUTÔNOMO ATIVO:\nVocê está em execução autônoma — sem interação humana entre iterações. Siga estas regras obrigatórias:\n1. Use ACTION tags para cada passo de execução, um passo por vez.\n2. Analise os resultados retornados e continue trabalhando iterativamente.\n3. Quando a tarefa estiver 100% concluída, inclua [PRONTO] na sua resposta final.\n4. Não faça perguntas — tome decisões com o contexto disponível.\n5. Não aguarde confirmação — execute e reporte o resultado.`
         }
         return sys
       }

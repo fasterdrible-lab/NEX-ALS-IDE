@@ -127,12 +127,22 @@ export default function SquadPage() {
   } | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
 
+  // Modo autônomo
+  const [autonomousMode, setAutonomousMode] = useState(false)
+  const [isAutonomousRunning, setIsAutonomousRunning] = useState(false)
+  const [autoIteration, setAutoIteration] = useState(0)
+  const MAX_AUTO_ITER = 30
+
   const endRef = useRef<HTMLDivElement>(null)
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const bubblesRef = useRef<ChatBubble[]>([])
   const streamHandlers = useRef<Map<string, StreamHandler>>(new Map())
   const dragState = useRef<{ side: 'left' | 'right'; startX: number; startW: number } | null>(null)
+  const autonomousModeRef = useRef(false)
+  const stopRequestedRef = useRef(false)
+  const autoIterRef = useRef(0)
+  const activeAgentRef = useRef<AgentName>('jarvis')
 
   const setAndRefBubbles = useCallback((updater: (prev: ChatBubble[]) => ChatBubble[]) => {
     setBubbles(prev => {
@@ -171,6 +181,9 @@ export default function SquadPage() {
     window.addEventListener('mouseup', onUp)
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
   }, [])
+
+  useEffect(() => { autonomousModeRef.current = autonomousMode }, [autonomousMode])
+  useEffect(() => { activeAgentRef.current = activeAgent }, [activeAgent])
 
   function startDrag(side: 'left' | 'right', e: React.MouseEvent) {
     dragState.current = { side, startX: e.clientX, startW: side === 'left' ? leftWidth : rightWidth }
@@ -277,6 +290,7 @@ export default function SquadPage() {
             agent, message, history,
             projectContext: projectContext || undefined,
             localPath: executionMode === 'local' ? (localPath || undefined) : undefined,
+            autonomous: autonomousModeRef.current,
           })
           streamId = res.streamId
         } catch (err) {
@@ -388,6 +402,10 @@ export default function SquadPage() {
     }).catch(console.error)
 
     await streamAgent(targetAgent, message, sid, undefined, 0)
+
+    if (autonomousModeRef.current) {
+      await autonomousLoop(sid)
+    }
   }
 
   async function loadSession(s: SessionItem) {
@@ -422,6 +440,81 @@ export default function SquadPage() {
 
   function cancelStream() {
     if (activeStreamId) ipc.squad.stream.cancel(activeStreamId).catch(console.error)
+  }
+
+  function stopAutonomous() {
+    stopRequestedRef.current = true
+    if (activeStreamId) ipc.squad.stream.cancel(activeStreamId).catch(console.error)
+  }
+
+  async function executeActionsAuto(actions: ActionBlock[]): Promise<Array<{ type: string; desc: string; output: string; ok: boolean }>> {
+    const results: Array<{ type: string; desc: string; output: string; ok: boolean }> = []
+    for (const action of actions) {
+      const desc = action.cwd ? `cwd:${action.cwd}` : action.path ? `path:${action.path}` : ''
+      setActionStates(prev => ({ ...prev, [action.id]: { status: 'running' } }))
+      try {
+        const vpsId = executionMode === 'local' ? '__local__' : selectedVpsId
+        if (!vpsId) {
+          const msg = 'Sem VPS/pasta configurada'
+          setActionStates(prev => ({ ...prev, [action.id]: { status: 'error', output: msg } }))
+          results.push({ type: action.type, desc, output: msg, ok: false })
+          continue
+        }
+        const cwd = executionMode === 'local' ? (action.cwd ?? localPath ?? undefined) : action.cwd
+        const res = await ipc.squad.action.execute({ type: action.type, content: action.content, cwd, path: action.path, vpsId })
+        setActionStates(prev => ({ ...prev, [action.id]: { status: 'ok', output: res.output } }))
+        results.push({ type: action.type, desc, output: res.output, ok: true })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        setActionStates(prev => ({ ...prev, [action.id]: { status: 'error', output: msg } }))
+        results.push({ type: action.type, desc, output: msg, ok: false })
+      }
+    }
+    return results
+  }
+
+  async function autonomousLoop(sid: string): Promise<void> {
+    setIsAutonomousRunning(true)
+    stopRequestedRef.current = false
+    autoIterRef.current = 0
+    try {
+      while (!stopRequestedRef.current && autoIterRef.current < MAX_AUTO_ITER) {
+        const lastBubble = [...bubblesRef.current].reverse().find(b => b.type === 'agent' && !b.isStreaming)
+        if (!lastBubble) break
+
+        if (/\[PRONTO\]|\[DONE\]|\[CONCLUÍDO\]/i.test(lastBubble.content)) {
+          setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '✅ Tarefa concluída pelo agente' }])
+          break
+        }
+
+        if (!lastBubble.actions || lastBubble.actions.length === 0) break
+
+        autoIterRef.current++
+        setAutoIteration(autoIterRef.current)
+        setAndRefBubbles(prev => [...prev, {
+          id: crypto.randomUUID(), type: 'system',
+          content: `⚙️ Iteração ${autoIterRef.current} — executando ${lastBubble.actions!.length} ação(ões)…`,
+        }])
+
+        const results = await executeActionsAuto(lastBubble.actions!)
+        if (stopRequestedRef.current) break
+
+        const lines: string[] = [`[RESULTADO DAS AÇÕES — iteração ${autoIterRef.current}]`]
+        for (const r of results) {
+          lines.push(`\n${r.type.toUpperCase()}${r.desc ? ` (${r.desc})` : ''}:\n${r.ok ? '✅ Sucesso' : '❌ Erro'}\n${r.output.slice(0, 2000)}`)
+        }
+        lines.push('\nAnalise os resultados e continue trabalhando. Se concluiu tudo, inclua [PRONTO] na resposta.')
+
+        await streamAgent(activeAgentRef.current, lines.join('\n'), sid, undefined, 0)
+      }
+      if (!stopRequestedRef.current && autoIterRef.current >= MAX_AUTO_ITER) {
+        setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: `⚠️ Limite de ${MAX_AUTO_ITER} iterações atingido` }])
+      }
+    } finally {
+      setIsAutonomousRunning(false)
+      setAutoIteration(0)
+      autoIterRef.current = 0
+    }
   }
 
   async function executeAction(action: ActionBlock) {
@@ -550,11 +643,30 @@ export default function SquadPage() {
                 respondendo...
               </span>
             )}
+            {isAutonomousRunning && (
+              <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium ml-2">
+                <Zap size={11} className="animate-pulse" />
+                autônomo · {autoIteration}/{MAX_AUTO_ITER}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <button
+              onClick={() => setAutonomousMode(v => !v)}
+              disabled={isStreaming || isAutonomousRunning}
+              title={autonomousMode ? 'Modo autônomo ON — clique para desativar' : 'Ativar modo autônomo (executa ações sozinho até concluir)'}
+              className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded border transition-colors disabled:opacity-40 ${
+                autonomousMode
+                  ? 'bg-green-900/30 border-green-700/50 text-green-400'
+                  : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-700'
+              }`}
+            >
+              <Bot size={10} />
+              Auto
+            </button>
+            <button
               onClick={clearChat}
-              disabled={isStreaming || bubbles.length === 0}
+              disabled={isStreaming || isAutonomousRunning || bubbles.length === 0}
               title="Limpar conversa"
               className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40 px-2 py-1 rounded hover:bg-slate-800 transition-colors"
             >
@@ -562,7 +674,7 @@ export default function SquadPage() {
             </button>
             <button
               onClick={newSession}
-              disabled={isStreaming}
+              disabled={isStreaming || isAutonomousRunning}
               className="text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40 px-2 py-1 rounded hover:bg-slate-800 transition-colors"
             >
               + Nova sessão
@@ -724,15 +836,16 @@ export default function SquadPage() {
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() }
               }}
-              placeholder={`Mensagem para @${activeAgent}… (Shift+Enter = nova linha)`}
+              placeholder={isAutonomousRunning ? 'Agente trabalhando autonomamente…' : `Mensagem para @${activeAgent}… (Shift+Enter = nova linha)`}
+              disabled={isAutonomousRunning}
               rows={1}
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 resize-none focus:outline-none focus:border-brand-600 transition-colors"
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 resize-none focus:outline-none focus:border-brand-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ maxHeight: '120px', overflowY: 'auto' }}
             />
-            {isStreaming ? (
+            {(isStreaming || isAutonomousRunning) ? (
               <button
-                onClick={cancelStream}
-                title="Cancelar"
+                onClick={isAutonomousRunning ? stopAutonomous : cancelStream}
+                title={isAutonomousRunning ? 'Parar execução autônoma' : 'Cancelar'}
                 className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-red-900/40 border border-red-700/40 text-red-400 hover:bg-red-900/60 transition-colors"
               >
                 <X size={16} />

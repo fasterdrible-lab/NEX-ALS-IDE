@@ -302,7 +302,7 @@ export const ipc = {
       delete: (id: string) => invoke<void>('squad:session:delete', id),
     },
     stream: {
-      start: (data: { agent: string; message: string; history: Array<{ role: string; content: string }>; projectContext?: string; localPath?: string; providerOverride?: string }) =>
+      start: (data: { agent: string; message: string; history: Array<{ role: string; content: string }>; projectContext?: string; localPath?: string; providerOverride?: string; autonomous?: boolean }) =>
         invoke<{ streamId: string }>('squad:stream:start', data),
       cancel: (streamId: string) => invoke<{ success: boolean }>('squad:stream:cancel', streamId),
       onChunk: (cb: (chunk: { type: string; delta?: string; error?: string; streamId: string }) => void) => {
