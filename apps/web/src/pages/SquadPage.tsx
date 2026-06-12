@@ -122,20 +122,39 @@ type PipelineGate = {
 
 function parseActions(text: string): ActionBlock[] {
   const blocks: ActionBlock[] = []
-  const re = /\[ACTION:(\w+)([^\]]*)\]([\s\S]*?)\[\/ACTION\]/gi
+  const matchedAt = new Set<number>()
   let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
-    const type = m[1].toLowerCase() as ActionType
-    const params: Record<string, string> = {}
+
+  function extractParams(raw: string): Record<string, string> {
+    const p: Record<string, string> = {}
     const pr = /(\w+)="([^"]*)"/g; let pm: RegExpExecArray | null
-    while ((pm = pr.exec(m[2])) !== null) params[pm[1]] = pm[2]
-    blocks.push({ id: `act-${Math.random().toString(36).slice(2)}`, type, cwd: params['cwd'], path: params['path'], content: m[3].trim() })
+    while ((pm = pr.exec(raw)) !== null) p[pm[1]] = pm[2]
+    return p
   }
+  function pushBlock(idx: number, type: string, paramStr: string, content: string) {
+    matchedAt.add(idx)
+    const p = extractParams(paramStr)
+    blocks.push({ id: `act-${Math.random().toString(36).slice(2)}`, type: type.toLowerCase() as ActionType, cwd: p['cwd'], path: p['path'], content: content.trim() })
+  }
+
+  // Pass 1: [ACTION:TYPE params]content[/ACTION] — handles missing ] on closing tag
+  const reFull = /\[ACTION:(\w+)([^\]]*)\]([\s\S]*?)\[\/ACTION\]?/gi
+  while ((m = reFull.exec(text)) !== null) pushBlock(m.index, m[1], m[2], m[3])
+
+  // Pass 2: orphan [ACTION:TYPE params] with no closing tag at all (e.g. model truncation)
+  const reOrphan = /\[ACTION:(\w+)([^\]\n]*)\]/gi
+  while ((m = reOrphan.exec(text)) !== null) {
+    if (!matchedAt.has(m.index)) pushBlock(m.index, m[1], m[2], '')
+  }
+
   return blocks
 }
 
 function stripActions(text: string): string {
-  return text.replace(/\[ACTION:[^\]]*\][\s\S]*?\[\/ACTION\]/gi, '').trim()
+  return text
+    .replace(/\[ACTION:[^\]]*\][\s\S]*?(?:\[\/ACTION\]?)/gi, '')
+    .replace(/\[ACTION:[^\]\n]*\]/gi, '') // remove orphan open tags
+    .trim()
 }
 
 // ── Client-side helpers ──────────────────────────────────────────────────────
@@ -482,12 +501,8 @@ export default function SquadPage() {
     if (autonomousModeRef.current) {
       await autonomousLoop(sid)
     } else if (autoExecuteRef.current) {
-      // Auto-executar actions da última resposta sem loop completo
-      const agentBubbles = bubblesRef.current.filter(b => b.type === 'agent' && !b.isStreaming)
-      const lastBubble = agentBubbles.at(-1)
-      if (lastBubble?.actions?.length) {
-        await executeActionsAuto(lastBubble.actions)
-      }
+      // Exec auto: executa actions e envia resultados de volta (até 6 rodadas por mensagem)
+      await autoExecRound(sid)
     }
   }
 
@@ -664,6 +679,33 @@ export default function SquadPage() {
       setIsAutonomousRunning(false)
       setAutoIteration(0)
       autoIterRef.current = 0
+    }
+  }
+
+  // Exec auto: executa actions, envia resultados ao root agent e repete até não haver mais actions
+  async function autoExecRound(sid: string, maxRounds = 6): Promise<void> {
+    for (let round = 0; round < maxRounds; round++) {
+      const agentBubbles = bubblesRef.current.filter(b => b.type === 'agent' && !b.isStreaming)
+      const lastBubble = agentBubbles.at(-1)
+      if (!lastBubble?.actions?.length) break
+
+      if (/\[PRONTO\]|\[DONE\]|\[CONCLUÍDO\]/i.test(lastBubble.content)) break
+
+      setAndRefBubbles(prev => [...prev, {
+        id: crypto.randomUUID(), type: 'system',
+        content: `⚡ Executando ${lastBubble.actions!.length} ação(ões) automaticamente…`,
+      }])
+
+      const results = await executeActionsAuto(lastBubble.actions!)
+
+      const lines: string[] = ['[RESULTADO DAS AÇÕES]']
+      for (const r of results) {
+        const desc = r.desc ? ` (${r.desc})` : ''
+        lines.push(`\n${r.type.toUpperCase()}${desc}:\n${r.ok ? '✅ Sucesso' : '❌ Erro'}\n${r.output.slice(0, 2000)}`)
+      }
+      lines.push('\nAnalise os resultados e continue. Se concluiu tudo, inclua [PRONTO].')
+
+      await streamAgent(rootAgentRef.current, lines.join('\n'), sid, undefined, 0)
     }
   }
 
