@@ -1,5 +1,22 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.20.0] — 2026-06-12
+
+### Corrigido — Friday regra npm lowercase + investigação Squad OneDrive
+
+**Friday: regra npm lowercase (`EXECUTOR_RULES` regra 8):**
+- Nomes de pacote npm/npx sempre lowercase — `create-next-app` rejeita nomes com maiúsculas
+- Se diretório destino tem maiúsculas (ex: BRAINBOARD), criar projeto em subpasta lowercase (ex: `apps/web`)
+- Usar `--ts` em vez de `--typescript`; aspas obrigatórias em `--import-alias "@/*"`
+
+**Investigação: por que agentes não criavam arquivos em OneDrive:**
+- Confirmado: `child_process.exec` em `handlers.ts:1062` executa comandos reais — não é simulação
+- Causa raiz 1: `create-next-app` chama `fs.access(root, W_OK)` antes de scaffoldar; OneDrive intercepta esse check e retorna "sem permissão" mesmo com pasta gravável — workaround é staging em temp dir + xcopy
+- Causa raiz 2: `parseActions` em `actions.ts:12` tem apenas um regex — CHANGELOG v3.19.0 documenta segundo passo tolerante mas não foi implementado; ACTIONs truncadas são descartadas silenciosamente
+- Pendente: corrigir ambas as causas (ver TASKS.md)
+
+---
+
 ## [3.19.0] — 2026-06-12
 
 ### Corrigido — Squad: parser robusto + Exec auto com feedback + fluxo de leitura Jarvis

@@ -4,6 +4,15 @@
 
 *(nenhuma)*
 
+## Bugs identificados — Squad execução local em OneDrive (2026-06-12)
+
+- [ ] **Squad: OneDrive bloqueia `create-next-app`** — `child_process.exec` executa corretamente (`handlers.ts:1062`), mas `create-next-app` faz `fs.access(root, W_OK)` antes de criar o projeto; o OneDrive intercepta esse check de forma diferente do filesystem normal e retorna "sem permissão" mesmo que a pasta seja gravável. Fix: adicionar em `EXECUTOR_RULES` a regra de usar `C:\Users\phpos\AppData\Local\Temp` como staging e copiar com `xcopy /E /Y /H /I source\* dest\` após o scaffold.
+- [ ] **Squad: `parseActions` segundo passo não implementado** — CHANGELOG v3.19.0 documenta dois passes tolerantes, mas `packages/core/src/squad/actions.ts:12` tem apenas um regex que exige `[/ACTION]` fechando. Se o modelo truncar antes do `[/ACTION]`, a ACTION é descartada silenciosamente. Fix: implementar o segundo passo de captura.
+
+## Concluídas recentemente (v3.19.0 → v3.20.0)
+
+- [x] **Squad: Friday — regra npm lowercase + flags corretas** — `EXECUTOR_RULES` regra 8: nomes npm sempre lowercase; se diretório tem maiúsculas criar em subpasta (ex: apps/web); usar `--ts` em vez de `--typescript`; aspas em `--import-alias "@/*"` — v3.20.0 · 2026-06-12
+
 ## Concluídas recentemente (v3.18.0 → v3.19.0)
 
 - [x] **Squad: parser tolerante a ACTION malformada** — `parseActions` com passe primário (regex `\[\/ACTION\]?`) e passe secundário para tags sem fechamento; `stripActions` alinhado — v3.19.0 · 2026-06-12

@@ -1,7 +1,7 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-06-12
-**Versão:** 3.19.0
+**Versão:** 3.20.0
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
@@ -12,6 +12,15 @@
 
 - **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat IA (API direta ou claude -p); badge vermelho "Produção" na top bar.
 - **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
+
+## Bugs conhecidos — Squad execução local em OneDrive (identificados v3.20.0)
+
+- **OneDrive bloqueia `create-next-app`** — `child_process.exec` em `handlers.ts:1062` executa de verdade, mas `create-next-app` chama `fs.access(root, W_OK)` antes de scaffoldar; OneDrive intercepta esse check e retorna "sem permissão" mesmo com a pasta gravável. Workaround: staging em `C:\Users\phpos\AppData\Local\Temp` + `xcopy` ao destino final. Pendente: adicionar isso em `EXECUTOR_RULES`.
+- **`parseActions` segundo passo ausente** — CHANGELOG v3.19.0 documenta parser de dois passes, mas `actions.ts:12` tem apenas um regex. ACTIONs truncadas antes de `[/ACTION]` são descartadas silenciosamente.
+
+## Squad — Friday regra npm lowercase (v3.20.0)
+
+- [x] **EXECUTOR_RULES regra 8** — nomes npm sempre lowercase; diretório com maiúsculas → criar em subpasta lowercase; `--ts` em vez de `--typescript`; aspas em `--import-alias "@/*"`
 
 ## Squad — parser robusto + autoExecRound + fluxo Jarvis (v3.19.0)
 
