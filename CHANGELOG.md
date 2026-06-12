@@ -1,5 +1,26 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.18.0] — 2026-06-12
+
+### Corrigido — Jarvis somente leitura + Exec auto no Squad
+
+**Jarvis restrito a leitura (fix comportamento incorreto):**
+- `JARVIS_ACTION_INSTRUCTIONS` separado em `packages/core/src/squad/agents.ts` — Jarvis só pode usar `READ_DIR` e `READ_FILE`
+- SHELL e WRITE_FILE **removidos** do arsenal do Jarvis; essas ações pertencem exclusivamente a `@friday`, `@tester` e agentes executores
+- System prompt reforçado: "VOCÊ NÃO ESCREVE CÓDIGO, NÃO EXECUTA COMANDOS, NÃO CRIA ARQUIVOS. Esse trabalho pertence a @friday."
+- Jarvis agora lê contexto (README, CURRENT_STATE) e delega imediatamente — não implementa nada diretamente
+
+**Toggle "Exec auto" — execução automática de actions:**
+- Novo botão **"Exec auto"** (ícone Zap, cor âmbar) no cabeçalho do chat ao lado do botão "Auto"
+- **Padrão ON** — ativo por padrão em todas as sessões novas
+- Persistência via `localStorage['squad_auto_execute']`
+- Quando ON (sem modo autônomo): após cada resposta do agente, as actions geradas são executadas automaticamente via `executeActionsAuto` — sem precisar clicar em "Executar" por bloco
+- Quando ON + modo autônomo: comportamento do loop autônomo original (sem mudança)
+- Quando OFF: comportamento anterior — clicar "Executar" manualmente em cada action
+- Versão: `3.17.0` → `3.18.0`
+
+---
+
 ## [3.17.0] — 2026-06-11
 
 ### Adicionado — KB Global do Desenvolvedor + Rebrand NEX-ALS Dark Luxury

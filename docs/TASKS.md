@@ -4,6 +4,12 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.17.0 → v3.18.0)
+
+- [x] **Squad: Jarvis somente leitura** — `JARVIS_ACTION_INSTRUCTIONS` em `agents.ts` com apenas `READ_DIR` e `READ_FILE`; SHELL e WRITE_FILE removidos; system prompt reforça: delegue para `@friday` / `@tester`, nunca implemente diretamente — v3.18.0 · 2026-06-12
+- [x] **Squad: toggle "Exec auto"** — botão Zap âmbar no cabeçalho; padrão ON; `autoExecute` state + `autoExecuteRef` + `useEffect` sync com `localStorage['squad_auto_execute']`; após `streamAgent` resolve em `handleSend`, se `autoExecuteRef.current` e não autônomo → `executeActionsAuto(lastBubble.actions)` — v3.18.0 · 2026-06-12
+- [x] **Versão 3.18.0** — bumps nos 3 package.json; CHANGELOG, CURRENT_STATE, TASKS, AGENTE atualizados; instalador `NEX-ALS IDE Setup 3.18.0.exe` + portable gerados — v3.18.0 · 2026-06-12
+
 ## Concluídas recentemente (v3.16.1 → v3.17.0)
 
 - [x] **KB Global do Desenvolvedor — modelo Prisma** — `KnowledgeEntry` em `schema.prisma` (`knowledge_entries`): id cuid, title, content, category enum 8 valores, tags string, isActive, timestamps — v3.17.0 · 2026-06-11
