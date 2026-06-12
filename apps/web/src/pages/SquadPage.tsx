@@ -683,8 +683,9 @@ export default function SquadPage() {
   }
 
   // Exec auto: executa actions, envia resultados ao root agent e repete até não haver mais actions
-  async function autoExecRound(sid: string, maxRounds = 6): Promise<void> {
-    for (let round = 0; round < maxRounds; round++) {
+  async function autoExecRound(sid: string, maxRounds = 20): Promise<void> {
+    let round = 0
+    for (; round < maxRounds; round++) {
       const agentBubbles = bubblesRef.current.filter(b => b.type === 'agent' && !b.isStreaming)
       const lastBubble = agentBubbles.at(-1)
       if (!lastBubble?.actions?.length) break
@@ -693,7 +694,7 @@ export default function SquadPage() {
 
       setAndRefBubbles(prev => [...prev, {
         id: crypto.randomUUID(), type: 'system',
-        content: `⚡ Executando ${lastBubble.actions!.length} ação(ões) automaticamente…`,
+        content: `⚡ Rodada ${round + 1} — executando ${lastBubble.actions!.length} ação(ões)…`,
       }])
 
       const results = await executeActionsAuto(lastBubble.actions!)
@@ -706,6 +707,12 @@ export default function SquadPage() {
       lines.push('\nAnalise os resultados e continue. Se concluiu tudo, inclua [PRONTO].')
 
       await streamAgent(rootAgentRef.current, lines.join('\n'), sid, undefined, 0)
+    }
+    if (round >= maxRounds) {
+      setAndRefBubbles(prev => [...prev, {
+        id: crypto.randomUUID(), type: 'system',
+        content: `⚠️ ${maxRounds} rodadas concluídas. Ative "Auto" para continuar automaticamente ou envie uma nova mensagem.`,
+      }])
     }
   }
 
