@@ -1,5 +1,26 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.19.0] — 2026-06-12
+
+### Corrigido — Squad: parser robusto + Exec auto com feedback + fluxo de leitura Jarvis
+
+**Parser de ACTION tolerante a tags malformadas:**
+- `parseActions`: regex primário aceita `[/ACTION` sem `]` final; segundo passo captura tags sem nenhum fechamento (truncamento do modelo)
+- `stripActions`: remove ambas as formas malformadas do texto exibido
+
+**Exec auto com feedback real (autoExecRound):**
+- Antes: executava as ações mas não enviava os resultados ao agente → agente repetia a mesma ação em loop
+- Agora: `autoExecRound()` — executa actions → envia `[RESULTADO DAS AÇÕES]` ao root agent → recebe nova resposta → se houver novas actions, repete (até 6 rodadas por mensagem)
+- `handleSend`: chama `autoExecRound(sid)` quando Exec auto está ON e modo autônomo está OFF
+
+**Fluxo de leitura obrigatório para Jarvis:**
+- `JARVIS_ACTION_INSTRUCTIONS` reescrito com fluxo a/b/c: READ_DIR → READ_FILE (um por resposta) → delegação
+- Regra explícita: nunca misturar ação + texto de delegação na mesma resposta
+- Regra explícita: nunca repetir ação já executada
+- Versão: `3.18.0` → `3.19.0`
+
+---
+
 ## [3.18.0] — 2026-06-12
 
 ### Corrigido — Jarvis somente leitura + Exec auto no Squad

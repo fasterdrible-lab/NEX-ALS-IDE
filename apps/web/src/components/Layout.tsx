@@ -214,7 +214,7 @@ export default function Layout() {
 
           <div>
             <p className="text-[10px] font-medium" style={{ color: 'rgba(217,164,65,0.6)' }}>
-              v3.18.0
+              v3.19.0
             </p>
             <p
               className="text-[9px] tracking-widest uppercase font-light"

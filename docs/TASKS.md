@@ -4,6 +4,13 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.18.0 → v3.19.0)
+
+- [x] **Squad: parser tolerante a ACTION malformada** — `parseActions` com passe primário (regex `\[\/ACTION\]?`) e passe secundário para tags sem fechamento; `stripActions` alinhado — v3.19.0 · 2026-06-12
+- [x] **Squad: `autoExecRound()`** — executa actions, envia resultado ao root agent, obtém próxima resposta, repete até sem actions ou `[PRONTO]` (máx 6 rodadas); elimina loop infinito de Jarvis repetindo READ_DIR sem feedback — v3.19.0 · 2026-06-12
+- [x] **Squad: Jarvis fluxo READ_DIR→READ_FILE→delegação** — instrução passo a passo em `JARVIS_ACTION_INSTRUCTIONS`; proibido misturar ação com delegação; proibido repetir ação já executada — v3.19.0 · 2026-06-12
+- [x] **Versão 3.19.0** — bumps nos 3 package.json + Layout; CHANGELOG, CURRENT_STATE, TASKS, AGENTE atualizados; instalador gerado — v3.19.0 · 2026-06-12
+
 ## Concluídas recentemente (v3.17.0 → v3.18.0)
 
 - [x] **Squad: Jarvis somente leitura** — `JARVIS_ACTION_INSTRUCTIONS` em `agents.ts` com apenas `READ_DIR` e `READ_FILE`; SHELL e WRITE_FILE removidos; system prompt reforça: delegue para `@friday` / `@tester`, nunca implemente diretamente — v3.18.0 · 2026-06-12
