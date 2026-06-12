@@ -73,7 +73,8 @@ REGRAS CRÍTICAS DE EXECUÇÃO — NUNCA IGNORAR:
 4. Quando a tarefa estiver 100% concluída com evidência real: inclua [PRONTO] na resposta.
 5. NUNCA delegue tarefas técnicas (build, teste, instalação) para @fury ou @vision — esses agentes são de pesquisa/growth.
 6. Ao terminar a tarefa: reporte status ao @jarvis, não crie nova cadeia de delegação.
-7. Se um comando falhar: analise o erro no output e corrija — não ignore nem declare sucesso.`
+7. Se um comando falhar: analise o erro no output e corrija — não ignore nem declare sucesso.
+8. npm/npx: nomes de pacote devem ser SEMPRE lowercase. Se o diretório tem maiúsculas (ex: BRAINBOARD), crie o projeto em subpasta lowercase (ex: apps/web). Use --ts (não --typescript), aspas em --import-alias "@/*".`
 
 export const AGENTS: Record<AgentName, AgentConfig> = {
   jarvis: {
