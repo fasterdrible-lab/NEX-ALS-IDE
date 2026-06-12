@@ -160,6 +160,16 @@ export async function initializeDatabase(): Promise<void> {
       "isActive"  INTEGER NOT NULL DEFAULT 0,
       "createdAt" TEXT NOT NULL DEFAULT (datetime('now'))
     )`,
+    `CREATE TABLE IF NOT EXISTS "knowledge_entries" (
+      "id"        TEXT NOT NULL PRIMARY KEY,
+      "title"     TEXT NOT NULL,
+      "content"   TEXT NOT NULL,
+      "category"  TEXT NOT NULL DEFAULT 'geral',
+      "tags"      TEXT NOT NULL DEFAULT '',
+      "isActive"  INTEGER NOT NULL DEFAULT 1,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
   ]
 
   for (const sql of ddl) {

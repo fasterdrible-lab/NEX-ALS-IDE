@@ -1,5 +1,31 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.17.0] — 2026-06-11
+
+### Adicionado — KB Global do Desenvolvedor + Rebrand NEX-ALS Dark Luxury
+
+**Base de Conhecimento Global (KB Global) — SQLite + IPC:**
+- Novo modelo `KnowledgeEntry` no schema Prisma (`knowledge_entries`): `id`, `title`, `content`, `category` (8 categorias), `tags`, `isActive`, `createdAt`, `updatedAt`
+- `KnowledgeService` em `packages/core/src/knowledge/knowledge.service.ts` com `list()`, `listActive()`, `create()`, `update()`, `delete()` e `buildContext()` (formata por categoria em markdown)
+- 5 IPC handlers em `handlers.ts`: `knowledge:list`, `knowledge:create`, `knowledge:update`, `knowledge:delete`, `knowledge:context`
+- Preload e `ipc.ts` atualizados com namespace `knowledge.*`
+- **Injeção automática em Squad e AI HUB**: `buildContext()` chamado antes de cada stream start — KB injetada no topo do system prompt de todos os agentes e do AI HUB sem necessidade de modificar cada agente individualmente
+- `KNOWLEDGE_CATEGORIES`, `KnowledgeEntrySchema`, `KnowledgeEntry`, `KnowledgeEntryInput` exportados de `@cwm/config`
+
+**Página Conhecimento (KnowledgePage.tsx):**
+- CRUD completo: busca full-text, filtro por categoria (8 cores distintas), toggle ativo/inativo, edição inline, formulário lateral para novos itens
+- Suporte a tags separadas por vírgula
+- Rota `/knowledge` adicionada ao App.tsx e sidebar
+
+**Rebrand NEX-ALS Dark Luxury:**
+- Paleta oficial: `#080612` (fundo), `#0D0A24` (card), `#D9A441`/`#F2C879` (dourado), `#B78DFF` (roxo)
+- `tailwind.config.ts` reescrito: override do `slate` com cores NEX-ALS, namespace `brand` (dourado), namespace `nex` (purple/gold/bg/card/border), sombras e gradientes customizados
+- `index.css` reescrito: Inter via Google Fonts, CSS custom properties `--nex-*`, scrollbar dourada, componentes `.card`, `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-ghost`, `.input`, `.glass`, `.badge-gold`, utilitários `text-gold`, `glow-gold`, `glow-purple`
+- `Layout.tsx` redesenhado: sidebar gradiente escuro, faixa dourada à esquerda, logo `logo-nexals.png` com fallback `⬡`, nome "NEX-ALS IDE" dourado, tagline "Intelligence", botões AI HUB (roxo) e SQUAD (dourado) com glow no hover, nav items com borda dourada ativa, footer com versão dourada
+- Versão: `3.16.1` → `3.17.0`
+
+---
+
 ## [3.16.1] — 2026-06-11
 
 ### Adicionado — Squad: Sincronizar KB, iterações configuráveis, relatório final

@@ -4,6 +4,17 @@
 
 *(nenhuma)*
 
+## Concluídas recentemente (v3.16.1 → v3.17.0)
+
+- [x] **KB Global do Desenvolvedor — modelo Prisma** — `KnowledgeEntry` em `schema.prisma` (`knowledge_entries`): id cuid, title, content, category enum 8 valores, tags string, isActive, timestamps — v3.17.0 · 2026-06-11
+- [x] **KB Global — `KnowledgeService`** — `packages/core/src/knowledge/knowledge.service.ts`; `list()`, `listActive()`, `create(input)`, `update(id, input)`, `delete(id)`, `buildContext()` (agrupa por categoria, formata markdown); padrão `get db()` = `getPrismaClient()`; exportado em `packages/core/src/index.ts` — v3.17.0 · 2026-06-11
+- [x] **KB Global — IPC handlers** — `handlers.ts`: 5 handlers `knowledge:*`; `knowledgeSvc.buildContext()` injetado antes de `squad:stream:start` e `ai:stream:start`; preload.ts com 5 channels na allowlist; `ipc.ts` com namespace `knowledge.*` — v3.17.0 · 2026-06-11
+- [x] **KB Global — KnowledgePage** — rota `/knowledge`; busca full-text, filtro por categoria (8 cores), toggle isActive, edição inline, painel lateral para novo item, tags; adicionada ao App.tsx e ao nav (ícone `BookMarked`) — v3.17.0 · 2026-06-11
+- [x] **Rebrand NEX-ALS Dark Luxury — Tailwind** — `tailwind.config.ts` reescrito: override `slate` mapeado para `#080612`–`#F8F8FC`; namespace `brand` (dourado); namespace `nex`; sombras e gradientes customizados — v3.17.0 · 2026-06-11
+- [x] **Rebrand NEX-ALS Dark Luxury — CSS Global** — `index.css` reescrito: Inter Google Fonts; 14 CSS vars `--nex-*`; scrollbar dourada 4px; componentes `.card`, `.btn-primary` (gradiente animado), `.input` (focus dourado), `.glass`; utilitários `glow-*` — v3.17.0 · 2026-06-11
+- [x] **Rebrand NEX-ALS Dark Luxury — Layout** — sidebar redesenhada: gradiente `#0D0A24→#080612`; faixa dourada esquerda; logo `logo-nexals.png` c/ fallback `⬡`; brand "NEX-ALS IDE" dourado; tagline; botões AI HUB (roxo) e SQUAD (dourado) com glow hover; nav ativo borda/texto dourado; footer versão dourada — v3.17.0 · 2026-06-11
+- [x] **Versão 3.17.0** — bumps em `package.json` raiz, `apps/desktop/package.json`, `apps/web/package.json`; CHANGELOG, CURRENT_STATE, TASKS, AGENTE atualizados; instalador Windows `NEX-ALS IDE Setup 3.17.0.exe` + portable gerados — v3.17.0 · 2026-06-11
+
 ## Concluídas recentemente (v3.15.8 → v3.16.1)
 
 - [x] **Squad: READ_DIR + auto-detecção de diretório em READ_FILE** — nova `ActionType` `'read_dir'`; handler local com `fs.readdir({ withFileTypes: true })` retorna lista `[DIR]/[ARQ]`; `read_file` local faz `fs.stat` e se for diretório lista conteúdo ao invés de erro; handler VPS usa `ls -la`; `ACTION_INSTRUCTIONS` adicionadas a Jarvis e Shuri — v3.15.8 · 2026-06-11

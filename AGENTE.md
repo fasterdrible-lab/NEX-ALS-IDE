@@ -57,9 +57,10 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 │   │       ├── launcher/
 │   │       ├── settings/
 │   │       ├── diagnostics/
-│   │       ├── git/      ← GitService (status/diff/add/commit/push/pull)
-│   │       ├── sftp/     ← SftpService + SftpSession
-│   │       └── terminal/ ← TerminalService (shell + exec)
+│   │       ├── git/       ← GitService (status/diff/add/commit/push/pull)
+│   │       ├── sftp/      ← SftpService + SftpSession
+│   │       ├── terminal/  ← TerminalService (shell + exec)
+│   │       └── knowledge/ ← KnowledgeService (KB Global SQLite)
 │   └── db/               ← Prisma client + schema SQLite
 ├── docs/
 │   ├── ARCHITECTURE.md
@@ -132,6 +133,14 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 - `TerminalService.openShell(vpsId, onData, onClose)` → `TerminalHandle`
 - `TerminalService.exec(vpsId, cmd, timeout?)` — SSH exec one-shot (não-interativo)
 
+### `packages/core/src/knowledge/` ← adicionado em 3.17.0
+- `KnowledgeService.list()` — lista todas as entradas
+- `KnowledgeService.listActive()` — lista apenas ativas (para injeção)
+- `KnowledgeService.create(input)` — cria entrada validada com Zod
+- `KnowledgeService.update(id, input)` — atualiza parcialmente
+- `KnowledgeService.delete(id)` — remove
+- `KnowledgeService.buildContext()` — formata KB como markdown agrupado por categoria para injeção nos system prompts de Squad e AI HUB
+
 ### `packages/core/src/tunnel/` ← adicionado em 1.5.0
 - `TunnelService.open(vpsId, localPort, remotePort, remoteHost?)` — cria túnel SSH local via `ssh2.forwardOut`
 - `TunnelService.close(tunnelId)` — encerra o túnel e o servidor TCP local
@@ -150,6 +159,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 | `/settings` | Configurações — VS Code/SSH + **Backup/Restore JSON** |
 | `/diagnostics` | Diagnóstico — status de todas as ferramentas |
 | `/help` | Manual de Uso — 9 seções expansíveis |
+| `/knowledge` | KB Global do Desenvolvedor — CRUD de entradas (title, content, category, tags) |
 | `/terminal/:vpsId/:vpsName` | Terminal SSH fullscreen |
 | `/explorer/:vpsId/:vpsName` | Explorer SFTP fullscreen |
 | `/ide/:vpsId/:vpsName` | **NEX-ALS IDE** modo remoto (VPS) |
@@ -202,7 +212,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`v3.16.1` — **NEX-ALS IDE completo + Squad com modo autônomo.** IDE com Monaco/xterm/SFTP/Git. NEX-ALS AI HUB com 6 providers + Claude Code. Squad com 8 agentes, ACTION tags, modo autônomo (loop até N iterações com `rootAgentRef` garantindo orquestração centralizada), Base de Conhecimento estruturada por projeto (8 seções, 3 templates, sincronização automática com README/CURRENT_STATE/ARCHITECTURE). Ver `docs/CURRENT_STATE.md`.
+`v3.17.0` — **NEX-ALS IDE completo + KB Global + rebrand Dark Luxury.** IDE com Monaco/xterm/SFTP/Git. NEX-ALS AI HUB com 6 providers + Claude Code. Squad com 8 agentes, ACTION tags, modo autônomo (loop até N iterações com `rootAgentRef`), KB por projeto (8 seções, sincronização automática). **KB Global do Desenvolvedor** (SQLite `knowledge_entries`, KnowledgeService, CRUD visual, injeção automática em todos os agentes Squad e AI HUB). **Visual NEX-ALS Dark Luxury** (paleta `#080612`/dourado/roxo, Inter, glassmorphism, logo). Ver `docs/CURRENT_STATE.md`.
 
 ## Squad — visão geral
 
@@ -369,6 +379,13 @@ git pull
 - `claude:accounts:check` — verifica credenciais (.credentials.json)
 - `claude:accounts:delete` — remove conta
 - `claude:usage` — lê email + plano da conta ativa
+
+### knowledge:*
+- `knowledge:list` — lista todas as entradas da KB Global
+- `knowledge:create` — cria entrada (title, content, category, tags, isActive)
+- `knowledge:update` — atualiza entrada por id
+- `knowledge:delete` — remove entrada por id
+- `knowledge:context` — retorna KB formatada como markdown (para injeção em prompts)
 
 ### shell:*
 - `shell:openExternal` — abre URL no navegador padrão (allowlist: claude.ai, anthropic.com)

@@ -1,17 +1,34 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-06-11
-**Versão:** 3.16.1
+**Versão:** 3.17.0
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**NEX-ALS IDE 3.16.1** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, Contexto de Projeto, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.17.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, KB por projeto, rootAgentRef, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude), **KB Global do Desenvolvedor** (SQLite `knowledge_entries`, KnowledgeService, CRUD completo, injeção automática em Squad + AI HUB), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. **Visual NEX-ALS Dark Luxury** (paleta `#080612`/`#D9A441`/`#B78DFF`, logo, Inter font, glassmorphism). `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
 - **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat IA (API direta ou claude -p); badge vermelho "Produção" na top bar.
 - **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
+
+## KB Global do Desenvolvedor (v3.17.0)
+
+- [x] **Modelo `KnowledgeEntry`** — SQLite via Prisma (`knowledge_entries`): id, title, content, category (8 tipos), tags, isActive, timestamps
+- [x] **`KnowledgeService`** — `list()`, `listActive()`, `create()`, `update()`, `delete()`, `buildContext()` (markdown por categoria); padrão `get db()` = `getPrismaClient()`
+- [x] **IPC handlers** — `knowledge:list/create/update/delete/context`; preload e `ipc.ts` com namespace `knowledge.*`
+- [x] **Injeção Squad** — `buildContext()` chamado antes de `squad:stream:start`; injetado no topo do system prompt
+- [x] **Injeção AI HUB** — `buildContext()` chamado antes de `ai:stream:start`; mesclado via `dataWithKB`
+- [x] **KnowledgePage** — rota `/knowledge`; busca, filtro por categoria, toggle ativo, edição inline, formulário lateral; 8 categorias com cores: geral, arquitetura, padrões, bibliotecas, convenções, snippets, regras, stack
+- [x] **Sidebar** — item "Conhecimento" (`BookMarked`) adicionado ao nav
+
+## Visual NEX-ALS Dark Luxury (v3.17.0)
+
+- [x] **Paleta oficial**: fundo `#080612`, card `#0D0A24`, surface `#151038`, dourado `#D9A441`/`#F2C879`, roxo `#B78DFF`
+- [x] **`tailwind.config.ts`** — override `slate` completo; namespace `brand` (dourado); namespace `nex` (purple/gold/bg/card/border); sombras `nex-glow`, `gold-glow`, `purple-glow`; gradientes `nex-gradient`, `gold-gradient`
+- [x] **`index.css`** — Inter via Google Fonts; CSS vars `--nex-*`; scrollbar dourada; `.card`, `.card-gold`, `.btn-primary` (gradiente dourado), `.btn-secondary`, `.btn-danger`, `.btn-ghost`, `.input` (focus dourado), `.glass`; badges; utilitários `text-gold`, `glow-gold`, `glow-purple`
+- [x] **`Layout.tsx`** — sidebar gradient escuro; faixa dourada esquerda; logo `logo-nexals.png` + fallback `⬡`; "NEX-ALS IDE" dourado; botões AI HUB (roxo glow) e SQUAD (dourado glow); nav com borda dourada ativa; footer versão dourada + tagline
 
 ## Squad (v3.10.0 → v3.15.7)
 
