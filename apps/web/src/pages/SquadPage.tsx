@@ -196,6 +196,10 @@ export default function SquadPage() {
   const maxAutoIterRef = useRef(30)
   const [syncingKB, setSyncingKB] = useState(false)
 
+  // Auto-executar ações (padrão ON — sem precisar clicar "Executar" em cada action)
+  const [autoExecute, setAutoExecute] = useState(() => localStorage.getItem('squad_auto_execute') !== 'false')
+  const autoExecuteRef = useRef(autoExecute)
+
   const endRef = useRef<HTMLDivElement>(null)
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -249,6 +253,10 @@ export default function SquadPage() {
   useEffect(() => { autonomousModeRef.current = autonomousMode }, [autonomousMode])
   useEffect(() => { activeAgentRef.current = activeAgent }, [activeAgent])
   useEffect(() => { maxAutoIterRef.current = maxAutoIter }, [maxAutoIter])
+  useEffect(() => {
+    autoExecuteRef.current = autoExecute
+    localStorage.setItem('squad_auto_execute', String(autoExecute))
+  }, [autoExecute])
   // Reload KB when project (localPath) changes
   useEffect(() => { setKb(loadKB(localPath || '__global__')) }, [localPath])
 
@@ -473,6 +481,13 @@ export default function SquadPage() {
 
     if (autonomousModeRef.current) {
       await autonomousLoop(sid)
+    } else if (autoExecuteRef.current) {
+      // Auto-executar actions da última resposta sem loop completo
+      const agentBubbles = bubblesRef.current.filter(b => b.type === 'agent' && !b.isStreaming)
+      const lastBubble = agentBubbles.at(-1)
+      if (lastBubble?.actions?.length) {
+        await executeActionsAuto(lastBubble.actions)
+      }
     }
   }
 
@@ -786,6 +801,19 @@ export default function SquadPage() {
             )}
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setAutoExecute(v => !v)}
+              disabled={isStreaming || isAutonomousRunning}
+              title={autoExecute ? 'Auto-executar ações ON — ações executam automaticamente (sem clicar Executar)' : 'Auto-executar ações OFF — clique Executar em cada action manualmente'}
+              className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded border transition-colors disabled:opacity-40 ${
+                autoExecute
+                  ? 'bg-amber-900/30 border-amber-700/50 text-amber-400'
+                  : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-700'
+              }`}
+            >
+              <Zap size={10} />
+              Exec auto
+            </button>
             <button
               onClick={() => setAutonomousMode(v => !v)}
               disabled={isStreaming || isAutonomousRunning}
