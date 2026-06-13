@@ -293,6 +293,7 @@ export default function SquadPage() {
   const dragState = useRef<{ side: 'left' | 'right'; startX: number; startW: number } | null>(null)
   const autonomousModeRef = useRef(false)
   const stopRequestedRef = useRef(false)
+  const activeStreamIdRef = useRef<string | null>(null)
   const autoIterRef = useRef(0)
   const activeAgentRef = useRef<AgentName>('jarvis')
   const rootAgentRef = useRef<AgentName>('jarvis')
@@ -610,6 +611,7 @@ export default function SquadPage() {
         }
 
         setActiveStreamId(streamId)
+        activeStreamIdRef.current = streamId
 
         streamHandlers.current.set(streamId, {
           bubbleId,
@@ -619,6 +621,7 @@ export default function SquadPage() {
             const cleanContent = actions.length > 0 ? stripActions(finalContent) : finalContent
             setIsStreaming(false)
             setActiveStreamId(null)
+            activeStreamIdRef.current = null
             setAndRefBubbles(prev =>
               prev.map(b => b.id === bubbleId ? { ...b, isStreaming: false, content: cleanContent, actions } : b)
             )
@@ -636,6 +639,7 @@ export default function SquadPage() {
               const delegations = detectDelegations(agent, finalContent)
               void (async () => {
                 for (const target of delegations) {
+                  if (stopRequestedRef.current) break // usuário cancelou durante delegação
                   const task = extractTask(finalContent, target)
                   setAndRefBubbles(prev => [...prev, {
                     id: crypto.randomUUID(),
@@ -653,6 +657,7 @@ export default function SquadPage() {
           onError: (msg?: string) => {
             setIsStreaming(false)
             setActiveStreamId(null)
+            activeStreamIdRef.current = null
             setAndRefBubbles(prev =>
               prev.map(b => b.id === bubbleId
                 ? { ...b, isStreaming: false, content: b.content || `❌ ${msg || 'Erro ao processar resposta'}` }
@@ -752,12 +757,14 @@ export default function SquadPage() {
 
   function cancelStream() {
     stopRequestedRef.current = true // interrompe autoExecRound e autonomousLoop
-    if (activeStreamId) ipc.squad.stream.cancel(activeStreamId).catch(console.error)
+    const sid = activeStreamIdRef.current ?? activeStreamId
+    if (sid) ipc.squad.stream.cancel(sid).catch(console.error)
   }
 
   function stopAutonomous() {
     stopRequestedRef.current = true
-    if (activeStreamId) ipc.squad.stream.cancel(activeStreamId).catch(console.error)
+    const sid = activeStreamIdRef.current ?? activeStreamId
+    if (sid) ipc.squad.stream.cancel(sid).catch(console.error)
   }
 
   async function syncKBFromProject() {
@@ -840,8 +847,8 @@ export default function SquadPage() {
   }
 
   async function autonomousLoop(sid: string): Promise<void> {
+    if (stopRequestedRef.current) return // usuário cancelou antes do loop iniciar
     setIsAutonomousRunning(true)
-    stopRequestedRef.current = false
     autoIterRef.current = 0
     const report = { reads: 0, writes: 0, shells: 0, errors: 0, filesWritten: [] as string[] }
     try {

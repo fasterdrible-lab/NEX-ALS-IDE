@@ -1,5 +1,25 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.28.0] — 2026-06-12
+
+### Corrigido — 3 bugs que causavam tela travada no modo autônomo
+
+**Bug 1 (crítico): `autonomousLoop` resetava o flag de cancel**
+- `autonomousLoop` chamava `stopRequestedRef.current = false` ao iniciar — apagava o cancel do usuário se clicasse ✕ durante o `streamAgent` inicial
+- Fix: removido o reset interno; adicionado `if (stopRequestedRef.current) return` logo no início
+
+**Bug 2: `activeStreamId` era React state com leitura stale**
+- `cancelStream()` e `stopAutonomous()` liam `activeStreamId` via closure — se o usuário clicasse ✕ antes da re-render confirmar o novo stream ID, o cancel não ocorria
+- Fix: adicionado `activeStreamIdRef` (useRef) atualizado sincronicamente; cancel usa `activeStreamIdRef.current ?? activeStreamId`
+
+**Bug 3: loop de delegação ignorava cancel**
+- Ao delegar entre agentes (depth=0), o loop não verificava `stopRequestedRef`
+- Fix: adicionado `if (stopRequestedRef.current) break` antes de cada delegação
+
+- Versão: `3.27.0` → `3.28.0`
+
+---
+
 ## [3.27.0] — 2026-06-12
 
 ### Corrigido — Squad: botão ✕ agora para realmente o autoExecRound
