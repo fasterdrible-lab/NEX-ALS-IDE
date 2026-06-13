@@ -1,5 +1,36 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.31.0] — 2026-06-13
+
+### Corrigido — Travamentos + Agentes mais autônomos (soluções validadas pelo mercado)
+
+**Investigação:** 4 causas raiz de travamento mapeadas além das já corrigidas
+
+**Fix 1 — Watchdog para API provider no servidor (mesmo padrão do claude-code)**
+- Streams de GPT/Anthropic/DeepSeek não tinham timeout — se a API parasse de responder, travava para sempre
+- `handlers.ts`: watchdog de 90s por chunk adicionado ao path de API key (idêntico ao já existente para claude-code)
+
+**Fix 2 — Watchdog no renderer (padrão Cursor: 60s por chunk no cliente)**
+- Backup independente: se o evento `done` do IPC for perdido, o renderer auto-cancela após 90s sem chunks
+- `lastChunkAtRef` atualizado a cada chunk recebido; `setInterval` de 15s verifica inatividade
+
+**Fix 3 — Chunk batching (padrão VS Code Copilot: atualização de estado em batch)**
+- Cada chunk do LLM causava um `setState` individual → centenas de re-renders por segundo em respostas grandes
+- Buffer acumula deltas por `bubbleId` e aplica em batch a cada 80ms → UI significativamente mais fluida
+
+**Fix 4 — Cancel signal em `executeActionsAuto` (padrão Devin: cancel por ferramenta)**
+- Clicar ✕ não interrompia ações já em execução na fila (READ_FILE, WRITE_FILE, SHELL em sequência)
+- Agora verifica `stopRequestedRef` antes de cada ação individual
+
+**Fix 5 — Agentes mais proativos: recovery de erros explícito (padrão Aider)**
+- `buildErrorHint()`: analisa o output de erro e injeta dica de correção específica para ENOENT, npm peers, robocopy, timeout, permissão negada
+- Feedback reformatado: `❌ ERRO — LEIA E CORRIJA` com instrução obrigatória de não repetir o mesmo comando
+- `EXECUTOR_RULES` em `agents.ts`: 8 regras de recovery (E1-E8) com correções concretas por tipo de erro
+
+- Versão: `3.30.0` → `3.31.0`
+
+---
+
 ## [3.30.0] — 2026-06-13
 
 ### Adicionado — Configurações: botão "Limpar histórico do Squad"

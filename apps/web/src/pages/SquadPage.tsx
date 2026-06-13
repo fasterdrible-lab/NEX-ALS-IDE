@@ -239,6 +239,37 @@ function extractTask(text: string, target: AgentName): string {
   return text.slice(0, 1200)
 }
 
+// ── Error recovery hints (padrão Aider: dicas específicas por causa) ────────
+function buildErrorHint(output: string, type: string, desc: string): string {
+  const o = output.toLowerCase()
+  const hints: string[] = []
+  if (o.includes('enoent') || o.includes('no such file or directory') || o.includes('cannot find path')) {
+    if (type === 'write_file') hints.push('→ CORREÇÃO: O diretório pai não existe. Use [ACTION:SHELL] com "mkdir -p <diretório>" ANTES do WRITE_FILE.')
+    else hints.push('→ CORREÇÃO: O caminho não existe. Use READ_DIR para verificar a estrutura antes.')
+  }
+  if (o.includes('eacces') || o.includes('permission denied') || o.includes('access is denied')) {
+    hints.push('→ CORREÇÃO: Permissão negada. Tente executar o comando em outro diretório ou verifique se o arquivo está em uso.')
+  }
+  if (o.includes('npm err') || o.includes('npm error')) {
+    if (o.includes('peer dep') || o.includes('could not resolve')) hints.push('→ CORREÇÃO: Conflito de dependências. Tente: npm install --legacy-peer-deps')
+    else if (o.includes('enotempty') || o.includes('not empty')) hints.push('→ CORREÇÃO: Diretório não vazio. Use rmdir /S /Q <pasta> antes, ou crie em subpasta.')
+    else hints.push('→ CORREÇÃO: Verifique se está na pasta correta com READ_DIR antes de rodar npm.')
+  }
+  if (o.includes('robocopy') && (o.includes('error') || o.includes('failed'))) {
+    hints.push('→ CORREÇÃO: Verifique se a pasta de origem existe. Use READ_DIR para confirmar.')
+  }
+  if (o.includes('cannot create') || o.includes('already exists')) {
+    hints.push('→ CORREÇÃO: Item já existe. Verifique com READ_DIR se já foi criado antes de repetir.')
+  }
+  if (o.includes('timeout') || o.includes('timed out')) {
+    hints.push('→ CORREÇÃO: Timeout. Comandos como npx/npm install levam 3-8 min. Verifique se o comando anterior completou antes de prosseguir.')
+  }
+  if (hints.length === 0 && type === 'shell') {
+    hints.push('→ CORREÇÃO: Analise o erro acima, identifique a causa e emita um comando diferente. Não repita o mesmo.')
+  }
+  return hints.join('\n')
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 export default function SquadPage() {
   const navigate = useNavigate()
@@ -295,6 +326,8 @@ export default function SquadPage() {
   const stopRequestedRef = useRef(false)
   const activeStreamIdRef = useRef<string | null>(null)
   const autoIterRef = useRef(0)
+  const lastChunkAtRef = useRef<number>(0)
+  const rendererWatchdogRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const activeAgentRef = useRef<AgentName>('jarvis')
   const rootAgentRef = useRef<AgentName>('jarvis')
 
@@ -520,30 +553,71 @@ export default function SquadPage() {
     }
   }
 
-  // Single global stream chunk listener
+  // Single global stream chunk listener — com batching de deltas (padrão VS Code Copilot)
   useEffect(() => {
+    // Buffer de chunks por bubbleId: acumula deltas e aplica em batch a cada 80ms
+    const deltaBuffer = new Map<string, string>()
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+    const flushDeltas = () => {
+      if (deltaBuffer.size === 0) return
+      const snapshot = new Map(deltaBuffer)
+      deltaBuffer.clear()
+      setAndRefBubbles(prev => prev.map(b => {
+        const extra = snapshot.get(b.id)
+        return extra ? { ...b, content: b.content + extra } : b
+      }))
+    }
+
     const unsub = ipc.squad.stream.onChunk(chunk => {
+      lastChunkAtRef.current = Date.now() // atualiza watchdog do renderer
       const handler = streamHandlers.current.get(chunk.streamId)
       if (!handler) return
 
       if (chunk.type === 'text_delta' && chunk.delta) {
-        setAndRefBubbles(prev =>
-          prev.map(b => b.id === handler.bubbleId ? { ...b, content: b.content + chunk.delta! } : b)
-        )
+        deltaBuffer.set(handler.bubbleId, (deltaBuffer.get(handler.bubbleId) ?? '') + chunk.delta)
+        if (!flushTimer) flushTimer = setTimeout(() => { flushTimer = null; flushDeltas() }, 80)
       }
 
       if (chunk.type === 'done') {
+        flushDeltas() // garante que todos os deltas pendentes sejam aplicados
         streamHandlers.current.delete(chunk.streamId)
         handler.onDone()
       }
 
       if (chunk.type === 'error') {
+        flushDeltas()
         streamHandlers.current.delete(chunk.streamId)
         handler.onError(chunk.error)
       }
     })
-    return unsub
+    return () => { unsub(); if (flushTimer) clearTimeout(flushTimer) }
   }, [setAndRefBubbles])
+
+  // Renderer-side watchdog: se isStreaming > 90s sem chunks → auto-cancel (padrão Cursor)
+  useEffect(() => {
+    if (isStreaming) {
+      lastChunkAtRef.current = Date.now()
+      if (!rendererWatchdogRef.current) {
+        rendererWatchdogRef.current = setInterval(() => {
+          if (!stopRequestedRef.current && Date.now() - lastChunkAtRef.current > 90_000) {
+            stopRequestedRef.current = true
+            const sid = activeStreamIdRef.current ?? activeStreamId
+            if (sid) ipc.squad.stream.cancel(sid).catch(console.error)
+            setAndRefBubbles(prev => [...prev, {
+              id: crypto.randomUUID(), type: 'system',
+              content: '⏱ Stream sem resposta há 90s — cancelado automaticamente. Tente novamente.',
+            }])
+          }
+        }, 15_000)
+      }
+    } else {
+      if (rendererWatchdogRef.current) {
+        clearInterval(rendererWatchdogRef.current)
+        rendererWatchdogRef.current = null
+      }
+    }
+  }, [isStreaming, activeStreamId, setAndRefBubbles])
 
   // Live shell output streaming
   useEffect(() => {
@@ -804,6 +878,8 @@ export default function SquadPage() {
   async function executeActionsAuto(actions: ActionBlock[]): Promise<Array<{ type: string; desc: string; output: string; ok: boolean }>> {
     const results: Array<{ type: string; desc: string; output: string; ok: boolean }> = []
     for (const action of actions) {
+      if (stopRequestedRef.current) break // cancel signal (padrão Devin)
+
       // Skip empty SHELL — agent produced [ACTION:SHELL][/ACTION] with no command
       if (action.type === 'shell' && !action.content.trim()) {
         const projPath = (executionMode === 'local' && localPath) ? localPath : 'C:\\projeto'
@@ -908,15 +984,22 @@ export default function SquadPage() {
         const results = await executeActionsAuto(lastBubble.actions!)
         if (stopRequestedRef.current) break
 
+        const hasErrors = results.some(r => !r.ok)
         const lines: string[] = [`[RESULTADO DAS AÇÕES — iteração ${autoIterRef.current}]`]
         for (const r of results) {
-          lines.push(`\n${r.type.toUpperCase()}${r.desc ? ` (${r.desc})` : ''}:\n${r.ok ? '✅ Sucesso' : '❌ Erro'}\n${r.output.slice(0, 2000)}`)
+          lines.push(`\n${r.type.toUpperCase()}${r.desc ? ` (${r.desc})` : ''}:\n${r.ok ? '✅ Sucesso' : '❌ ERRO — LEIA E CORRIJA'}`)
+          lines.push(r.output.slice(0, 2000))
+          if (!r.ok) lines.push(buildErrorHint(r.output, r.type, r.desc))
           if (r.type === 'read_file' || r.type === 'read_dir') report.reads++
           else if (r.type === 'write_file') { report.writes++; if (r.ok && r.desc) report.filesWritten.push(r.desc.replace('path:', '').trim()) }
           else if (r.type === 'shell') report.shells++
           if (!r.ok) report.errors++
         }
-        lines.push('\nAnalise os resultados e continue trabalhando. Se concluiu tudo, inclua [PRONTO] na resposta.')
+        if (hasErrors) {
+          lines.push('\n⚠️ INSTRUÇÃO OBRIGATÓRIA: Corrija o(s) erro(s) acima. NÃO repita o mesmo comando. Analise a causa raiz e emita ação corrigida. Se concluiu tudo, inclua [PRONTO].')
+        } else {
+          lines.push('\nContinue com o próximo passo. Se concluiu tudo, inclua [PRONTO] na resposta.')
+        }
 
         // Return results to the agent that produced the actions:
         // — root agent → depth 0 (can trigger further delegations)
@@ -965,12 +1048,19 @@ export default function SquadPage() {
       const results = await executeActionsAuto(lastBubble.actions!)
       if (stopRequestedRef.current) break // cancelado durante execução
 
+      const hasErrors = results.some(r => !r.ok)
       const lines: string[] = ['[RESULTADO DAS AÇÕES]']
       for (const r of results) {
         const desc = r.desc ? ` (${r.desc})` : ''
-        lines.push(`\n${r.type.toUpperCase()}${desc}:\n${r.ok ? '✅ Sucesso' : '❌ Erro'}\n${r.output.slice(0, 2000)}`)
+        lines.push(`\n${r.type.toUpperCase()}${desc}:\n${r.ok ? '✅ Sucesso' : '❌ ERRO — LEIA E CORRIJA'}`)
+        lines.push(r.output.slice(0, 2000))
+        if (!r.ok) lines.push(buildErrorHint(r.output, r.type, r.desc))
       }
-      lines.push('\nAnalise os resultados e continue. Se concluiu tudo, inclua [PRONTO].')
+      if (hasErrors) {
+        lines.push('\n⚠️ INSTRUÇÃO OBRIGATÓRIA: Corrija o(s) erro(s) acima antes de continuar. NÃO repita o mesmo comando com falha. Analise o erro, identifique a causa raiz e emita uma ação corrigida. Se concluiu tudo sem erros, inclua [PRONTO].')
+      } else {
+        lines.push('\nContinue com o próximo passo. Se concluiu tudo, inclua [PRONTO].')
+      }
 
       // Route results to the agent that produced the actions (not always root)
       const isRoot = lastBubble.agentName === rootAgentRef.current

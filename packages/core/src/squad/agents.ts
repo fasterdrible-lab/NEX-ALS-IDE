@@ -84,7 +84,17 @@ REGRAS CRÍTICAS DE EXECUÇÃO — NUNCA IGNORAR:
 8. npm/npx: nomes de pacote devem ser SEMPRE lowercase. Se o diretório tem maiúsculas (ex: BRAINBOARD), crie o projeto em subpasta lowercase (ex: apps/web). Use --ts (não --typescript), aspas em --import-alias "@/*". SEMPRE use "npx --yes" (com flag --yes) para evitar prompt "Ok to proceed? (y)".
 9. Scaffold em staging: SEMPRE use C:\\Temp\\squad-scaffold como staging (caminho fixo, sem variáveis de ambiente). Passo 1: mkdir C:\\Temp\\squad-scaffold 2>nul & npx --yes create-next-app@latest C:\\Temp\\squad-scaffold\\<nome> --ts --tailwind --app --eslint --src-dir --import-alias "@/*" --use-npm. Passo 2 (copiar EXCLUINDO node_modules): robocopy "C:\\Temp\\squad-scaffold\\<nome>" "<destino>" /E /IS /IT /NFL /NDL /NJH /NJS /XD node_modules .next. Passo 3: npm install --prefix "<destino>". Passo 4: rmdir /S /Q "C:\\Temp\\squad-scaffold". PROIBIDO usar xcopy com \\* no final. NUNCA copiar node_modules com robocopy — leva 10+ minutos e trava o app. NUNCA use %USERNAME% no cwd.
 10. Comandos com npm/npx levam 3-8 minutos — aguarde o [RESULTADO DAS AÇÕES] antes de prosseguir. NUNCA emita segundo ACTION antes de receber o resultado do primeiro.
-11. create-next-app recusa criar em pasta não-vazia. SEMPRE use subpasta em staging (ex: C:\\Temp\\squad-scaffold\\meu-app) e copie depois com robocopy — nunca aponte create-next-app diretamente para a pasta de destino que já tem arquivos.`
+11. create-next-app recusa criar em pasta não-vazia. SEMPRE use subpasta em staging (ex: C:\\Temp\\squad-scaffold\\meu-app) e copie depois com robocopy — nunca aponte create-next-app diretamente para a pasta de destino que já tem arquivos.
+
+RECOVERY DE ERROS — PROATIVO (não trave, resolva):
+E1. ENOENT / "no such file or directory" em WRITE_FILE → o diretório pai não existe. Crie com [ACTION:SHELL]mkdir "<diretório-pai>"[/ACTION] ANTES de retentar o WRITE_FILE.
+E2. ENOENT / "cannot find path" em SHELL → verifique o caminho com [ACTION:READ_DIR path="<pasta>"][/ACTION] antes.
+E3. npm ERR! peer dep / could not resolve → use npm install --legacy-peer-deps
+E4. "not empty" / "already exists" → verifique com READ_DIR se o trabalho já foi feito. Se sim, pule para o próximo passo.
+E5. Permissão negada (EACCES / "access denied") → tente outro diretório ou verifique se o arquivo está aberto.
+E6. Timeout → não repita o mesmo comando. Verifique o estado atual com READ_DIR e continue de onde parou.
+E7. Mesmo erro 2 vezes seguidas → MUDE A ABORDAGEM. Tente comando diferente, biblioteca diferente, ou caminho diferente. Nunca repita o mesmo erro.
+E8. Robocopy error 3 (path not found) → a pasta de origem não existe. Verifique com READ_DIR antes de copiar.`
 
 export const AGENTS: Record<AgentName, AgentConfig> = {
   jarvis: {

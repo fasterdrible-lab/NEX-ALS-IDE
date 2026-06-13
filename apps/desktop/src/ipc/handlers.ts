@@ -1089,16 +1089,39 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         return { streamId }
       }
 
-      // Rota padrão (API Key)
+      // Rota padrão (API Key) — com watchdog de 90s (mesmo padrão do claude-code)
+      let apiLastChunkAt = Date.now()
+      let apiDoneSent = false
+      // eslint-disable-next-line prefer-const
+      let apiWatchdog: ReturnType<typeof setInterval>
+
       const session = await squadSvc.startAgentStream(
         data.agent,
         data.message,
         data.history ?? [],
         chunk => {
+          apiLastChunkAt = Date.now()
+          if (chunk.type === 'done' || chunk.type === 'error') {
+            apiDoneSent = true
+            clearInterval(apiWatchdog)
+          }
           try { targetWin?.webContents.send('squad:stream:chunk', chunk) } catch { /* janela fechada */ }
         },
         { systemPromptOverride: buildSystemPrompt(agentCfg.systemPrompt), providerOverride: effectiveProvider }
       )
+
+      apiWatchdog = setInterval(() => {
+        if (apiDoneSent) { clearInterval(apiWatchdog); return }
+        if (Date.now() - apiLastChunkAt > 90_000) {
+          clearInterval(apiWatchdog)
+          squadSvc.cancelStream(session.streamId)
+          try { targetWin?.webContents.send('squad:stream:chunk', {
+            streamId: session.streamId, type: 'error',
+            error: '⏱ Timeout: provider não respondeu em 90s. Verifique sua API key e tente novamente.',
+          }) } catch { /* janela fechada */ }
+        }
+      }, 15_000)
+
       return { streamId: session.streamId }
     })
   )
