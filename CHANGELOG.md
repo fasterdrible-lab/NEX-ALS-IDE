@@ -1,5 +1,21 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.27.0] — 2026-06-12
+
+### Corrigido — Squad: botão ✕ agora para realmente o autoExecRound
+
+**Raiz do problema:**
+- `autoExecRound` tem um loop de até 20 rodadas mas nunca verificava `stopRequestedRef` — ao clicar ✕, o stream atual era cancelado mas o loop JS reiniciava um novo stream imediatamente, deixando a tela presa indefinidamente
+- `cancelStream()` não setava `stopRequestedRef.current = true` (apenas `stopAutonomous()` fazia isso), então o flag que os loops usam para parar nunca era ativado ao clicar ✕ no modo Exec auto
+
+**Fixes:**
+- `cancelStream()` agora seta `stopRequestedRef.current = true` — unifica comportamento com `stopAutonomous()`
+- `autoExecRound`: verifica `stopRequestedRef.current` **antes de cada rodada** e **após `executeActionsAuto`** — para imediatamente quando o usuário cancela, mesmo no meio de uma execução
+- `handleSend`: reseta `stopRequestedRef.current = false` ao enviar nova mensagem — sem esse reset, clicar ✕ uma vez bloquearia todos os loops seguintes permanentemente
+- Versão: `3.26.0` → `3.27.0`
+
+---
+
 ## [3.26.0] — 2026-06-12
 
 ### Corrigido — Squad + AI Hub: stream congelado + cancelamento que não funcionava

@@ -669,6 +669,7 @@ export default function SquadPage() {
   async function handleSend() {
     const text = input.trim()
     if (!text || isStreaming) return
+    stopRequestedRef.current = false // reset para cada nova mensagem enviada
 
     // Parse @agent mention at start
     let targetAgent = activeAgent
@@ -750,6 +751,7 @@ export default function SquadPage() {
   }
 
   function cancelStream() {
+    stopRequestedRef.current = true // interrompe autoExecRound e autonomousLoop
     if (activeStreamId) ipc.squad.stream.cancel(activeStreamId).catch(console.error)
   }
 
@@ -940,6 +942,8 @@ export default function SquadPage() {
   async function autoExecRound(sid: string, maxRounds = 20): Promise<void> {
     let round = 0
     for (; round < maxRounds; round++) {
+      if (stopRequestedRef.current) break // usuário clicou ✕
+
       const agentBubbles = bubblesRef.current.filter(b => b.type === 'agent' && !b.isStreaming)
       const lastBubble = agentBubbles.at(-1)
       if (!lastBubble?.actions?.length) break
@@ -952,6 +956,7 @@ export default function SquadPage() {
       }])
 
       const results = await executeActionsAuto(lastBubble.actions!)
+      if (stopRequestedRef.current) break // cancelado durante execução
 
       const lines: string[] = ['[RESULTADO DAS AÇÕES]']
       for (const r of results) {
