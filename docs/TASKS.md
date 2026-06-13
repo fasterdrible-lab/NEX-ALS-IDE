@@ -2,12 +2,28 @@
 
 ## Em andamento
 
-*(nenhuma)*
+- [ ] **Phase 2 — LSP auto-start local** — iniciar TypeScript language server localmente em modo local sem exigir túnel SSH manual; maior ganho de qualidade pendente no IDE
 
-## Bugs identificados — Squad execução local em OneDrive (2026-06-12)
+## Concluídas recentemente (v3.22.0 → v3.25.0)
 
-- [ ] **Squad: OneDrive bloqueia `create-next-app`** — `child_process.exec` executa corretamente (`handlers.ts:1062`), mas `create-next-app` faz `fs.access(root, W_OK)` antes de criar o projeto; o OneDrive intercepta esse check de forma diferente do filesystem normal e retorna "sem permissão" mesmo que a pasta seja gravável. Fix: adicionar em `EXECUTOR_RULES` a regra de usar `C:\Users\phpos\AppData\Local\Temp` como staging e copiar com `xcopy /E /Y /H /I source\* dest\` após o scaffold.
-- [ ] **Squad: `parseActions` segundo passo não implementado** — CHANGELOG v3.19.0 documenta dois passes tolerantes, mas `packages/core/src/squad/actions.ts:12` tem apenas um regex que exige `[/ACTION]` fechando. Se o modelo truncar antes do `[/ACTION]`, a ACTION é descartada silenciosamente. Fix: implementar o segundo passo de captura.
+- [x] **monacoSetup.ts reescrito** — TypeScript language service via type cast (`MonacoTsDefaults`/`MonacoTsLang`); compiler options ESNext+JSX ReactJSX+allowJs; inlay hints com `setInlayHintsOptions`; semantic highlighting via `'semanticHighlighting.enabled': true` — v3.25.0 · 2026-06-12
+- [x] **IDEPage: Breadcrumbs bar** — barra fina acima do Monaco mostrando últimos 4 segmentos do caminho + símbolo atual (roxo `text-brand-500`) via `currentSymbol` state + `outlineRef` (evita closure stale no handler de cursor) — v3.25.0 · 2026-06-12
+- [x] **IDEPage: Outline View** — aba "Outline" (`List` icon) no painel esquerdo; TypeScript/JS via `getTypeScriptWorker()` + `getNavigationBarItems()`; regex fallback para outras linguagens; `OutlineTree` component com ícones por kind, entrada ativa realçada, clique navega; auto-refresh debounce 450ms — v3.25.0 · 2026-06-12
+- [x] **Squad: robocopy `/XD node_modules`** — fix freeze crítico (10+ min copiando 30k arquivos); `handlers.ts` system prompt + `agents.ts` regra 9 atualizados; `npm install --prefix` após robocopy; timeout 600s adicionado ao regex de robocopy — v3.25.0 · 2026-06-12
+- [x] **Versão 3.25.0** — bumps nos 3 package.json + Layout.tsx + CHANGELOG + CURRENT_STATE + TASKS — v3.25.0 · 2026-06-12
+
+## Concluídas recentemente (v3.21.0 → v3.22.0)
+
+- [x] **IDEPage: badges git estilo VS Code na SFTP tree** — `gitFileMap` (Map path→{letter,color}) e `dirtyDirSet` (Set de prefixos de pastas sujas) via `useMemo`; `flatTree.map()` convertido para arrow function `=>{}` com variáveis `relPath`, `gitInfo`, `dirtyFolder`; nome do arquivo colorido com `gitInfo.color`; badge letra (M/A/D/?) à direita para arquivos; ponto âmbar para pastas com filhos sujos; auto-load git status quando tree carrega pela primeira vez — v3.22.0 · 2026-06-12
+- [x] **SquadPage: "Arquivos modificados" estilo VS Code Explorer** — cada entrada mostra ícone `FileCheck2` colorido por extensão (ts/tsx/js/py/json/css…), nome em negrito na cor da extensão, path pai em `text-slate-600` ao lado, badge 'W' verde à direita; paleta `extColor` com 12 extensões — v3.22.0 · 2026-06-12
+- [x] **Versão 3.22.0** — bumps nos 3 package.json + Layout — v3.22.0 · 2026-06-12
+
+## Concluídas recentemente (v3.20.0 → v3.21.0)
+
+- [x] **Squad: `parseActions` segundo passo implementado** — `parseActions` agora tem dois passes: Pass 1 com regex `\[\/ACTION\]?` (aceita fechamento sem `]` final); Pass 2 com lookahead `(?=\[ACTION:|$)` captura blocos completamente truncados antes de `[/ACTION`; `Set<number>` evita duplicatas; `makeBlock`/`extractParams` extraídos para funções auxiliares; `stripActions` atualizado para limpar ambas as formas — v3.21.0 · 2026-06-12
+- [x] **Squad: regra 9 — OneDrive bloqueia scaffolds** — `EXECUTOR_RULES` regra 9 instrui a usar `C:\Users\%USERNAME%\AppData\Local\Temp\squad-scaffold` como staging quando `cwd` estiver em OneDrive; scaffold executa no Temp; cópia com `xcopy /E /Y /H /I` para destino final; apaga staging após copiar — v3.21.0 · 2026-06-12
+- [x] **SquadPage: painel de monitoramento de atividade (4 painéis)** — interfaces `ActivityEntry` e `SessionStats`; estado + refs (`activityLog`, `sessionStats`, `modifiedFiles`) para evitar closures stale; `pushActivity`/`updateActivity`/`clearActivity`; `executeAction` e `executeActionsAuto` instrumentados; painel direito com 3 tabs: Histórico | Atividade | Contexto; tab Atividade com stats bar (R/W/⚡/✗), arquivos modificados, log expandível com status e duração — v3.21.0 · 2026-06-12
+- [x] **Versão 3.21.0** — bumps nos 3 package.json + Layout — v3.21.0 · 2026-06-12
 
 ## Concluídas recentemente (v3.19.0 → v3.20.0)
 

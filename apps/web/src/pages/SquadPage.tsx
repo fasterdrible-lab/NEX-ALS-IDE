@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw, BookOpen, Sparkles, RotateCw, BarChart2 } from 'lucide-react'
+import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronRight, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw, BookOpen, Sparkles, RotateCw, BarChart2, Activity, FilePen, Cpu, Clock, FileCheck2 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 
 // ── Agent metadata (UI only) ─────────────────────────────────────────────────
@@ -120,6 +120,18 @@ type PipelineGate = {
   prodOutput?: string
 }
 
+interface ActivityEntry {
+  id: string
+  ts: number
+  type: ActionType
+  label: string
+  status: 'running' | 'ok' | 'error'
+  output?: string
+  durationMs?: number
+}
+
+interface SessionStats { reads: number; writes: number; shells: number; errors: number }
+
 function parseActions(text: string): ActionBlock[] {
   const blocks: ActionBlock[] = []
   const matchedAt = new Set<number>()
@@ -131,10 +143,47 @@ function parseActions(text: string): ActionBlock[] {
     while ((pm = pr.exec(raw)) !== null) p[pm[1]] = pm[2]
     return p
   }
+
+  // Cleans up common LLM patterns: [ cmd ], ```shell\ncmd\n```, backtick wrapping
+  function cleanShellContent(raw: string, tagPos: number): string {
+    let c = raw.trim()
+    // Strip [ cmd ] wrapper — agents sometimes write the command between [ ]
+    if (c.startsWith('[') && c.endsWith(']') && !c.startsWith('[ACTION:') && !c.startsWith('[/ACTION')) {
+      c = c.slice(1, -1).trim()
+    }
+    // Strip markdown code fences: ```shell\n...\n``` or ```\n...\n```
+    c = c.replace(/^```[\w]*\n?/m, '').replace(/\n?```\s*$/m, '').trim()
+    // Strip single-backtick wrapping: `cmd`
+    if (c.startsWith('`') && c.endsWith('`') && !c.includes('\n')) c = c.slice(1, -1).trim()
+
+    // If still empty, scan backward in text for the last backtick/code block before this tag
+    if (!c) {
+      const before = text.slice(0, tagPos)
+      // Look for a backtick code block just before the tag
+      const codeBlock = /```[\w]*\n([\s\S]+?)\n```\s*$/.exec(before)
+      if (codeBlock) c = codeBlock[1].trim()
+      else {
+        // Look for a line that starts with a Windows command keyword
+        const lines = before.split('\n').map(l => l.trim()).filter(Boolean)
+        for (let i = lines.length - 1; i >= Math.max(0, lines.length - 5); i--) {
+          const l = lines[i]
+          if (/^(npx|npm|node|mkdir|rmdir|xcopy|rd |cd |dir |if exist|where|cmd )/i.test(l) ||
+              /^(npx |npm |node |mkdir |rmdir |xcopy |echo |del |copy |move )/i.test(l)) {
+            // Strip surrounding backticks if present
+            c = l.replace(/^`|`$/g, '').trim()
+            break
+          }
+        }
+      }
+    }
+    return c
+  }
+
   function pushBlock(idx: number, type: string, paramStr: string, content: string) {
     matchedAt.add(idx)
     const p = extractParams(paramStr)
-    blocks.push({ id: `act-${Math.random().toString(36).slice(2)}`, type: type.toLowerCase() as ActionType, cwd: p['cwd'], path: p['path'], content: content.trim() })
+    const cleaned = type.toLowerCase() === 'shell' ? cleanShellContent(content, idx) : content.trim()
+    blocks.push({ id: `act-${Math.random().toString(36).slice(2)}`, type: type.toLowerCase() as ActionType, cwd: p['cwd'], path: p['path'], content: cleaned })
   }
 
   // Pass 1: [ACTION:TYPE params]content[/ACTION] — handles missing ] on closing tag
@@ -157,6 +206,21 @@ function stripActions(text: string): string {
     .trim()
 }
 
+// ── VS Code-style file explorer ──────────────────────────────────────────────
+interface ExplorerEntry { name: string; path: string; isDirectory: boolean; depth: number }
+
+const EXPLORER_SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'dist-app', '.turbo', '__pycache__', '.venv', 'venv', '.cache'])
+
+function fileIconColor(name: string): string {
+  const ext = name.split('.').at(-1)?.toLowerCase() ?? ''
+  const map: Record<string, string> = {
+    ts: 'text-blue-400', tsx: 'text-blue-300', js: 'text-yellow-300', jsx: 'text-yellow-200',
+    json: 'text-amber-300', md: 'text-slate-300', css: 'text-pink-400', html: 'text-orange-400',
+    py: 'text-green-400', sql: 'text-purple-400', sh: 'text-green-300', env: 'text-red-400',
+  }
+  return map[ext] ?? 'text-slate-400'
+}
+
 // ── Client-side helpers ──────────────────────────────────────────────────────
 function detectDelegations(agentName: AgentName, text: string): AgentName[] {
   const lower = text.toLowerCase()
@@ -164,13 +228,15 @@ function detectDelegations(agentName: AgentName, text: string): AgentName[] {
 }
 
 function extractTask(text: string, target: AgentName): string {
-  const pattern = new RegExp(`@${target}[^.!?\\n]*[.!?\\n]?`, 'i')
+  // Captura tudo a partir de @target até o próximo @agente ou fim do texto
+  const agentsAlt = AGENT_NAMES.map(a => `@${a}`).join('|')
+  const pattern = new RegExp(`@${target}[\\s\\S]*?(?=${agentsAlt}|$)`, 'i')
   const match = text.match(pattern)
   if (match) {
-    const task = match[0].replace(new RegExp(`@${target}[:\\s]*`, 'i'), '').trim()
-    return task || text.slice(0, 400)
+    const task = match[0].replace(new RegExp(`^@${target}[:\\s—\\-]*`, 'i'), '').trim()
+    if (task.length > 20) return task.slice(0, 1200)
   }
-  return text.slice(0, 400)
+  return text.slice(0, 1200)
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -231,6 +297,24 @@ export default function SquadPage() {
   const activeAgentRef = useRef<AgentName>('jarvis')
   const rootAgentRef = useRef<AgentName>('jarvis')
 
+  // ── Activity panel ───────────────────────────────────────────────────────────
+  const [liveShellOutput, setLiveShellOutput] = useState('')
+  const liveShellRef = useRef<HTMLDivElement>(null)
+  const [activityLog, setActivityLog] = useState<ActivityEntry[]>([])
+  const activityLogRef = useRef<ActivityEntry[]>([])
+  const [sessionStats, setSessionStats] = useState<SessionStats>({ reads: 0, writes: 0, shells: 0, errors: 0 })
+  const sessionStatsRef = useRef<SessionStats>({ reads: 0, writes: 0, shells: 0, errors: 0 })
+  const [modifiedFiles, setModifiedFiles] = useState<string[]>([])
+  const modifiedFilesRef = useRef<string[]>([])
+  const [rightTab, setRightTab] = useState<'history' | 'activity' | 'context'>('history')
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
+
+  // ── Explorer state ────────────────────────────────────────────────────────────
+  const [explorerCache, setExplorerCache] = useState<Record<string, ExplorerEntry[]>>({})
+  const [explorerExpanded, setExplorerExpanded] = useState<Set<string>>(new Set())
+  const [recentlyChanged, setRecentlyChanged] = useState<Record<string, number>>({})
+  const explorerWatchIdRef = useRef<string | null>(null)
+
   const setAndRefBubbles = useCallback((updater: (prev: ChatBubble[]) => ChatBubble[]) => {
     setBubbles(prev => {
       const next = updater(prev)
@@ -238,6 +322,87 @@ export default function SquadPage() {
       return next
     })
   }, [])
+
+  function pushActivity(entry: ActivityEntry) {
+    activityLogRef.current = [entry, ...activityLogRef.current].slice(0, 300)
+    setActivityLog([...activityLogRef.current])
+    setRightTab('activity')
+  }
+
+  function updateActivity(id: string, status: 'ok' | 'error', output: string, startTs: number) {
+    activityLogRef.current = activityLogRef.current.map(e =>
+      e.id === id ? { ...e, status, output, durationMs: Date.now() - startTs } : e
+    )
+    setActivityLog([...activityLogRef.current])
+    const entry = activityLogRef.current.find(e => e.id === id)
+    if (!entry) return
+    const st = { ...sessionStatsRef.current }
+    if (status === 'error') st.errors++
+    else if (entry.type === 'read_file' || entry.type === 'read_dir') st.reads++
+    else if (entry.type === 'write_file') st.writes++
+    else if (entry.type === 'shell') st.shells++
+    sessionStatsRef.current = st
+    setSessionStats(st)
+    if (status === 'ok' && entry.type === 'write_file' && entry.label) {
+      const mf = modifiedFilesRef.current
+      if (!mf.includes(entry.label)) {
+        modifiedFilesRef.current = [entry.label, ...mf]
+        setModifiedFiles([...modifiedFilesRef.current])
+      }
+    }
+  }
+
+  function clearActivity() {
+    activityLogRef.current = []
+    setActivityLog([])
+    sessionStatsRef.current = { reads: 0, writes: 0, shells: 0, errors: 0 }
+    setSessionStats({ reads: 0, writes: 0, shells: 0, errors: 0 })
+    modifiedFilesRef.current = []
+    setModifiedFiles([])
+    setExpandedLogId(null)
+  }
+
+  // ── Explorer helpers ──────────────────────────────────────────────────────────
+  async function loadExplorerDir(dirPath: string) {
+    try {
+      const raw = await ipc.local.readdir(dirPath)
+      const entries: ExplorerEntry[] = raw
+        .filter(e => !EXPLORER_SKIP.has(e.name))
+        .map(e => ({ name: e.name, path: e.path, isDirectory: e.isDirectory, depth: 0 }))
+        .sort((a, b) => {
+          if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
+          return a.name.localeCompare(b.name)
+        })
+      setExplorerCache(prev => ({ ...prev, [dirPath]: entries }))
+    } catch {}
+  }
+
+  async function toggleExplorerDir(entry: ExplorerEntry) {
+    if (!entry.isDirectory) return
+    const next = new Set(explorerExpanded)
+    if (next.has(entry.path)) {
+      next.delete(entry.path)
+    } else {
+      next.add(entry.path)
+      if (!explorerCache[entry.path]) await loadExplorerDir(entry.path)
+    }
+    setExplorerExpanded(next)
+  }
+
+  const explorerFlat = useMemo((): ExplorerEntry[] => {
+    if (!localPath || !explorerCache[localPath]) return []
+    function buildFlat(entries: ExplorerEntry[], depth: number): ExplorerEntry[] {
+      const result: ExplorerEntry[] = []
+      for (const e of entries) {
+        result.push({ ...e, depth })
+        if (e.isDirectory && explorerExpanded.has(e.path)) {
+          result.push(...buildFlat(explorerCache[e.path] ?? [], depth + 1))
+        }
+      }
+      return result
+    }
+    return buildFlat(explorerCache[localPath], 0)
+  }, [explorerCache, explorerExpanded, localPath])
 
   // Load sessions + VPS list
   useEffect(() => {
@@ -279,6 +444,42 @@ export default function SquadPage() {
   // Reload KB when project (localPath) changes
   useEffect(() => { setKb(loadKB(localPath || '__global__')) }, [localPath])
 
+  // Explorer watcher — start/stop when localPath changes
+  useEffect(() => {
+    if (!localPath || executionMode !== 'local') {
+      setExplorerCache({})
+      setExplorerExpanded(new Set())
+      return
+    }
+    void loadExplorerDir(localPath)
+    const watchId = `explorer-${Date.now()}`
+    explorerWatchIdRef.current = watchId
+    ipc.local.watch(watchId, localPath).catch(console.error)
+    const unsub = ipc.local.onFsChange(e => {
+      if (e.watchId !== watchId) return
+      const sep = e.fullPath.includes('\\') ? '\\' : '/'
+      const parentDir = e.fullPath.includes(sep)
+        ? e.fullPath.slice(0, e.fullPath.lastIndexOf(sep))
+        : localPath
+      setExplorerCache(prev => {
+        if (prev[parentDir] !== undefined) void loadExplorerDir(parentDir)
+        return prev
+      })
+      if (parentDir === localPath) void loadExplorerDir(localPath)
+      setRecentlyChanged(prev => ({ ...prev, [e.fullPath]: Date.now() }))
+    })
+    return () => {
+      unsub()
+      if (explorerWatchIdRef.current) {
+        ipc.local.unwatch(explorerWatchIdRef.current).catch(console.error)
+        explorerWatchIdRef.current = null
+      }
+      setExplorerCache({})
+      setExplorerExpanded(new Set())
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localPath, executionMode])
+
   function startDrag(side: 'left' | 'right', e: React.MouseEvent) {
     dragState.current = { side, startX: e.clientX, startW: side === 'left' ? leftWidth : rightWidth }
     document.body.style.cursor = 'col-resize'
@@ -302,6 +503,7 @@ export default function SquadPage() {
     setBubbles([])
     bubblesRef.current = []
     setSessionId(null)
+    clearActivity()
   }
 
   async function fetchUsage() {
@@ -341,6 +543,16 @@ export default function SquadPage() {
     })
     return unsub
   }, [setAndRefBubbles])
+
+  // Live shell output streaming
+  useEffect(() => {
+    return ipc.squad.shell.onLine((line: string) => {
+      setLiveShellOutput(prev => prev + line)
+      setTimeout(() => {
+        if (liveShellRef.current) liveShellRef.current.scrollTop = liveShellRef.current.scrollHeight
+      }, 0)
+    })
+  }, [])
 
   // Textarea auto-resize
   function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
@@ -534,6 +746,7 @@ export default function SquadPage() {
     setSessionId(null)
     setActiveAgent('jarvis')
     setInput('')
+    clearActivity()
   }
 
   function cancelStream() {
@@ -582,23 +795,42 @@ export default function SquadPage() {
   async function executeActionsAuto(actions: ActionBlock[]): Promise<Array<{ type: string; desc: string; output: string; ok: boolean }>> {
     const results: Array<{ type: string; desc: string; output: string; ok: boolean }> = []
     for (const action of actions) {
+      // Skip empty SHELL — agent produced [ACTION:SHELL][/ACTION] with no command
+      if (action.type === 'shell' && !action.content.trim()) {
+        const projPath = (executionMode === 'local' && localPath) ? localPath : 'C:\\projeto'
+        results.push({
+          type: action.type, desc: '', ok: false,
+          output: `[ERRO] Comando SHELL vazio. O comando DEVE ficar entre as tags, assim:\n\n[ACTION:SHELL cwd="${projPath}"]\nseu-comando-aqui\n[/ACTION]\n\nVocê escreveu o comando FORA ou ANTES do tag. Repita com o comando dentro.`,
+        })
+        continue
+      }
       const desc = action.cwd ? `cwd:${action.cwd}` : action.path ? `path:${action.path}` : ''
+      const label = action.path || (action.content.slice(0, 70).replace(/\n/g, ' '))
+      const startTs = Date.now()
+      if (action.type === 'shell') setLiveShellOutput('')
       setActionStates(prev => ({ ...prev, [action.id]: { status: 'running' } }))
+      pushActivity({ id: action.id, ts: startTs, type: action.type, label, status: 'running' })
       try {
         const vpsId = executionMode === 'local' ? '__local__' : selectedVpsId
         if (!vpsId) {
           const msg = 'Sem VPS/pasta configurada'
           setActionStates(prev => ({ ...prev, [action.id]: { status: 'error', output: msg } }))
+          updateActivity(action.id, 'error', msg, startTs)
           results.push({ type: action.type, desc, output: msg, ok: false })
           continue
         }
         const cwd = executionMode === 'local' ? (action.cwd ?? localPath ?? undefined) : action.cwd
         const res = await ipc.squad.action.execute({ type: action.type, content: action.content, cwd, path: action.path, vpsId })
-        setActionStates(prev => ({ ...prev, [action.id]: { status: 'ok', output: res.output } }))
-        results.push({ type: action.type, desc, output: res.output, ok: true })
+        // Detect backend-signalled shell errors (ENOENT, non-zero exit code, etc.)
+        const isShellErr = action.type === 'shell' && res.output.startsWith('[SHELL_ERROR')
+        const actionStatus = isShellErr ? 'error' : 'ok'
+        setActionStates(prev => ({ ...prev, [action.id]: { status: actionStatus, output: res.output } }))
+        updateActivity(action.id, actionStatus, res.output, startTs)
+        results.push({ type: action.type, desc, output: res.output, ok: !isShellErr })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         setActionStates(prev => ({ ...prev, [action.id]: { status: 'error', output: msg } }))
+        updateActivity(action.id, 'error', msg, startTs)
         results.push({ type: action.type, desc, output: msg, ok: false })
       }
     }
@@ -626,17 +858,34 @@ export default function SquadPage() {
         const isRootBubble = lastBubble.agentName === rootAgentRef.current
 
         if (!hasActions) {
-          // Delegated agent finished without actions — ask root to synthesize
-          if (isRootBubble) break
+          // Check if the last response contains a delegation to another agent
+          const hasDelegation = lastBubble.agentName
+            ? detectDelegations(lastBubble.agentName, lastBubble.content).length > 0
+            : false
+
+          // Root with no actions and no delegation → done
+          if (isRootBubble && !hasDelegation) break
+
+          // Root delegated → delegation already ran at depth=1 inside streamAgent;
+          // the delegated agent's bubble is now the effective last — continue to pick it up
+          if (isRootBubble && hasDelegation) { continue }
+
+          // Non-root agent planned without action tags → push them to execute NOW
           autoIterRef.current++
           setAutoIteration(autoIterRef.current)
+          const agentToPush = lastBubble.agentName ?? rootAgentRef.current
           setAndRefBubbles(prev => [...prev, {
             id: crypto.randomUUID(), type: 'system',
-            content: `⚙️ Iteração ${autoIterRef.current} — síntese com ${AGENT_META[rootAgentRef.current].label}…`,
+            content: `⚙️ Iteração ${autoIterRef.current} — aguardando ${AGENT_META[agentToPush]?.label ?? agentToPush} executar…`,
           }])
-          await streamAgent(rootAgentRef.current,
-            'Os agentes delegados concluíram suas sub-tarefas. Analise o que foi feito e determine o próximo passo concreto. Se a tarefa principal estiver 100% completa, inclua [PRONTO].',
-            sid, undefined, 0)
+          const projPath = (executionMode === 'local' && localPath) ? localPath : 'C:\\caminho\\do\\projeto'
+          await streamAgent(
+            agentToPush,
+            `EXECUTE AGORA. Emita apenas um ACTION tag (sem texto antes ou depois).\n\nFormato obrigatório:\n[ACTION:SHELL cwd="${projPath}"]\nseu-comando-aqui\n[/ACTION]\n\nOu para criar arquivo:\n[ACTION:WRITE_FILE path="${projPath}\\\\arquivo.ts"]\nconteúdo\n[/ACTION]\n\nCaminho do projeto: ${projPath}\nNão escreva explicação. Não planeje. Apenas o ACTION.`,
+            sid,
+            lastBubble.delegatedBy,
+            1,
+          )
           continue
         }
 
@@ -660,8 +909,13 @@ export default function SquadPage() {
         }
         lines.push('\nAnalise os resultados e continue trabalhando. Se concluiu tudo, inclua [PRONTO] na resposta.')
 
-        // Always return results to the ROOT agent (orchestrator)
-        await streamAgent(rootAgentRef.current, lines.join('\n'), sid, undefined, 0)
+        // Return results to the agent that produced the actions:
+        // — root agent → depth 0 (can trigger further delegations)
+        // — delegated agent → depth 1 (stays focused on its own task)
+        const resultAgent = isRootBubble ? rootAgentRef.current : (lastBubble.agentName ?? rootAgentRef.current)
+        const resultDepth = isRootBubble ? 0 : 1
+        const resultDelegatedBy = isRootBubble ? undefined : lastBubble.delegatedBy
+        await streamAgent(resultAgent, lines.join('\n'), sid, resultDelegatedBy, resultDepth)
       }
       if (!stopRequestedRef.current && autoIterRef.current >= maxAutoIterRef.current) {
         setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: `⚠️ Limite de ${maxAutoIterRef.current} iterações atingido` }])
@@ -706,7 +960,10 @@ export default function SquadPage() {
       }
       lines.push('\nAnalise os resultados e continue. Se concluiu tudo, inclua [PRONTO].')
 
-      await streamAgent(rootAgentRef.current, lines.join('\n'), sid, undefined, 0)
+      // Route results to the agent that produced the actions (not always root)
+      const isRoot = lastBubble.agentName === rootAgentRef.current
+      const resultAgent = isRoot ? rootAgentRef.current : (lastBubble.agentName ?? rootAgentRef.current)
+      await streamAgent(resultAgent, lines.join('\n'), sid, isRoot ? undefined : lastBubble.delegatedBy, isRoot ? 0 : 1)
     }
     if (round >= maxRounds) {
       setAndRefBubbles(prev => [...prev, {
@@ -720,15 +977,21 @@ export default function SquadPage() {
     const vpsId = executionMode === 'local' ? '__local__' : selectedVpsId
     if (!vpsId) return
     setActionStates(prev => ({ ...prev, [action.id]: { status: 'running' } }))
+    const label = action.path || (action.content.slice(0, 70).replace(/\n/g, ' '))
+    const startTs = Date.now()
+    pushActivity({ id: action.id, ts: startTs, type: action.type, label, status: 'running' })
     try {
       const cwd = executionMode === 'local' ? (action.cwd ?? localPath ?? undefined) : action.cwd
       const res = await ipc.squad.action.execute({ type: action.type, content: action.content, cwd, path: action.path, vpsId })
       setActionStates(prev => ({ ...prev, [action.id]: { status: 'ok', output: res.output } }))
+      updateActivity(action.id, 'ok', res.output, startTs)
       if (executionMode === 'vps' && pipelineMode && prodVpsId && prodVpsId !== selectedVpsId) {
         setPipelineGates(prev => ({ ...prev, [action.id]: { action, homologOutput: res.output, status: 'pending' } }))
       }
     } catch (err) {
-      setActionStates(prev => ({ ...prev, [action.id]: { status: 'error', output: err instanceof Error ? err.message : String(err) } }))
+      const msg = err instanceof Error ? err.message : String(err)
+      setActionStates(prev => ({ ...prev, [action.id]: { status: 'error', output: msg } }))
+      updateActivity(action.id, 'error', msg, startTs)
     }
   }
 
@@ -817,6 +1080,95 @@ export default function SquadPage() {
             )
           })}
         </div>
+
+        {/* ── VS Code-style live file explorer ─────────────────────────────── */}
+        {executionMode === 'local' && (
+          <div className="border-t border-slate-800 flex flex-col shrink-0" style={{ maxHeight: localPath ? 320 : 80 }}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-3 py-1.5 shrink-0 bg-slate-900/80">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <FolderOpen size={11} className="shrink-0 text-amber-400/70" />
+                <span className="truncate text-[10px] font-semibold text-slate-300" title={localPath || 'Explorer'}>
+                  {localPath ? (localPath.split(/[\\/]/).at(-1) || 'Projeto') : 'Explorer'}
+                </span>
+              </div>
+              {localPath && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => void loadExplorerDir(localPath)}
+                    title="Atualizar"
+                    className="p-0.5 text-slate-600 hover:text-slate-300 transition-colors"
+                  >
+                    <RefreshCw size={10} />
+                  </button>
+                  <button
+                    onClick={() => ipc.local.exec(`code-insiders "${localPath}"`, localPath).catch(() =>
+                      ipc.local.exec(`code "${localPath}"`, localPath).catch(console.error)
+                    )}
+                    title="Abrir no VS Code Insiders"
+                    className="p-0.5 text-slate-600 hover:text-blue-400 transition-colors"
+                  >
+                    <ExternalLink size={10} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Empty state — no path set */}
+            {!localPath && (
+              <button
+                onClick={async () => {
+                  const res = await ipc.local.openFolder()
+                  if (res) setLocalPath(res)
+                }}
+                className="flex items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-800/60 transition-colors"
+              >
+                <FolderOpen size={13} className="shrink-0 text-amber-400/60" />
+                <span className="text-[10px] text-slate-500 leading-tight">
+                  Selecionar pasta do projeto<br />
+                  <span className="text-slate-700">para ver arquivos em tempo real</span>
+                </span>
+              </button>
+            )}
+
+            {/* File tree */}
+            {localPath && (
+              <div className="overflow-y-auto flex-1 text-[11px]">
+                {explorerFlat.length === 0 ? (
+                  <p className="text-slate-700 text-[10px] px-3 py-2 italic">carregando…</p>
+                ) : explorerFlat.map(entry => {
+                  const changedAt = recentlyChanged[entry.path]
+                  const isNew = !!changedAt && Date.now() - changedAt < 8000
+                  return (
+                    <div
+                      key={entry.path}
+                      onClick={() => { if (entry.isDirectory) void toggleExplorerDir(entry) }}
+                      className={`flex items-center gap-1 py-0.5 cursor-pointer hover:bg-slate-800/70 transition-colors ${isNew ? 'bg-amber-900/20' : ''}`}
+                      style={{ paddingLeft: 8 + entry.depth * 10 }}
+                    >
+                      {entry.isDirectory
+                        ? explorerExpanded.has(entry.path)
+                          ? <ChevronDown size={10} className="shrink-0 text-slate-500" />
+                          : <ChevronRight size={10} className="shrink-0 text-slate-500" />
+                        : <span className="w-2.5 shrink-0" />
+                      }
+                      {entry.isDirectory
+                        ? <FolderOpen size={11} className="shrink-0 text-amber-400/60" />
+                        : <FileText size={11} className={`shrink-0 ${fileIconColor(entry.name)}`} />
+                      }
+                      <span className={`truncate ml-0.5 ${isNew ? 'text-amber-300 font-semibold' : entry.isDirectory ? 'text-slate-300' : 'text-slate-400'}`}>
+                        {entry.name}
+                      </span>
+                      {isNew && !entry.isDirectory && (
+                        <span className="shrink-0 text-[9px] font-bold text-amber-400 ml-auto mr-1">W</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </aside>
 
       {/* Drag handle — left */}
@@ -1255,9 +1607,13 @@ export default function SquadPage() {
                   <FolderOpen size={12} />
                 </button>
               </div>
-              {localPath && (
+              {localPath ? (
                 <p className="text-[10px] text-green-500 flex items-center gap-1">
-                  <CheckCircle size={9} /> Pasta selecionada
+                  <CheckCircle size={9} /> <span className="truncate">{localPath}</span>
+                </p>
+              ) : (
+                <p className="text-[10px] text-amber-400 flex items-center gap-1">
+                  <AlertCircle size={9} className="shrink-0" /> Defina a pasta para os agentes saberem onde escrever
                 </p>
               )}
               <p className="text-[10px] text-slate-600">Ações SHELL, READ e WRITE rodam no seu PC (sem VPS).</p>
@@ -1303,56 +1659,252 @@ export default function SquadPage() {
           </div>
         )}
 
-        <div className="px-4 py-2 border-b border-slate-800 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Histórico</h3>
-          <button
-            onClick={() => { setShowUsage(true); void fetchUsage() }}
-            title="Ver conta e uso Claude"
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] bg-blue-900/30 border border-blue-700/40 text-blue-400 hover:bg-blue-900/50 transition-colors"
-          >
-            <User2 size={11} />
-            Uso
-          </button>
+        {/* ── Tab bar ──────────────────────────────────────────────────── */}
+        <div className="flex border-b border-slate-800 shrink-0">
+          {([
+            { key: 'history',  icon: Clock,    label: 'Histórico' },
+            { key: 'activity', icon: Activity, label: 'Atividade' },
+            { key: 'context',  icon: Cpu,      label: 'Contexto'  },
+          ] as const).map(({ key, icon: Icon, label }) => (
+            <button
+              key={key}
+              onClick={() => setRightTab(key)}
+              className={`flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-semibold uppercase tracking-wide transition-colors border-b-2 ${
+                rightTab === key
+                  ? 'text-brand-400 border-brand-500'
+                  : 'text-slate-500 border-transparent hover:text-slate-300'
+              }`}
+            >
+              <Icon size={10} />
+              {label}
+              {key === 'activity' && activityLog.length > 0 && (
+                <span className="ml-0.5 bg-brand-600/40 text-brand-300 text-[9px] px-1 rounded-full">{activityLog.length}</span>
+              )}
+            </button>
+          ))}
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {sessions.length === 0 && (
-            <p className="text-xs text-slate-600 px-4 py-4">Nenhuma sessão ainda.</p>
-          )}
-          {sessions.map(s => {
-            const sm = AGENT_META[s.agentName as AgentName] ?? AGENT_META.jarvis
-            return (
-              <div
-                key={s.id}
-                className={`group relative border-b border-slate-800/50 ${
-                  s.id === sessionId ? 'bg-slate-800/60' : ''
-                }`}
+
+        {/* ── Tab: Histórico ───────────────────────────────────────────── */}
+        {rightTab === 'history' && (
+          <>
+            <div className="px-3 py-1.5 border-b border-slate-800 flex justify-end">
+              <button
+                onClick={() => { setShowUsage(true); void fetchUsage() }}
+                title="Ver conta e uso Claude"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] bg-blue-900/30 border border-blue-700/40 text-blue-400 hover:bg-blue-900/50 transition-colors"
               >
-                <button
-                  onClick={() => void loadSession(s)}
-                  disabled={isStreaming}
-                  className="w-full text-left px-4 py-3 pr-8 hover:bg-slate-800 transition-colors disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-sm leading-none">{sm.emoji}</span>
-                    <span className={`text-[11px] font-semibold ${sm.colorClass}`}>{sm.label}</span>
+                <User2 size={11} />
+                Uso
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {sessions.length === 0 && (
+                <p className="text-xs text-slate-600 px-4 py-4">Nenhuma sessão ainda.</p>
+              )}
+              {sessions.map(s => {
+                const sm = AGENT_META[s.agentName as AgentName] ?? AGENT_META.jarvis
+                return (
+                  <div
+                    key={s.id}
+                    className={`group relative border-b border-slate-800/50 ${
+                      s.id === sessionId ? 'bg-slate-800/60' : ''
+                    }`}
+                  >
+                    <button
+                      onClick={() => void loadSession(s)}
+                      disabled={isStreaming}
+                      className="w-full text-left px-4 py-3 pr-8 hover:bg-slate-800 transition-colors disabled:opacity-50"
+                    >
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm leading-none">{sm.emoji}</span>
+                        <span className={`text-[11px] font-semibold ${sm.colorClass}`}>{sm.label}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 truncate">{s.title}</p>
+                      <p className="text-[10px] text-slate-600 mt-0.5">
+                        {new Date(s.createdAt).toLocaleDateString('pt-BR')}
+                      </p>
+                    </button>
+                    <button
+                      onClick={e => void deleteSession(s.id, e)}
+                      disabled={isStreaming}
+                      title="Excluir conversa"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition-all disabled:pointer-events-none"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                  <p className="text-xs text-slate-400 truncate">{s.title}</p>
-                  <p className="text-[10px] text-slate-600 mt-0.5">
-                    {new Date(s.createdAt).toLocaleDateString('pt-BR')}
-                  </p>
-                </button>
-                <button
-                  onClick={e => void deleteSession(s.id, e)}
-                  disabled={isStreaming}
-                  title="Excluir conversa"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1.5 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition-all disabled:pointer-events-none"
-                >
-                  <Trash2 size={12} />
-                </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {/* ── Tab: Atividade ───────────────────────────────────────────── */}
+        {rightTab === 'activity' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+
+            {/* Stats bar */}
+            <div className="grid grid-cols-4 gap-px bg-slate-800 border-b border-slate-700 shrink-0">
+              {([
+                { label: 'Iter',  value: autoIteration,        color: 'text-brand-400'  },
+                { label: 'Leit',  value: sessionStats.reads,   color: 'text-blue-400'   },
+                { label: 'Escr',  value: sessionStats.writes,  color: 'text-green-400'  },
+                { label: 'Erros', value: sessionStats.errors,  color: 'text-red-400'    },
+              ] as const).map(({ label, value, color }) => (
+                <div key={label} className="bg-slate-900 px-1 py-2 text-center">
+                  <p className={`text-sm font-bold leading-none ${color}`}>{value}</p>
+                  <p className="text-[8px] text-slate-500 uppercase mt-0.5">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Terminal live — output em tempo real do SHELL */}
+            {liveShellOutput && (
+              <div className="border-b border-slate-800 shrink-0">
+                <p className="text-[9px] text-slate-500 uppercase font-semibold px-3 pt-2 pb-1 flex items-center gap-1">
+                  <Activity size={9} className="text-amber-400 animate-pulse" />
+                  Terminal ao vivo
+                </p>
+                <div ref={liveShellRef} className="max-h-40 overflow-y-auto bg-slate-950 px-3 pb-2">
+                  <pre className="text-[9px] text-green-300 whitespace-pre-wrap leading-relaxed font-mono">{liveShellOutput}</pre>
+                </div>
               </div>
-            )
-          })}
-        </div>
+            )}
+
+            {/* Arquivos modificados — estilo VS Code Explorer */}
+            {modifiedFiles.length > 0 && (
+              <div className="px-3 py-2 border-b border-slate-800 shrink-0">
+                <p className="text-[9px] text-slate-500 uppercase font-semibold mb-1.5 flex items-center gap-1">
+                  <FilePen size={9} className="text-emerald-400" />
+                  Arquivos modificados ({modifiedFiles.length})
+                </p>
+                <div className="space-y-px max-h-36 overflow-y-auto">
+                  {modifiedFiles.map(f => {
+                    const parts = f.replace(/\\/g, '/').split('/')
+                    const filename = parts.at(-1) ?? f
+                    const parentPath = parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+                    const ext = filename.includes('.') ? filename.split('.').at(-1)!.toLowerCase() : ''
+                    const extColor: Record<string, string> = {
+                      ts: 'text-blue-400', tsx: 'text-blue-300', js: 'text-yellow-300',
+                      jsx: 'text-yellow-200', py: 'text-green-400', json: 'text-amber-300',
+                      md: 'text-slate-300', css: 'text-pink-400', html: 'text-orange-400',
+                      sql: 'text-purple-400', sh: 'text-green-300', env: 'text-red-400',
+                    }
+                    const fileColor = extColor[ext] ?? 'text-slate-300'
+                    return (
+                      <div key={f} className="flex items-center gap-1.5 py-1 px-1.5 rounded hover:bg-slate-800/60 group" title={f}>
+                        <FileCheck2 size={10} className={`shrink-0 ${fileColor}`} />
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-[10px] font-semibold ${fileColor}`}>{filename}</span>
+                          {parentPath && (
+                            <span className="text-[9px] text-slate-600 ml-1.5 truncate">{parentPath}</span>
+                          )}
+                        </div>
+                        <span className="shrink-0 text-[8px] font-bold text-emerald-400 bg-emerald-900/30 border border-emerald-700/40 rounded px-1 leading-4">W</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Log de ações */}
+            <div className="flex-1 overflow-y-auto">
+              {activityLog.length === 0 ? (
+                <p className="text-xs text-slate-600 px-4 py-4">Nenhuma ação executada nesta sessão.</p>
+              ) : (
+                activityLog.map(entry => {
+                  const typeIcon = entry.type === 'shell' ? '⚡' : entry.type === 'write_file' ? '✏️' : entry.type === 'read_dir' ? '📂' : '📖'
+                  const isExpanded = expandedLogId === entry.id
+                  return (
+                    <div key={entry.id} className="border-b border-slate-800/50">
+                      <button
+                        onClick={() => setExpandedLogId(prev => prev === entry.id ? null : entry.id)}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-800/40 transition-colors flex items-start gap-2"
+                      >
+                        <span className="text-xs mt-px shrink-0">{typeIcon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] text-slate-300 truncate leading-relaxed">{entry.label}</p>
+                          <p className="text-[9px] text-slate-600">
+                            {new Date(entry.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            {entry.durationMs !== undefined && ` · ${entry.durationMs}ms`}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 text-xs mt-px font-bold ${
+                          entry.status === 'ok' ? 'text-green-400' : entry.status === 'error' ? 'text-red-400' : 'text-yellow-400 animate-pulse'
+                        }`}>
+                          {entry.status === 'ok' ? '✓' : entry.status === 'error' ? '✗' : '…'}
+                        </span>
+                      </button>
+                      {isExpanded && entry.output && (
+                        <pre className="px-3 pb-2 text-[9px] text-slate-400 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto bg-slate-900/60 border-t border-slate-800/60">
+                          {entry.output.slice(0, 3000)}
+                        </pre>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab: Contexto ────────────────────────────────────────────── */}
+        {rightTab === 'context' && (
+          <div className="flex-1 overflow-y-auto p-3 space-y-4">
+
+            {/* Agente ativo */}
+            <div>
+              <p className="text-[9px] text-slate-500 uppercase font-semibold tracking-wider mb-1.5">Agente ativo</p>
+              <div className={`rounded-lg border px-3 py-2 ${meta.bgClass} ${meta.borderClass}`}>
+                <p className={`text-xs font-semibold ${meta.colorClass}`}>{meta.emoji} {meta.label}</p>
+                <p className="text-[9px] text-slate-500 mt-0.5">{meta.role}</p>
+                <p className="text-[9px] text-slate-600 mt-0.5">Provider: {meta.provider}</p>
+              </div>
+            </div>
+
+            {/* Modo de execução */}
+            <div>
+              <p className="text-[9px] text-slate-500 uppercase font-semibold tracking-wider mb-1.5">Execução</p>
+              <div className="bg-slate-800/50 rounded-lg px-3 py-2 space-y-1">
+                <p className="text-[10px] text-slate-200">{executionMode === 'local' ? '💻 Local' : '🖥️ VPS'}</p>
+                {executionMode === 'local' && localPath && (
+                  <p className="text-[9px] text-green-400 truncate" title={localPath}>{localPath}</p>
+                )}
+                {executionMode === 'vps' && selectedVpsId && (
+                  <p className="text-[9px] text-blue-400">{vpsList.find(v => v.id === selectedVpsId)?.name ?? selectedVpsId}</p>
+                )}
+                {autonomousMode && (
+                  <p className="text-[9px] text-yellow-400 flex items-center gap-1">
+                    <Zap size={8} /> Autônomo ativo · máx {maxAutoIter} iter
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* KB injetada */}
+            <div>
+              <p className="text-[9px] text-slate-500 uppercase font-semibold tracking-wider mb-1.5 flex items-center gap-1">
+                <BookOpen size={9} />
+                KB injetada
+              </p>
+              {projectContext ? (
+                <div className="bg-slate-800/50 rounded-lg p-2.5">
+                  <p className="text-[9px] text-green-400 mb-1.5 font-medium">
+                    {projectContext.length.toLocaleString()} chars · ~{Math.round(projectContext.length / 4).toLocaleString()} tokens
+                  </p>
+                  <pre className="text-[9px] text-slate-400 whitespace-pre-wrap leading-relaxed max-h-52 overflow-y-auto">
+                    {projectContext.slice(0, 2000)}{projectContext.length > 2000 ? '\n…' : ''}
+                  </pre>
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-600">KB vazia — preencha as seções acima.</p>
+              )}
+            </div>
+
+          </div>
+        )}
+
       </aside>
 
       {/* ── Modal: Conta & Uso Claude ─────────────────────────────────── */}

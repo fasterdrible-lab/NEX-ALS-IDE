@@ -1,19 +1,78 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.25.0] — 2026-06-12
+
+### Melhorado — IDE: tecnologia VS Code Phase 1 + Squad: robocopy robusto
+
+**Semantic Highlighting (Monaco + TypeScript worker):**
+- `monacoSetup.ts` reescrito: workers locais configurados (offline/Electron); TypeScript language service via type cast (`MonacoTsDefaults`/`MonacoTsLang`) — contorna `monaco.languages.typescript` tipado como `{ deprecated: true }` no Monaco 0.55 sem `@ts-ignore`
+- Compiler options completos: ESNext, JSX ReactJSX, allowJs, esModuleInterop, strict: false
+- **Inlay hints** — dicas de tipo inline idênticas ao VS Code: nomes de parâmetros, tipos de retorno, declarações de propriedade, valores de enum; via `setInlayHintsOptions` com optional chaining
+- `'semanticHighlighting.enabled': true` nos editor options — Monaco usa o TypeScript worker para coloração semântica além da sintática
+
+**Breadcrumbs bar (acima do Monaco Editor):**
+- Barra fina `bg-[#161b22]` mostrando últimos 4 segmentos do caminho do arquivo ativo
+- Símbolo atual (função/classe/variável sob o cursor) exibido em roxo `text-brand-500`; atualizado em tempo real via `editor.onDidChangeCursorPosition`
+- `outlineRef = useRef<OutlineSymbol[]>([])` sincronizado via `useEffect` — evita closure stale no handler de cursor registrado uma vez no mount
+
+**Outline View (painel esquerdo — aba "Outline"):**
+- Nova aba "Outline" (`List` icon) no painel esquerdo, sempre visível (local e remoto)
+- TypeScript/JS: `getTypeScriptWorker()` → `getNavigationBarItems(fileName)` → `NavigationBarItem[]` convertido para `OutlineSymbol[]` com hierarquia (classes → métodos) e kind-to-icon mapping
+- Outras linguagens: regex fallback para classes, funções, variáveis em Python, Ruby, PHP etc.
+- `OutlineTree` component: ícones coloridos por tipo (◆ classe, ⊕ método, ƒ função, ◎ variável…); entrada ativa realçada; clique navega com `revealLineInCenter`
+- Auto-refresh: `useEffect` com debounce 450ms ao trocar arquivo; botão manual de refresh
+
+**Squad: robocopy `/XD node_modules` (fix freeze crítico):**
+- Robocopy copiando `node_modules` travava o app por 10+ minutos (30k+ arquivos)
+- `handlers.ts` e `agents.ts` EXECUTOR_RULES regra 9 atualizados: `/XD node_modules .next` obrigatório; `npm install --prefix "<destino>"` após robocopy; timeout de `robocopy` adicionado ao regex de 600s
+- Regra explícita: "NUNCA copie node_modules com robocopy"
+- Versão: `3.24.0` → `3.25.0`
+
+---
+
+## [3.22.0] — 2026-06-12
+
+### Adicionado — IDE: badges git na SFTP tree + Squad: painel arquivos modificados
+
+**IDEPage: badges git estilo VS Code na SFTP tree:**
+- `gitFileMap` (Map<path, {letter, color}>) e `dirtyDirSet` (Set de prefixos de pastas sujas) via `useMemo`
+- Nome do arquivo colorido com `gitInfo.color`; badge letra (M/A/D/?) à direita; ponto âmbar para pastas com filhos sujos
+- Auto-load git status quando tree carrega pela primeira vez
+
+**SquadPage: painel "Arquivos modificados" estilo VS Code Explorer:**
+- Ícone `FileCheck2` colorido por extensão (ts/tsx/js/py/json/css…), nome em negrito, path pai em `text-slate-600`, badge 'W' verde
+- Paleta `extColor` com 12 extensões mapeadas
+- Versão: `3.21.0` → `3.22.0`
+
+---
+
+## [3.21.0] — 2026-06-12
+
+### Adicionado — Squad: parser 2-pass + staging seguro + monitoramento de atividade
+
+**Parser de ACTION 2 passes:**
+- Pass 1: regex `\[\/ACTION\]?` — aceita fechamento sem `]` final
+- Pass 2: lookahead `(?=\[ACTION:|$)` captura blocos truncados antes de `[/ACTION`
+- `Set<number>` evita duplicatas; `makeBlock`/`extractParams` extraídos como funções auxiliares
+- `stripActions` atualizado para limpar ambas as formas
+
+**Staging seguro:**
+- `EXECUTOR_RULES` regra 9: usa `C:\Temp\squad-scaffold` como staging fixo (sem variáveis de ambiente); OneDrive bloqueia scaffolds em pastas sincronizadas
+
+**Painel de monitoramento de atividade:**
+- Interfaces `ActivityEntry` e `SessionStats`; refs para evitar closures stale
+- `pushActivity`/`updateActivity`/`clearActivity` instrumentados em `executeAction` e `executeActionsAuto`
+- Painel direito: tab Atividade com stats bar (R/W/⚡/✗), arquivos modificados, log com status e duração
+- Versão: `3.20.0` → `3.21.0`
+
+---
+
 ## [3.20.0] — 2026-06-12
 
-### Corrigido — Friday regra npm lowercase + investigação Squad OneDrive
+### Adicionado — Squad: regras npm corretas para Friday
 
-**Friday: regra npm lowercase (`EXECUTOR_RULES` regra 8):**
-- Nomes de pacote npm/npx sempre lowercase — `create-next-app` rejeita nomes com maiúsculas
-- Se diretório destino tem maiúsculas (ex: BRAINBOARD), criar projeto em subpasta lowercase (ex: `apps/web`)
-- Usar `--ts` em vez de `--typescript`; aspas obrigatórias em `--import-alias "@/*"`
-
-**Investigação: por que agentes não criavam arquivos em OneDrive:**
-- Confirmado: `child_process.exec` em `handlers.ts:1062` executa comandos reais — não é simulação
-- Causa raiz 1: `create-next-app` chama `fs.access(root, W_OK)` antes de scaffoldar; OneDrive intercepta esse check e retorna "sem permissão" mesmo com pasta gravável — workaround é staging em temp dir + xcopy
-- Causa raiz 2: `parseActions` em `actions.ts:12` tem apenas um regex — CHANGELOG v3.19.0 documenta segundo passo tolerante mas não foi implementado; ACTIONs truncadas são descartadas silenciosamente
-- Pendente: corrigir ambas as causas (ver TASKS.md)
+- `EXECUTOR_RULES` regra 8: nomes npm sempre lowercase; `--ts` em vez de `--typescript`; aspas em `--import-alias "@/*"`; `npx --yes` para evitar prompt interativo
+- Versão: `3.19.0` → `3.20.0`
 
 ---
 

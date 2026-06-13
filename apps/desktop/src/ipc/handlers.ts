@@ -397,6 +397,33 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     return { success: true }
   })
 
+  // ── Local file watcher (fs.watch) ─────────────────────────────────────────
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { watch: fsWatch } = require('node:fs') as typeof import('node:fs')
+  const localWatchers = new Map<string, import('node:fs').FSWatcher>()
+
+  ipcMain.handle('local:watch', (_, { watchId, folderPath }: { watchId: string; folderPath: string }) => {
+    localWatchers.get(watchId)?.close()
+    try {
+      const watcher = fsWatch(folderPath, { recursive: true }, (eventType: string, filename: string | null) => {
+        if (!filename) return
+        const fullPath = path.join(folderPath, filename)
+        win?.webContents.send('squad:fs:change', { watchId, eventType, filename, fullPath })
+      })
+      watcher.on('error', () => {})
+      localWatchers.set(watchId, watcher)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('local:unwatch', (_, { watchId }: { watchId: string }) => {
+    localWatchers.get(watchId)?.close()
+    localWatchers.delete(watchId)
+    return { success: true }
+  })
+
   ipcMain.handle('local:exec', (_, { cmd, cwd }: { cmd: string; cwd?: string }) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { exec } = require('child_process') as typeof import('child_process')
@@ -954,7 +981,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           sys += `\n\nCONTEXTO DO PROJETO:\n${data.projectContext}`
         }
         if (data.autonomous) {
-          sys += `\n\nMODO AUTÔNOMO ATIVO — regras obrigatórias:\n1. Cada iteração DEVE produzir progresso concreto: código escrito, arquivo criado/modificado, ou comando executado com resultado.\n2. PROIBIDO reler arquivos que já estão no histórico desta conversa — use o conteúdo já retornado.\n3. Use READ_DIR para explorar pastas antes de READ_FILE — nunca READ_FILE em um caminho de pasta.\n4. ACTION:SHELL deve conter apenas comandos executáveis reais (npm, git, node, dir, etc.) — nunca frases em português.\n5. Um ACTION por resposta — aguarde o resultado antes do próximo passo.\n6. Quando concluir 100% da tarefa, inclua [PRONTO] na resposta final.\n7. Não faça perguntas — decida com o contexto disponível e continue.\n\nACÕES DISPONÍVEIS:\n[ACTION:READ_DIR path="C:\\\\pasta"][/ACTION] — lista arquivos de uma pasta\n[ACTION:READ_FILE path="C:\\\\pasta\\\\arquivo.ts"][/ACTION] — lê um arquivo específico\n[ACTION:WRITE_FILE path="C:\\\\pasta\\\\arquivo.ts"]conteúdo[/ACTION] — cria/sobrescreve arquivo\n[ACTION:SHELL cwd="C:\\\\pasta"]comando[/ACTION] — executa comando no terminal`
+          const projPath = data.localPath || 'C:\\meu-projeto'
+          sys += `\n\nMODO AUTÔNOMO ATIVO — regras ABSOLUTAS:\n1. SUA PRÓXIMA RESPOSTA DEVE CONTER UM [ACTION:...] TAG. Sem exceções. Sem texto introdutório.\n2. PROIBIDO escrever "vou fazer", "planejo", "primeiro preciso" — apenas emita o ACTION.\n3. Cada iteração produz UMA ação. Aguarde o resultado antes da próxima.\n4. PROIBIDO reler arquivos que já estão no histórico — use o conteúdo já retornado.\n5. Use READ_DIR para explorar pastas antes de READ_FILE — nunca READ_FILE em um caminho de pasta.\n6. ACTION:SHELL deve conter apenas comandos reais (npm, git, node, mkdir, dir, etc.) — nunca texto em português.\n7. Quando concluir 100% da tarefa, inclua [PRONTO] na resposta final.\n8. Não faça perguntas — decida com o contexto disponível e continue.\n\nEXEMPLOS CONCRETOS (substitua pelos caminhos reais):\n\n[ACTION:SHELL cwd="${projPath}"]\nmkdir "${projPath}\\src"\n[/ACTION]\n\n[ACTION:SHELL cwd="${projPath}"]\nnpm install\n[/ACTION]\n\n[ACTION:WRITE_FILE path="${projPath}\\src\\index.ts"]\nexport function main() {}\n[/ACTION]\n\n[ACTION:READ_DIR path="${projPath}"][/ACTION]\n\nSCAFFOLD — use C:\\\\Temp\\\\squad-scaffold como staging (sem %USERNAME%):\nPasso 1:\n[ACTION:SHELL cwd="C:\\\\Temp"]\nmkdir squad-scaffold 2>nul & npx --yes create-next-app@latest C:\\\\Temp\\\\squad-scaffold\\\\meu-app --ts --tailwind --app --eslint --src-dir --import-alias "@/*" --use-npm\n[/ACTION]\nPasso 2 (copiar EXCLUINDO node_modules — NÃO copie node_modules, leva 10min e trava):\n[ACTION:SHELL cwd="C:\\\\Temp"]\nrobocopy "C:\\\\Temp\\\\squad-scaffold\\\\meu-app" "${projPath}" /E /IS /IT /NFL /NDL /NJH /NJS /XD node_modules .next\n[/ACTION]\nPasso 3 (instalar dependências no destino):\n[ACTION:SHELL cwd="${projPath}"]\nnpm install\n[/ACTION]\nPasso 4:\n[ACTION:SHELL cwd="C:\\\\Temp"]\nrmdir /S /Q "C:\\\\Temp\\\\squad-scaffold"\n[/ACTION]\nNUNCA copie node_modules com robocopy — /XD node_modules obrigatório. npx leva 3-8 min.`
         }
         return sys
       }
@@ -1043,9 +1071,6 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
       // ── Execução local (sem VPS) ─────────────────────────────────────────
       if (data.vpsId === '__local__') {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { exec } = require('child_process') as typeof import('child_process')
-
         // Normaliza caminhos Unix gerados pelo agente para Windows
         function resolveLocalPath(filePath: string, cwd?: string): string {
           if (!filePath.startsWith('/')) return filePath // já é caminho Windows
@@ -1058,12 +1083,48 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         }
 
         if (data.type === 'shell') {
+          if (!data.content?.trim()) {
+            return { output: '[ERRO] Comando SHELL vazio — o agente emitiu [ACTION:SHELL] sem nenhum comando dentro. Emita o comando na próxima resposta.' }
+          }
+          // Expand Windows %VAR% in cwd — Node.js spawn does NOT expand env vars in cwd
+          function expandEnv(s: string): string {
+            return s.replace(/%([^%]+)%/g, (_, k) => process.env[k] ?? `%${k}%`)
+          }
+          const resolvedCwd = data.cwd ? expandEnv(data.cwd) : undefined
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { spawn } = require('child_process') as typeof import('child_process')
+          // Ensure cwd exists before spawning — ENOENT is misleading when cwd is missing
+          if (resolvedCwd) {
+            try { await fs.mkdir(resolvedCwd, { recursive: true }) } catch { /* already exists */ }
+          }
           return new Promise<{ output: string }>(resolve => {
-            exec(data.content, { cwd: data.cwd, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
-              (err, stdout, stderr) => {
-                const output = [stdout, stderr].filter(Boolean).join('\n').trim()
-                resolve({ output: output || (err ? err.message : '✓ Concluído') })
-              })
+            const proc = spawn(data.content.trim(), [], { cwd: resolvedCwd, shell: true, windowsHide: true })
+            const chunks: string[] = []
+            const onData = (chunk: Buffer) => {
+              const text = chunk.toString()
+              chunks.push(text)
+              win?.webContents.send('squad:shell:line', text)
+            }
+            proc.stdout?.on('data', onData)
+            proc.stderr?.on('data', onData)
+            // scaffold commands (npx create-*) can take 5+ min — use 10min timeout
+            const timeoutMs = /npx|npm install|npm ci|yarn install|pnpm install|robocopy/i.test(data.content) ? 600_000 : 120_000
+            const timer = setTimeout(() => {
+              proc.kill()
+              resolve({ output: (chunks.join('') || '(sem output)') + `\n[Timeout após ${timeoutMs / 1000}s]` })
+            }, timeoutMs)
+            proc.on('close', (code) => {
+              clearTimeout(timer)
+              const out = chunks.join('').trim() || '✓ Concluído'
+              // xcopy/robocopy exit code 1 = "files copied" (success), not an error
+              // Only flag exit code >= 4 as hard failure to avoid false positives
+              const isHardFail = code !== null && code >= 4
+              resolve({ output: isHardFail ? `[SHELL_ERROR código ${code}]\n${out}` : out })
+            })
+            proc.on('error', err => {
+              clearTimeout(timer)
+              resolve({ output: `[SHELL_ERROR] ${err.message}\nDica: verifique se o cwd existe e o comando está correto.` })
+            })
           })
         }
         if (data.type === 'read_file') {

@@ -15,10 +15,15 @@ export interface AgentConfig {
 
 const ACTION_INSTRUCTIONS = `
 
-AÇÕES DISPONÍVEIS (use somente quando for claramente o próximo passo — nunca em exemplos hipotéticos):
+REGRA DE OURO — SEGUIR SEMPRE:
+Quando você recebe uma task para executar, sua resposta DEVE começar com um [ACTION:...] tag.
+PROIBIDO escrever "vou fazer X" ou "primeiro preciso Y" sem emitir o ACTION imediatamente.
+Se não sabe por onde começar: emita [ACTION:READ_DIR path="pasta do projeto"][/ACTION] na primeira linha.
 
-[ACTION:SHELL cwd="C:\\caminho\\opcional"]
-comando executável aqui
+AÇÕES DISPONÍVEIS:
+
+[ACTION:SHELL cwd="C:\\caminho"]
+comando aqui
 [/ACTION]
 
 [ACTION:WRITE_FILE path="C:\\caminho\\arquivo.js"]
@@ -30,10 +35,10 @@ conteúdo do arquivo
 [ACTION:READ_DIR path="C:\\caminho\\pasta"][/ACTION]
 
 Regras de ACTION:
-- SHELL: apenas comandos reais (npm, git, node, dir, etc.) — nunca frases em português
-- READ_DIR: use para listar o conteúdo de uma pasta antes de READ_FILE
-- READ_FILE: use em arquivos específicos, nunca em caminhos de pasta
-- Um ACTION por vez — aguarde o resultado antes do próximo`
+- SHELL: apenas comandos reais (npm, git, node, etc.) — nunca texto em português
+- READ_DIR antes de READ_FILE — sempre explore a pasta primeiro
+- Um ACTION por resposta — aguarde o resultado antes do próximo
+- Após receber [RESULTADO DAS AÇÕES], continue com o próximo ACTION imediatamente`
 
 // Jarvis é orquestrador — apenas lê para entender o contexto, nunca escreve código
 const JARVIS_ACTION_INSTRUCTIONS = `
@@ -67,6 +72,8 @@ REGRAS ANTI-DIVAGAÇÃO:
 const EXECUTOR_RULES = `
 
 REGRAS CRÍTICAS DE EXECUÇÃO — NUNCA IGNORAR:
+0. PRIMEIRA RESPOSTA A QUALQUER TASK: deve conter UM [ACTION:...] tag. Sem exceções. Sem introdução. Sem planejamento em texto.
+0a. O COMANDO VAI DENTRO DO TAG — NUNCA FORA. ERRADO: escrever o comando como texto e depois [ACTION:SHELL cwd="..."][/ACTION] vazio. CORRETO: [ACTION:SHELL cwd="C:\\pasta"]seu-comando[/ACTION]. Isso é um erro crítico de formato.
 1. NUNCA declare "✅ sucesso", "instalado" ou "criado" sem ter o output REAL do SHELL nesta resposta. Se não há output, a ação não rodou.
 2. Use SEMPRE o cwd EXATO do último SHELL bem-sucedido. Nunca assuma que um diretório existe — confirme com READ_DIR antes.
 3. Uma ação por resposta. Aguarde o resultado antes de prosseguir.
@@ -74,7 +81,10 @@ REGRAS CRÍTICAS DE EXECUÇÃO — NUNCA IGNORAR:
 5. NUNCA delegue tarefas técnicas (build, teste, instalação) para @fury ou @vision — esses agentes são de pesquisa/growth.
 6. Ao terminar a tarefa: reporte status ao @jarvis, não crie nova cadeia de delegação.
 7. Se um comando falhar: analise o erro no output e corrija — não ignore nem declare sucesso.
-8. npm/npx: nomes de pacote devem ser SEMPRE lowercase. Se o diretório tem maiúsculas (ex: BRAINBOARD), crie o projeto em subpasta lowercase (ex: apps/web). Use --ts (não --typescript), aspas em --import-alias "@/*".`
+8. npm/npx: nomes de pacote devem ser SEMPRE lowercase. Se o diretório tem maiúsculas (ex: BRAINBOARD), crie o projeto em subpasta lowercase (ex: apps/web). Use --ts (não --typescript), aspas em --import-alias "@/*". SEMPRE use "npx --yes" (com flag --yes) para evitar prompt "Ok to proceed? (y)".
+9. Scaffold em staging: SEMPRE use C:\\Temp\\squad-scaffold como staging (caminho fixo, sem variáveis de ambiente). Passo 1: mkdir C:\\Temp\\squad-scaffold 2>nul & npx --yes create-next-app@latest C:\\Temp\\squad-scaffold\\<nome> --ts --tailwind --app --eslint --src-dir --import-alias "@/*" --use-npm. Passo 2 (copiar EXCLUINDO node_modules): robocopy "C:\\Temp\\squad-scaffold\\<nome>" "<destino>" /E /IS /IT /NFL /NDL /NJH /NJS /XD node_modules .next. Passo 3: npm install --prefix "<destino>". Passo 4: rmdir /S /Q "C:\\Temp\\squad-scaffold". PROIBIDO usar xcopy com \\* no final. NUNCA copiar node_modules com robocopy — leva 10+ minutos e trava o app. NUNCA use %USERNAME% no cwd.
+10. Comandos com npm/npx levam 3-8 minutos — aguarde o [RESULTADO DAS AÇÕES] antes de prosseguir. NUNCA emita segundo ACTION antes de receber o resultado do primeiro.
+11. create-next-app recusa criar em pasta não-vazia. SEMPRE use subpasta em staging (ex: C:\\Temp\\squad-scaffold\\meu-app) e copie depois com robocopy — nunca aponte create-next-app diretamente para a pasta de destino que já tem arquivos.`
 
 export const AGENTS: Record<AgentName, AgentConfig> = {
   jarvis: {

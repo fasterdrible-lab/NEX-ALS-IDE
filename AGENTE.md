@@ -212,7 +212,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`v3.19.0` — **NEX-ALS IDE completo + KB Global + Dark Luxury + Squad robusto** (parser tolerante, Exec auto com feedback real, Jarvis fluxo READ_DIR→READ_FILE→delegação). IDE com Monaco/xterm/SFTP/Git. NEX-ALS AI HUB com 6 providers + Claude Code. Squad com 8 agentes, ACTION tags, modo autônomo (loop até N iterações com `rootAgentRef`), **Exec auto** (actions executam sem clicar, padrão ON), **Jarvis somente leitura** (apenas READ_DIR+READ_FILE, delega código para @friday), KB por projeto (8 seções, sincronização automática). **KB Global do Desenvolvedor** (SQLite `knowledge_entries`, KnowledgeService, CRUD visual, injeção automática em todos os agentes Squad e AI HUB). **Visual NEX-ALS Dark Luxury** (paleta `#080612`/dourado/roxo, Inter, glassmorphism, logo). Ver `docs/CURRENT_STATE.md`.
+`v3.25.0` — **NEX-ALS IDE completo + KB Global + Dark Luxury + Squad robusto + IDE Phase 1 VS Code**. IDE com Monaco/xterm/SFTP/Git + **Semantic Highlighting** (TypeScript worker + inlay hints) + **Breadcrumbs bar** (path + símbolo atual) + **Outline View** (TypeScript worker API, regex fallback, OutlineTree). NEX-ALS AI HUB com 6 providers + Claude Code. Squad com 8 agentes, ACTION tags, modo autônomo, Exec auto, Jarvis somente leitura, KB por projeto, **robocopy `/XD node_modules` obrigatório** (fix freeze crítico). **KB Global do Desenvolvedor** (SQLite `knowledge_entries`). **Visual NEX-ALS Dark Luxury** (paleta `#080612`/dourado/roxo). Ver `docs/CURRENT_STATE.md`.
 
 ## Squad — visão geral
 

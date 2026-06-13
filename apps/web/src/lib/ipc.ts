@@ -281,6 +281,14 @@ export const ipc = {
       invoke<{ success: boolean }>('local:touch', filePath),
     exec: (cmd: string, cwd?: string) =>
       invoke<{ success: boolean; output: string }>('local:exec', { cmd, cwd }),
+    watch: (watchId: string, folderPath: string) =>
+      invoke<{ success: boolean; error?: string }>('local:watch', { watchId, folderPath }),
+    unwatch: (watchId: string) =>
+      invoke<{ success: boolean }>('local:unwatch', { watchId }),
+    onFsChange: (cb: (e: { watchId: string; eventType: string; filename: string; fullPath: string }) => void) => {
+      if (!window.electron) return () => {}
+      return window.electron.on('squad:fs:change', cb as (...args: unknown[]) => void)
+    },
   },
   notifications: {
     getEnabled: () => invoke<{ enabled: boolean }>('notifications:getEnabled'),
@@ -316,6 +324,12 @@ export const ipc = {
     action: {
       execute: (data: { type: string; content: string; cwd?: string; path?: string; vpsId: string }) =>
         invoke<{ output: string }>('squad:action:execute', data),
+    },
+    shell: {
+      onLine: (cb: (line: string) => void) => {
+        if (!window.electron) return () => {}
+        return window.electron.on('squad:shell:line', cb as (...args: unknown[]) => void)
+      },
     },
   },
   shell: {

@@ -19,3 +19,55 @@ import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 
 // Usa Monaco instalado localmente (não CDN)
 loader.config({ monaco })
+
+// TypeScript language service — acesso via cast (types marcados deprecated no Monaco 0.55)
+type MonacoTsDefaults = {
+  setCompilerOptions: (opts: Record<string, unknown>) => void
+  setDiagnosticsOptions: (opts: Record<string, unknown>) => void
+  setInlayHintsOptions?: (opts: Record<string, unknown>) => void
+}
+type MonacoTsLang = {
+  typescriptDefaults: MonacoTsDefaults
+  javascriptDefaults: MonacoTsDefaults
+  ScriptTarget: Record<string, number>
+  ModuleResolutionKind: Record<string, number>
+  ModuleKind: Record<string, number>
+  JsxEmit: Record<string, number>
+}
+const ts = (monaco.languages as unknown as { typescript: MonacoTsLang }).typescript
+
+ts.typescriptDefaults.setCompilerOptions({
+  target: ts.ScriptTarget.ESNext,
+  allowNonTsExtensions: true,
+  moduleResolution: ts.ModuleResolutionKind.NodeJs,
+  module: ts.ModuleKind.CommonJS,
+  noEmit: true,
+  esModuleInterop: true,
+  jsx: ts.JsxEmit.ReactJSX,
+  allowJs: true,
+  checkJs: false,
+  strict: false,
+})
+
+ts.typescriptDefaults.setDiagnosticsOptions({
+  noSemanticValidation: false,
+  noSyntaxValidation: false,
+})
+
+// Inlay hints — dicas de tipo inline iguais ao VS Code
+ts.typescriptDefaults.setInlayHintsOptions?.({
+  includeInlayParameterNameHints: 'literals',
+  includeInlayParameterNameHintsWhenArgumentMatchesName: false,
+  includeInlayFunctionParameterTypeHints: true,
+  includeInlayVariableTypeHints: false,
+  includeInlayPropertyDeclarationTypeHints: true,
+  includeInlayFunctionLikeReturnTypeHints: true,
+  includeInlayEnumMemberValueHints: true,
+})
+
+ts.javascriptDefaults.setCompilerOptions({
+  target: ts.ScriptTarget.ESNext,
+  allowNonTsExtensions: true,
+  allowJs: true,
+  checkJs: false,
+})

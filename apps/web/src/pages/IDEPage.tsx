@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Editor, { type OnMount, type Monaco } from '@monaco-editor/react'
 import type { editor as MonacoEditor } from 'monaco-editor'
@@ -12,7 +12,7 @@ import {
   GitBranch, Plus, Minus, Upload, Download, GitCommit as GitCommitIcon,
   Command, Search, PanelBottom, Copy, Files, Check, FolderOpen as FolderOpenIcon,
   MessageSquare, Send, Bot, Columns2, PanelRightClose, Network, Globe, Box, Cpu,
-  ExternalLink, Siren, Rocket as RocketDeployIcon,
+  ExternalLink, Siren, Rocket as RocketDeployIcon, List,
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
 import { LSP_CONFIGS, monacoLangToLspKey } from '../lib/lsp'
@@ -65,6 +65,42 @@ interface Problem  { file:string; line:number; col:number; message:string; sever
 interface CtxMenu  { x:number; y:number; entry:FileEntry }
 interface GitDiff  { content:string; filePath:string; staged:boolean }
 interface SearchResult { file:string; line:number; preview:string }
+interface OutlineSymbol { name:string; kind:number; line:number; endLine:number; detail?:string; children?:OutlineSymbol[] }
+
+// ── Outline helpers ────────────────────────────────────────────────────
+const SYMBOL_KIND: Record<number, { icon:string; color:string }> = {
+  1:  { icon:'⬡',   color:'text-slate-400'  },
+  2:  { icon:'▼',   color:'text-purple-400' },
+  3:  { icon:'▼',   color:'text-purple-400' },
+  4:  { icon:'▣',   color:'text-yellow-400' },
+  5:  { icon:'◆',   color:'text-yellow-400' },
+  6:  { icon:'⊕',   color:'text-emerald-400'},
+  7:  { icon:'●',   color:'text-blue-400'   },
+  8:  { icon:'●',   color:'text-sky-400'    },
+  9:  { icon:'⊕',   color:'text-emerald-400'},
+  10: { icon:'⊞',   color:'text-orange-400' },
+  11: { icon:'◇',   color:'text-emerald-300'},
+  12: { icon:'ƒ',   color:'text-emerald-400'},
+  13: { icon:'◎',   color:'text-sky-400'    },
+  14: { icon:'○',   color:'text-brand-300'  },
+  15: { icon:'"',   color:'text-amber-400'  },
+  16: { icon:'#',   color:'text-green-400'  },
+  17: { icon:'?',   color:'text-sky-300'    },
+  18: { icon:'[]',  color:'text-sky-400'    },
+  19: { icon:'{}',  color:'text-slate-400'  },
+  22: { icon:'⊞',   color:'text-orange-300' },
+  23: { icon:'◆',   color:'text-orange-400' },
+  24: { icon:'⚡',   color:'text-amber-300'  },
+  26: { icon:'<T>', color:'text-sky-400'    },
+}
+function tsKindToSymbolKind(kind: string): number {
+  const m: Record<string,number> = {
+    module:11, class:5, method:6, property:7, field:8,
+    constructor:9, enum:10, interface:11, function:12,
+    var:13, variable:13, const:14, let:13, type:11, alias:11,
+  }
+  return m[kind] ?? 13
+}
 
 // IDE-05 multi-terminal
 interface TermTab { id:string; title:string; sessionId:string|null; status:'connecting'|'connected'|'error'|'closed'; errMsg:string }
@@ -133,7 +169,7 @@ export default function IDEPage() {
   const [termH,    startResizeTerm] = useResize(200, 100, 600, 'y')
   const [chatW,    startResizeChat] = useResize(320, 200, 600, 'x')
   const [showTerm,    setShowTerm]    = useState(false)
-  const [leftPanel,   setLeftPanel]   = useState<'files'|'search'|'git'|'ports'|'docker'|'pm2'>('files')
+  const [leftPanel,   setLeftPanel]   = useState<'files'|'search'|'git'|'ports'|'docker'|'pm2'|'outline'>('files')
   const [pm2Processes, setPm2Processes] = useState<Array<{id:number;name:string;status:string;cpu:number;memory:number;restarts:number;uptime:number}>>([])
   const [pm2Loading, setPm2Loading] = useState(false)
   const [pm2Logs, setPm2Logs] = useState<{name:string;logs:string}|null>(null)
@@ -157,6 +193,12 @@ export default function IDEPage() {
   const [lspStates, setLspStates] = useState<Record<string, boolean>>({})
   const [lspLoading, setLspLoading] = useState(false)
   const monacoRef = useRef<Monaco|null>(null)
+
+  // Outline & Breadcrumbs
+  const [outlineSymbols, setOutlineSymbols] = useState<OutlineSymbol[]>([])
+  const [outlineLoading, setOutlineLoading] = useState(false)
+  const [currentSymbol,  setCurrentSymbol]  = useState<string|null>(null)
+  const outlineRef = useRef<OutlineSymbol[]>([])
 
   const toggleLSP = async (langKey: string) => {
     if (lspLoading) return
@@ -495,6 +537,12 @@ export default function IDEPage() {
     if (leftPanel === 'git' && !gitStatus && !gitLoading) loadGitStatus()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leftPanel])
+
+  // Auto-fetch git status when tree first loads (VPS mode only)
+  useEffect(() => {
+    if (!isLocal && rootEntries.length > 0 && !gitStatus && !gitLoading) loadGitStatus()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rootEntries.length, isLocal])
 
   // ── IDE-05: multi-terminal ────────────────────────────────────────────
 
@@ -902,6 +950,70 @@ export default function IDEPage() {
     }
   }
 
+  // ── Outline / Breadcrumbs ─────────────────────────────────────────────
+
+  const refreshOutline = useCallback(async () => {
+    const mon = monacoRef.current
+    const ed  = editorRef.current
+    if (!mon || !ed) return
+    const model = ed.getModel()
+    if (!model) return
+    const lang = model.getLanguageId()
+    setOutlineLoading(true)
+    try {
+      if (['typescript','javascript','typescriptreact','javascriptreact'].includes(lang)) {
+        type NavItem = {text:string;kind:string;spans:{start:number;length:number}[];childItems?:NavItem[]}
+        const getWorker = await (mon.languages as unknown as {typescript:{getTypeScriptWorker:()=>Promise<(...u:unknown[])=>Promise<unknown>>}}).typescript.getTypeScriptWorker()
+        const worker = await getWorker(model.uri)
+        const items = await (worker as unknown as {getNavigationBarItems:(f:string)=>Promise<NavItem[]>})
+          .getNavigationBarItems(model.uri.toString())
+        const convert = (item: NavItem, depth=0): OutlineSymbol[] => {
+          if (!item || depth > 6) return []
+          const span = item.spans[0]
+          const line    = span ? model.getPositionAt(span.start).lineNumber - 1 : 0
+          const endLine = span ? model.getPositionAt(span.start + span.length).lineNumber - 1 : line
+          return [{
+            name: item.text, kind: tsKindToSymbolKind(item.kind), line, endLine,
+            children: item.childItems?.flatMap(c => convert(c, depth+1)) ?? [],
+          }]
+        }
+        const syms = items.flatMap(item => {
+          if (item.text === '<global>' || item.text === 'module' || item.kind === 'module') {
+            return item.childItems?.flatMap(c => convert(c)) ?? []
+          }
+          return convert(item)
+        })
+        setOutlineSymbols(syms)
+        outlineRef.current = syms
+      } else {
+        // Fallback: regex para Python e outros
+        const content = model.getValue()
+        const syms: OutlineSymbol[] = []
+        const patterns: Array<{re:RegExp;kind:number}> = [
+          { re: /^class\s+(\w+)/gm,       kind:5  },
+          { re: /^def\s+(\w+)/gm,          kind:12 },
+          { re: /^function\s+(\w+)/gm,     kind:12 },
+          { re: /^(?:const|let|var)\s+(\w+)\s*=/gm, kind:14 },
+        ]
+        for (const { re, kind } of patterns) {
+          let m: RegExpExecArray | null
+          while ((m = re.exec(content)) !== null) {
+            const line = model.getPositionAt(m.index).lineNumber - 1
+            syms.push({ name:m[1], kind, line, endLine: line })
+          }
+        }
+        syms.sort((a,b) => a.line - b.line)
+        setOutlineSymbols(syms)
+        outlineRef.current = syms
+      }
+    } catch {
+      setOutlineSymbols([])
+      outlineRef.current = []
+    } finally {
+      setOutlineLoading(false)
+    }
+  }, [])
+
   // ── git operations ────────────────────────────────────────────────────
 
   const handleGitAdd = async (f:GitFileStatus) => {
@@ -981,10 +1093,44 @@ export default function IDEPage() {
   // ── derived ───────────────────────────────────────────────────────────
 
   const activeFile = openFiles.find(f=>f.path===activeTab)
+
+  // Auto-refresh outline quando arquivo abre — alimenta breadcrumbs mesmo com painel fechado
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!activeFile || activeFile.loading || activeFile.imageDataUrl) return
+    const timer = setTimeout(() => refreshOutline(), 450)
+    return () => clearTimeout(timer)
+  }, [activeFile?.path, activeFile?.loading]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const totalGitChanges = gitStatus ? gitStatus.staged.length+gitStatus.unstaged.length+gitStatus.untracked.length : 0
   const flatTree = flattenTree(rootEntries, 0, expandedFolders, folderChildren, loadingFolders)
   const errCount  = problems.filter(p=>p.severity==='error').length
   const warnCount = problems.filter(p=>p.severity==='warning').length
+
+  // ── Git status overlay for file tree ───────────────────────────────────
+  const gitFileMap = useMemo(() => {
+    const map = new Map<string, { letter: string; color: string }>()
+    if (!gitStatus?.isRepo) return map
+    const add = (files: GitFileStatus[], fallback: string) => {
+      for (const f of files) {
+        const letter = (f.status?.trim()[0] ?? fallback)
+        map.set(f.path.replace(/\\/g, '/'), { letter, color: GIT_STATUS_COLOR[letter] ?? 'text-slate-400' })
+      }
+    }
+    add(gitStatus.staged, 'A')
+    add(gitStatus.unstaged, 'M')
+    add(gitStatus.untracked, '?')
+    return map
+  }, [gitStatus])
+
+  const dirtyDirSet = useMemo(() => {
+    const dirs = new Set<string>()
+    for (const [p] of gitFileMap) {
+      const parts = p.split('/')
+      for (let i = 1; i < parts.length; i++) dirs.add(parts.slice(0, i).join('/'))
+    }
+    return dirs
+  }, [gitFileMap])
 
   // Search results grouped by file
   const searchByFile = searchResults.reduce<Record<string, SearchResult[]>>((acc, r) => {
@@ -997,8 +1143,25 @@ export default function IDEPage() {
     editorRef.current = ed
     monacoRef.current = mon
     ed.focus()
+
+    // Semantic highlighting — VS Code-level token colors (TS worker faz o resto)
+    ed.updateOptions({ 'semanticHighlighting.enabled': true } as Parameters<typeof ed.updateOptions>[0])
+
     ed.onDidChangeCursorPosition(e => {
       setCursorPos({ line:e.position.lineNumber, col:e.position.column })
+      // Breadcrumbs: encontra símbolo que contém o cursor
+      const line = e.position.lineNumber - 1
+      const findSym = (syms: OutlineSymbol[]): string|null => {
+        for (let i = syms.length - 1; i >= 0; i--) {
+          const s = syms[i]
+          if (s.line <= line && s.endLine >= line) {
+            const child = s.children ? findSym(s.children) : null
+            return child ?? s.name
+          }
+        }
+        return null
+      }
+      setCurrentSymbol(findSym(outlineRef.current))
     })
     // IDE-12: subscribe to Monaco markers (errors/warnings)
     markerDisposableRef.current?.dispose()
@@ -1670,15 +1833,16 @@ export default function IDEPage() {
           {/* panel tabs — Files | Search | Git (Git oculto no modo local) */}
           <div className="flex border-b border-slate-800 shrink-0">
             {([
-              { id:'files', icon:<Folder size={11}/>, label:'Arquivos' },
-              { id:'search', icon:<Search size={11}/>, label:'Busca' },
-              ...(!isLocal ? [{ id:'git', icon:<GitBranch size={11}/>, label:'Git', badge: totalGitChanges }] : []),
-              ...(!isLocal ? [{ id:'ports', icon:<Network size={11}/>, label:'Portas', badge: tunnels.length }] : []),
-              ...(!isLocal ? [{ id:'docker', icon:<Box size={11}/>, label:'Docker', badge: dockerContainers.filter(c=>c.state==='running').length || undefined }] : []),
-              ...(!isLocal ? [{ id:'pm2', icon:<Cpu size={11}/>, label:'PM2', badge: pm2Processes.filter(p=>p.status==='online').length || undefined }] : []),
+              { id:'files',   icon:<Folder size={11}/>,     label:'Arquivos' },
+              { id:'search',  icon:<Search size={11}/>,     label:'Busca' },
+              { id:'outline', icon:<List size={11}/>,       label:'Outline' },
+              ...(!isLocal ? [{ id:'git',    icon:<GitBranch size={11}/>, label:'Git',    badge: totalGitChanges }] : []),
+              ...(!isLocal ? [{ id:'ports',  icon:<Network size={11}/>,   label:'Portas', badge: tunnels.length }] : []),
+              ...(!isLocal ? [{ id:'docker', icon:<Box size={11}/>,       label:'Docker', badge: dockerContainers.filter(c=>c.state==='running').length || undefined }] : []),
+              ...(!isLocal ? [{ id:'pm2',    icon:<Cpu size={11}/>,       label:'PM2',    badge: pm2Processes.filter(p=>p.status==='online').length || undefined }] : []),
             ] as const).map(p => (
               <button key={p.id}
-                onClick={()=>{ setLeftPanel(p.id as 'files'|'search'|'git'|'ports'|'docker'|'pm2'); if(p.id==='git'&&!gitStatus&&!gitLoading) loadGitStatus(); if(p.id==='ports') refreshTunnels(); if(p.id==='docker') refreshDocker(); if(p.id==='pm2') refreshPm2() }}
+                onClick={()=>{ setLeftPanel(p.id as 'files'|'search'|'git'|'ports'|'docker'|'pm2'|'outline'); if(p.id==='git'&&!gitStatus&&!gitLoading) loadGitStatus(); if(p.id==='ports') refreshTunnels(); if(p.id==='docker') refreshDocker(); if(p.id==='pm2') refreshPm2(); if(p.id==='outline') refreshOutline() }}
                 className={`flex-1 flex items-center justify-center gap-1 py-1.5 text-xs font-medium transition-colors relative ${leftPanel===p.id?'text-slate-200 border-b-2 border-brand-500':'text-slate-500 hover:text-slate-300'}`}>
                 {p.icon} {p.label}
                 {'badge' in p && (p.badge ?? 0) > 0 && (
@@ -1729,34 +1893,47 @@ export default function IDEPage() {
                 {treeError && <div className="flex flex-col items-center py-6 gap-2 text-red-400 text-xs px-2 text-center"><AlertCircle size={16}/>{treeError}</div>}
                 {!treeConnecting && !treeError && (
                   <div className="py-0.5">
-                    {flatTree.map(({ entry, depth, childLoading }) => (
-                      <div key={entry.path}
-                        className={`flex items-center group cursor-pointer text-xs hover:bg-slate-800 ${
-                          activeTab===entry.path||selectedPath===entry.path?'bg-slate-800/80 text-slate-100':'text-slate-400 hover:text-slate-200'}`}
-                        style={{ paddingLeft: depth * 12 + 4 }}
-                        onClick={()=>{ selectedEntryRef.current=entry; setSelectedPath(entry.path); entry.isDirectory ? handleToggleFolder(entry) : openFile(entry) }}
-                        onContextMenu={ev=>{ev.preventDefault();selectedEntryRef.current=entry;setSelectedPath(entry.path);setCtxMenu({x:ev.clientX,y:ev.clientY,entry})}}
-                      >
-                        {entry.isDirectory
-                          ? <ChevronRight size={11} className={`shrink-0 text-slate-600 transition-transform ${expandedFolders.has(entry.path)?'rotate-90':''}`}/>
-                          : <span className="w-3 shrink-0"/>
-                        }
-                        {renaming?.path===entry.path ? (
-                          <div className="flex items-center gap-1 py-0.5 flex-1 min-w-0" onClick={ev=>ev.stopPropagation()}>
-                            <input autoFocus className="input text-xs py-0 flex-1" value={renameVal} onChange={ev=>setRenameVal(ev.target.value)}
-                              onKeyDown={ev=>{if(ev.key==='Enter')handleRename();if(ev.key==='Escape')setRenaming(null)}}/>
-                            <button onClick={handleRename}><Save size={10} className="text-emerald-400"/></button>
-                            <button onClick={()=>setRenaming(null)}><X size={10}/></button>
-                          </div>
-                        ) : (
-                          <span className="flex items-center gap-1 py-0.5 flex-1 min-w-0 truncate">
-                            <FileIcon name={entry.name} isDir={entry.isDirectory} open={expandedFolders.has(entry.path)} sz={13}/>
-                            <span className="truncate text-xs">{entry.name}</span>
-                            {childLoading && <Loader2 size={9} className="animate-spin text-slate-600 ml-auto mr-1"/>}
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                    {flatTree.map(({ entry, depth, childLoading }) => {
+                      const relPath = entry.path.startsWith(activeDir + '/')
+                        ? entry.path.slice(activeDir.length + 1)
+                        : null
+                      const gitInfo    = relPath && !entry.isDirectory ? gitFileMap.get(relPath) : undefined
+                      const dirtyFolder = relPath && entry.isDirectory  ? dirtyDirSet.has(relPath) : false
+                      return (
+                        <div key={entry.path}
+                          className={`flex items-center group cursor-pointer text-xs hover:bg-slate-800 ${
+                            activeTab===entry.path||selectedPath===entry.path?'bg-slate-800/80 text-slate-100':'text-slate-400 hover:text-slate-200'}`}
+                          style={{ paddingLeft: depth * 12 + 4 }}
+                          onClick={()=>{ selectedEntryRef.current=entry; setSelectedPath(entry.path); entry.isDirectory ? handleToggleFolder(entry) : openFile(entry) }}
+                          onContextMenu={ev=>{ev.preventDefault();selectedEntryRef.current=entry;setSelectedPath(entry.path);setCtxMenu({x:ev.clientX,y:ev.clientY,entry})}}
+                        >
+                          {entry.isDirectory
+                            ? <ChevronRight size={11} className={`shrink-0 text-slate-600 transition-transform ${expandedFolders.has(entry.path)?'rotate-90':''}`}/>
+                            : <span className="w-3 shrink-0"/>
+                          }
+                          {renaming?.path===entry.path ? (
+                            <div className="flex items-center gap-1 py-0.5 flex-1 min-w-0" onClick={ev=>ev.stopPropagation()}>
+                              <input autoFocus className="input text-xs py-0 flex-1" value={renameVal} onChange={ev=>setRenameVal(ev.target.value)}
+                                onKeyDown={ev=>{if(ev.key==='Enter')handleRename();if(ev.key==='Escape')setRenaming(null)}}/>
+                              <button onClick={handleRename}><Save size={10} className="text-emerald-400"/></button>
+                              <button onClick={()=>setRenaming(null)}><X size={10}/></button>
+                            </div>
+                          ) : (
+                            <span className="flex items-center gap-1 py-0.5 flex-1 min-w-0 overflow-hidden">
+                              <FileIcon name={entry.name} isDir={entry.isDirectory} open={expandedFolders.has(entry.path)} sz={13}/>
+                              <span className={`truncate text-xs flex-1 ${gitInfo ? gitInfo.color : ''}`}>{entry.name}</span>
+                              {childLoading && <Loader2 size={9} className="animate-spin text-slate-600 ml-1 shrink-0"/>}
+                              {!childLoading && gitInfo && (
+                                <span className={`shrink-0 text-[9px] font-bold leading-none mr-1 ${gitInfo.color}`}>{gitInfo.letter}</span>
+                              )}
+                              {!childLoading && !gitInfo && dirtyFolder && (
+                                <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400/70 mr-1.5"/>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
                     {flatTree.length===0 && <p className="text-xs text-slate-700 px-3 py-3 text-center">Pasta vazia</p>}
                   </div>
                 )}
@@ -1821,6 +1998,43 @@ export default function IDEPage() {
                   <div className="px-2 py-1.5 text-[10px] text-slate-700 border-t border-slate-800">
                     {searchResults.length} resultado{searchResults.length>1?'s':''} em {Object.keys(searchByFile).length} arquivo{Object.keys(searchByFile).length>1?'s':''}
                   </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── OUTLINE panel ── */}
+          {leftPanel==='outline' && (
+            <div className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex items-center justify-between px-2 py-1 border-b border-slate-800 shrink-0">
+                <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Outline</span>
+                <button onClick={refreshOutline} disabled={outlineLoading}
+                  className="p-1 rounded text-slate-700 hover:text-slate-300 hover:bg-slate-700">
+                  <RefreshCw size={10} className={outlineLoading?'animate-spin':''}/>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {outlineLoading && (
+                  <div className="flex items-center justify-center py-6 gap-1.5 text-slate-700 text-xs">
+                    <Loader2 size={12} className="animate-spin"/> Carregando…
+                  </div>
+                )}
+                {!outlineLoading && outlineSymbols.length===0 && (
+                  <div className="flex flex-col items-center py-8 gap-2 text-slate-700 text-xs px-3 text-center">
+                    <List size={18}/>
+                    <p>{activeFile ? 'Sem símbolos encontrados' : 'Abra um arquivo para ver o outline'}</p>
+                  </div>
+                )}
+                {!outlineLoading && outlineSymbols.length>0 && (
+                  <OutlineTree
+                    symbols={outlineSymbols}
+                    currentLine={cursorPos.line - 1}
+                    onJump={line => {
+                      editorRef.current?.revealLineInCenter(line+1)
+                      editorRef.current?.setPosition({ lineNumber:line+1, column:1 })
+                      editorRef.current?.focus()
+                    }}
+                  />
                 )}
               </div>
             </div>
@@ -2207,18 +2421,36 @@ export default function IDEPage() {
                   <Loader2 size={16} className="animate-spin"/> Carregando {activeFile.name}…
                 </div>
               ) : (
-                <Editor height="100%" theme="vs-dark"
-                  language={activeFile.language} value={activeFile.content} path={activeFile.path}
-                  onMount={handleEditorMount}
-                  onChange={val=>setOpenFiles(f=>f.map(fl=>fl.path===activeTab?{...fl,content:val??''}:fl))}
-                  options={{
-                    fontSize:14, fontFamily:'"Cascadia Code","Fira Code",Consolas,"Courier New",monospace',
-                    fontLigatures:true, lineHeight:1.6, minimap:{enabled:splitMode?false:true}, wordWrap:'on',
-                    automaticLayout:true, scrollBeyondLastLine:false, renderLineHighlight:'gutter',
-                    bracketPairColorization:{enabled:true}, smoothScrolling:true,
-                    cursorBlinking:'smooth', cursorSmoothCaretAnimation:'on',
-                    padding:{top:10,bottom:10}, tabSize:2,
-                  }}/>
+                <>
+                  {/* Breadcrumbs — path segments + símbolo atual (VS Code-style) */}
+                  <div className="flex items-center gap-0.5 px-3 py-0.5 bg-[#161b22] border-b border-slate-800/60 text-[10px] text-slate-600 overflow-hidden shrink-0 select-none">
+                    {activeFile.path.replace(/\\/g,'/').split('/').filter(Boolean).slice(-4).map((seg,i,arr) => (
+                      <span key={i} className="flex items-center gap-0.5 shrink-0">
+                        {i>0 && <ChevronRight size={8} className="text-slate-800 shrink-0"/>}
+                        <span className={i===arr.length-1 ? 'text-slate-400 font-medium' : 'text-slate-700'}>{seg}</span>
+                      </span>
+                    ))}
+                    {currentSymbol && (
+                      <>
+                        <ChevronRight size={8} className="text-slate-800 shrink-0"/>
+                        <span className="text-brand-500 font-medium shrink-0">{currentSymbol}</span>
+                      </>
+                    )}
+                  </div>
+                  <Editor height="100%" theme="vs-dark"
+                    language={activeFile.language} value={activeFile.content} path={activeFile.path}
+                    onMount={handleEditorMount}
+                    onChange={val=>setOpenFiles(f=>f.map(fl=>fl.path===activeTab?{...fl,content:val??''}:fl))}
+                    options={{
+                      fontSize:14, fontFamily:'"Cascadia Code","Fira Code",Consolas,"Courier New",monospace',
+                      fontLigatures:true, lineHeight:1.6, minimap:{enabled:splitMode?false:true}, wordWrap:'on',
+                      automaticLayout:true, scrollBeyondLastLine:false, renderLineHighlight:'gutter',
+                      bracketPairColorization:{enabled:true}, smoothScrolling:true,
+                      cursorBlinking:'smooth', cursorSmoothCaretAnimation:'on',
+                      padding:{top:10,bottom:10}, tabSize:2,
+                      'semanticHighlighting.enabled': true,
+                    } as Parameters<typeof Editor>[0]['options']}/>
+                </>
               )}
             </div>
 
@@ -2944,6 +3176,37 @@ export default function IDEPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// ── OutlineTree ────────────────────────────────────────────────────────
+
+function OutlineTree({ symbols, onJump, depth=0, currentLine }: {
+  symbols: OutlineSymbol[]; onJump:(line:number)=>void; depth?:number; currentLine:number
+}) {
+  return (
+    <>
+      {symbols.map((sym,i) => {
+        const ki = SYMBOL_KIND[sym.kind] ?? { icon:'○', color:'text-slate-500' }
+        const active = currentLine >= sym.line && currentLine <= sym.endLine
+        return (
+          <div key={i}>
+            <div
+              className={`flex items-center gap-1.5 py-[3px] text-xs cursor-pointer hover:bg-slate-800 transition-colors ${active ? 'bg-slate-800/70' : ''}`}
+              style={{ paddingLeft: depth*12 + 8 }}
+              onClick={() => onJump(sym.line)}
+            >
+              <span className={`shrink-0 text-[10px] font-mono ${ki.color}`}>{ki.icon}</span>
+              <span className={`truncate ${active ? 'text-slate-100 font-medium' : 'text-slate-400 hover:text-slate-200'}`}>{sym.name}</span>
+              {sym.detail && <span className="text-slate-700 text-[9px] truncate shrink-0 ml-auto pr-2">{sym.detail}</span>}
+            </div>
+            {sym.children && sym.children.length>0 && (
+              <OutlineTree symbols={sym.children} onJump={onJump} depth={depth+1} currentLine={currentLine}/>
+            )}
+          </div>
+        )
+      })}
+    </>
   )
 }
 

@@ -1,26 +1,32 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-06-12
-**Versão:** 3.20.0
+**Versão:** 3.25.0
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**NEX-ALS IDE 3.19.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, KB por projeto, rootAgentRef, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude), **KB Global do Desenvolvedor** (SQLite `knowledge_entries`, KnowledgeService, CRUD completo, injeção automática em Squad + AI HUB), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. **Visual NEX-ALS Dark Luxury** (paleta `#080612`/`#D9A441`/`#B78DFF`, logo, Inter font, glassmorphism). `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.25.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, KB por projeto, rootAgentRef, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude, **robocopy `/XD node_modules` obrigatório**), **KB Global do Desenvolvedor** (SQLite `knowledge_entries`, KnowledgeService, CRUD completo, injeção automática em Squad + AI HUB), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. **Visual NEX-ALS Dark Luxury** (paleta `#080612`/`#D9A441`/`#B78DFF`, logo, Inter font, glassmorphism). **IDE Phase 1 VS Code** (Semantic Highlighting via TypeScript worker, Breadcrumbs bar, Outline View). `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
 - **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat IA (API direta ou claude -p); badge vermelho "Produção" na top bar.
 - **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
 
-## Bugs conhecidos — Squad execução local em OneDrive (identificados v3.20.0)
+## IDE Phase 1 — tecnologia VS Code (v3.25.0)
 
-- **OneDrive bloqueia `create-next-app`** — `child_process.exec` em `handlers.ts:1062` executa de verdade, mas `create-next-app` chama `fs.access(root, W_OK)` antes de scaffoldar; OneDrive intercepta esse check e retorna "sem permissão" mesmo com a pasta gravável. Workaround: staging em `C:\Users\phpos\AppData\Local\Temp` + `xcopy` ao destino final. Pendente: adicionar isso em `EXECUTOR_RULES`.
-- **`parseActions` segundo passo ausente** — CHANGELOG v3.19.0 documenta parser de dois passes, mas `actions.ts:12` tem apenas um regex. ACTIONs truncadas antes de `[/ACTION]` são descartadas silenciosamente.
+- [x] **Semantic Highlighting** — `monacoSetup.ts` reescrito com `MonacoTsDefaults`/`MonacoTsLang` type aliases; compiler options ESNext+JSX ReactJSX+allowJs; inlay hints via `setInlayHintsOptions`; `'semanticHighlighting.enabled': true` nos editor options
+- [x] **Breadcrumbs bar** — barra fina `bg-[#161b22]` acima do Monaco; últimos 4 segmentos do path + símbolo atual sob o cursor (roxo, tempo real); `outlineRef` pattern evita closure stale
+- [x] **Outline View** — aba "Outline" (`List` icon) no painel esquerdo; TypeScript/JS usa `getTypeScriptWorker()` + `getNavigationBarItems()`; regex fallback para Python/Ruby/PHP; `OutlineTree` com ícones por kind, entrada ativa realçada, clique revela linha; auto-refresh debounce 450ms
+- [x] **Squad: robocopy `/XD node_modules`** — fix freeze crítico: `handlers.ts` + `agents.ts` regra 9 com `/XD node_modules .next` obrigatório + `npm install --prefix` + timeout 600s
 
-## Squad — Friday regra npm lowercase (v3.20.0)
+## IDE — badges git na SFTP tree + Squad: painel atividade (v3.21.0–v3.22.0)
 
-- [x] **EXECUTOR_RULES regra 8** — nomes npm sempre lowercase; diretório com maiúsculas → criar em subpasta lowercase; `--ts` em vez de `--typescript`; aspas em `--import-alias "@/*"`
+- [x] **Badges git na tree** — `gitFileMap` + `dirtyDirSet` via `useMemo`; nome colorido + letra badge; ponto âmbar em pastas sujas; auto-load no mount
+- [x] **Squad: arquivos modificados** — painel com ícone colorido por extensão, nome, path pai, badge 'W'
+- [x] **Squad: parser 2-pass** — Pass 1 aceita `[/ACTION` sem `]`; Pass 2 captura blocos truncados; Set evita duplicatas
+- [x] **Squad: staging fixo** — `C:\Temp\squad-scaffold` sem variáveis de ambiente; resolve bloqueio OneDrive
+- [x] **Squad: monitoramento de atividade** — stats bar R/W/⚡/✗; log expandível com duração
 
 ## Squad — parser robusto + autoExecRound + fluxo Jarvis (v3.19.0)
 
