@@ -1,5 +1,16 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.30.0] — 2026-06-13
+
+### Adicionado — Configurações: botão "Limpar histórico do Squad"
+
+- Nova seção "Squad" na página de Configurações
+- Botão **Limpar histórico do Squad** apaga todas as sessões e mensagens do Squad (`DELETE FROM squad_sessions` + `DELETE FROM squad_messages`) via confirmação
+- Novo IPC handler `squad:session:clearAll` no main process
+- Versão: `3.29.0` → `3.30.0`
+
+---
+
 ## [3.29.0] — 2026-06-13
 
 ### Corrigido — Squad: tela travada na Friday e agentes usando provider errado

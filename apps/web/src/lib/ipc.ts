@@ -311,6 +311,7 @@ export const ipc = {
       addMsg: (data: { sessionId: string; agentName: string; role: string; content: string; delegatedBy: string | null }) =>
         invoke<{ id: string }>('squad:session:addMsg', data),
       delete: (id: string) => invoke<void>('squad:session:delete', id),
+      clearAll: () => invoke<{ cleared: boolean }>('squad:session:clearAll'),
     },
     stream: {
       start: (data: { agent: string; message: string; history: Array<{ role: string; content: string }>; projectContext?: string; localPath?: string; providerOverride?: string; autonomous?: boolean }) =>

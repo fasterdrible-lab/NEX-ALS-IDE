@@ -950,6 +950,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     wrapHandler(() => { requireAuth(); return db.squadSession.delete({ where: { id } }) })
   )
 
+  ipcMain.handle('squad:session:clearAll', () =>
+    wrapHandler(async () => {
+      requireAuth()
+      await db.$executeRawUnsafe(`DELETE FROM squad_messages`)
+      await db.$executeRawUnsafe(`DELETE FROM squad_sessions`)
+      return { cleared: true }
+    })
+  )
+
   ipcMain.handle('squad:stream:start', (event, data: {
     agent: AgentName
     message: string

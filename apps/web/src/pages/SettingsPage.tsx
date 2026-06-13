@@ -3,7 +3,7 @@ import {
   Loader2, CheckCircle,
   Download, Upload, ChevronDown, ChevronUp, Eye, EyeOff,
   Trash2, Zap, Star, Check, AlertCircle, Bell, Users, Plus, ShieldCheck, Shield,
-  Terminal, RefreshCw, Copy,
+  Terminal, RefreshCw, Copy, MessageSquare,
 } from 'lucide-react'
 import { ipc, type AppUser } from '../lib/ipc'
 import type { AiProviderConfig } from '@cwm/config'
@@ -565,6 +565,8 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(true)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [clearingSquad, setClearingSquad] = useState(false)
+  const [clearSquadMsg, setClearSquadMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [aiProviders, setAiProviders] = useState<AiProviderConfig[]>([])
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
 
@@ -775,6 +777,46 @@ export default function SettingsPage() {
           </Section>
         </div>
       )}
+
+      {/* Squad — limpar histórico */}
+      <div className="card space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-1">
+            <MessageSquare size={14} className="text-slate-400" /> Squad
+          </h2>
+          <p className="text-xs text-slate-500">
+            Gerenciamento do histórico de conversas dos agentes. O banco persiste entre versões — limpe manualmente quando necessário.
+          </p>
+        </div>
+
+        {clearSquadMsg && (
+          <div className={`text-sm px-3 py-2 rounded-lg ${clearSquadMsg.ok ? 'bg-emerald-900/40 text-emerald-300' : 'bg-red-900/40 text-red-300'}`}>
+            {clearSquadMsg.text}
+          </div>
+        )}
+
+        <button
+          onClick={async () => {
+            if (!confirm('Apagar TODO o histórico de conversas do Squad? Esta ação não pode ser desfeita.')) return
+            setClearingSquad(true)
+            setClearSquadMsg(null)
+            try {
+              await ipc.squad.session.clearAll()
+              setClearSquadMsg({ ok: true, text: 'Histórico do Squad apagado com sucesso.' })
+            } catch (e) {
+              setClearSquadMsg({ ok: false, text: e instanceof Error ? e.message : String(e) })
+            } finally {
+              setClearingSquad(false)
+              setTimeout(() => setClearSquadMsg(null), 4000)
+            }
+          }}
+          disabled={clearingSquad}
+          className="btn-secondary flex items-center gap-2 text-sm text-red-400 hover:text-red-300 border-red-900/40 disabled:opacity-40"
+        >
+          {clearingSquad ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+          Limpar histórico do Squad
+        </button>
+      </div>
 
       {/* Backup / Restore */}
       <div className="card space-y-4">
