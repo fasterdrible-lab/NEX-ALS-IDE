@@ -963,21 +963,28 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       requireAuth()
       const targetWin = BrowserWindow.fromWebContents(event.sender)
 
-      // Resolve provider efetivo: preferido → checar API key → fallback padrão
+      // Resolve provider efetivo: override explícito → default configurado nas settings → preferredProvider do agente
       const agentCfg = AGENTS[data.agent]
-      let effectiveProvider: string = data.providerOverride ?? agentCfg.preferredProvider
+      let effectiveProvider: string = agentCfg.preferredProvider
       try {
-        const hasKey = await db.$queryRawUnsafe(
-          `SELECT provider FROM ai_providers WHERE provider=? AND enabled=1 AND apiKey!='' LIMIT 1`,
-          effectiveProvider
-        ) as Array<{ provider: string }>
-        if (!hasKey[0]) {
+        if (data.providerOverride) {
+          effectiveProvider = data.providerOverride
+        } else {
+          // Sempre usa o provider padrão configurado pelo usuário nas Settings
           const def = await db.$queryRawUnsafe(
-            `SELECT provider FROM ai_providers WHERE isDefault=1 AND enabled=1 LIMIT 1`
+            `SELECT provider FROM ai_providers WHERE isDefault=1 AND enabled=1 AND apiKey!='' LIMIT 1`
           ) as Array<{ provider: string }>
-          if (def[0]) effectiveProvider = def[0].provider
+          if (def[0]) {
+            effectiveProvider = def[0].provider
+          } else {
+            // Fallback: qualquer provider habilitado com key
+            const any = await db.$queryRawUnsafe(
+              `SELECT provider FROM ai_providers WHERE enabled=1 AND apiKey!='' LIMIT 1`
+            ) as Array<{ provider: string }>
+            if (any[0]) effectiveProvider = any[0].provider
+          }
         }
-      } catch { /* ignora — usa preferredProvider */ }
+      } catch { /* ignora — usa preferredProvider do agente */ }
 
       // Carrega KB global uma vez por stream
       const globalKBContext = await knowledgeSvc.buildContext().catch(() => '')

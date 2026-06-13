@@ -1,6 +1,6 @@
 {
   "name": "@cwm/desktop",
-  "version": "3.28.0",
+  "version": "3.29.0",
   "description": "NEX-ALS IDE â€” gerenciador de ambientes VPS com IDE integrado",
   "author": "NEX-ALS",
   "private": true,

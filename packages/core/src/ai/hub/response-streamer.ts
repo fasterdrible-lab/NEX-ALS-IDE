@@ -6,9 +6,14 @@ export interface StreamSession {
   abort: () => void
 }
 
+interface StreamEntry {
+  controller: AbortController
+  sendDone: () => void
+}
+
 export class ResponseStreamer {
   private readonly manager = new ProviderManager()
-  private readonly sessions = new Map<string, AbortController>()
+  private readonly sessions = new Map<string, StreamEntry>()
 
   /**
    * Inicia streaming. Chama onChunk para cada fragmento.
@@ -20,7 +25,8 @@ export class ResponseStreamer {
   ): Promise<StreamSession> {
     const streamId = `stream_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
     const controller = new AbortController()
-    this.sessions.set(streamId, controller)
+    const sendDone = () => onChunk({ type: 'done', streamId })
+    this.sessions.set(streamId, { controller, sendDone })
 
     const provider = await this.manager.build(input.provider)
 
@@ -45,16 +51,17 @@ export class ResponseStreamer {
       abort: () => {
         controller.abort()
         this.sessions.delete(streamId)
-        onChunk({ type: 'done', streamId })
+        sendDone()
       },
     }
   }
 
   cancel(streamId: string): void {
-    const ctrl = this.sessions.get(streamId)
-    if (ctrl) {
-      ctrl.abort()
+    const entry = this.sessions.get(streamId)
+    if (entry) {
+      entry.controller.abort()
       this.sessions.delete(streamId)
+      entry.sendDone() // garante que o renderer recebe 'done' e resolve() é chamado
     }
   }
 }

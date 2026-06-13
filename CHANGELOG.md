@@ -1,5 +1,22 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.29.0] — 2026-06-13
+
+### Corrigido — Squad: tela travada na Friday e agentes usando provider errado
+
+**Bug 1 (causa raiz do travamento na Friday): `ResponseStreamer.cancel()` nunca enviava `done`**
+- Quando `squadSvc.cancelStream(streamId)` era chamado, o `AbortController` abortava o fetch mas **nunca enviava `{ type: 'done' }` para o renderer**
+- O renderer esperava o evento `done` para chamar `resolve()` — sem ele, `await streamAgent(...)` ficava preso para sempre
+- Fix em `response-streamer.ts`: salva o callback `sendDone` junto com o controller; `cancel()` agora chama `entry.sendDone()` após abortar
+
+**Bug 2: agentes usando provider hardcoded, ignorando configuração do usuário**
+- Friday usava `openai`, Fury usava `gemini`, Tester usava `openai` — mesmo que o usuário só tivesse `anthropic` configurado nas Settings
+- Fix em `handlers.ts`: provider resolution agora prioriza o **isDefault** habilitado nas Settings; `preferredProvider` do agente é último recurso
+
+- Versão: `3.28.0` → `3.29.0`
+
+---
+
 ## [3.28.0] — 2026-06-12
 
 ### Corrigido — 3 bugs que causavam tela travada no modo autônomo
