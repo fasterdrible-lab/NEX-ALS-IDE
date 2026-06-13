@@ -688,18 +688,24 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         let doneSent = false
         let hasStdout = false
         let stderrBuf = ''
+        let lastChunkAt = Date.now()
+        // eslint-disable-next-line prefer-const
+        let watchdog: ReturnType<typeof setInterval>
         const sendErr = (msg: string) => {
           if (doneSent) return; doneSent = true
+          clearInterval(watchdog)
           claudeProcs.delete(streamId)
           try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'error', error: msg }) } catch { /* janela fechada */ }
         }
         const sendDone = () => {
           if (doneSent) return; doneSent = true
+          clearInterval(watchdog)
           claudeProcs.delete(streamId)
           try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'done' }) } catch { /* janela fechada */ }
         }
         proc.stdout?.on('data', (chunk: Buffer) => {
           hasStdout = true
+          lastChunkAt = Date.now()
           try { targetWin?.webContents.send('ai:stream:chunk', { streamId, type: 'text_delta', delta: chunk.toString() }) } catch { /* janela fechada */ }
         })
         proc.stderr?.on('data', (chunk: Buffer) => { stderrBuf += chunk.toString() })
@@ -715,6 +721,14 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           }
         })
         proc.on('error', (err: Error) => sendErr(`claude CLI não encontrado: ${err.message}`))
+        watchdog = setInterval(() => {
+          if (doneSent) { clearInterval(watchdog); return }
+          if (Date.now() - lastChunkAt > 90_000) {
+            clearInterval(watchdog)
+            proc.kill()
+            sendErr('⏱ Timeout: claude CLI não respondeu em 90s. O processo foi encerrado. Tente novamente.')
+          }
+        }, 15_000)
 
         return { streamId }
       }
@@ -1014,18 +1028,24 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         let doneSent = false
         let hasStdout = false
         let stderrBuf = ''
+        let lastChunkAt = Date.now()
+        // eslint-disable-next-line prefer-const
+        let watchdog: ReturnType<typeof setInterval>
         const sendErr = (msg: string) => {
           if (doneSent) return; doneSent = true
+          clearInterval(watchdog)
           claudeProcs.delete(streamId)
           try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'error', error: msg }) } catch { /* janela fechada */ }
         }
         const sendDone = () => {
           if (doneSent) return; doneSent = true
+          clearInterval(watchdog)
           claudeProcs.delete(streamId)
           try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'done' }) } catch { /* janela fechada */ }
         }
         proc.stdout?.on('data', (chunk: Buffer) => {
           hasStdout = true
+          lastChunkAt = Date.now()
           try { targetWin?.webContents.send('squad:stream:chunk', { streamId, type: 'text_delta', delta: chunk.toString() }) } catch { /* janela fechada */ }
         })
         proc.stderr?.on('data', (chunk: Buffer) => { stderrBuf += chunk.toString() })
@@ -1041,6 +1061,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           }
         })
         proc.on('error', (err: Error) => sendErr(`claude CLI não encontrado: ${err.message}`))
+        // Watchdog: mata o processo se nenhum chunk chegar em 90s (evita tela congelada)
+        watchdog = setInterval(() => {
+          if (doneSent) { clearInterval(watchdog); return }
+          if (Date.now() - lastChunkAt > 90_000) {
+            clearInterval(watchdog)
+            proc.kill()
+            sendErr('⏱ Timeout: claude CLI não respondeu em 90s. O processo foi encerrado. Tente novamente.')
+          }
+        }, 15_000)
         return { streamId }
       }
 
@@ -1059,7 +1088,10 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   )
 
   ipcMain.handle('squad:stream:cancel', (_, streamId: string) => {
-    squadSvc.cancelStream(streamId)
+    // Mata subprocesso Claude Code se existir (mesma lógica de ai:stream:cancel)
+    const proc = claudeProcs.get(streamId)
+    if (proc) { proc.kill(); claudeProcs.delete(streamId) }
+    else { squadSvc.cancelStream(streamId) }
     return { success: true }
   })
 

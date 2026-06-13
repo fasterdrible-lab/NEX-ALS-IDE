@@ -1,7 +1,7 @@
-{
+﻿{
   "name": "@cwm/desktop",
-  "version": "3.25.0",
-  "description": "NEX-ALS IDE — gerenciador de ambientes VPS com IDE integrado",
+  "version": "3.26.0",
+  "description": "NEX-ALS IDE â€” gerenciador de ambientes VPS com IDE integrado",
   "author": "NEX-ALS",
   "private": true,
   "main": "out/main/index.js",
@@ -33,7 +33,7 @@
   "build": {
     "appId": "com.nexals.ide",
     "productName": "NEX-ALS IDE",
-    "copyright": "Copyright © 2026 NEX-ALS",
+    "copyright": "Copyright Â© 2026 NEX-ALS",
     "directories": {
       "output": "dist-app"
     },
@@ -115,3 +115,4 @@
     }
   }
 }
+

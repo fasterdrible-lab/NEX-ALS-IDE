@@ -1,5 +1,23 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.26.0] — 2026-06-12
+
+### Corrigido — Squad + AI Hub: stream congelado + cancelamento que não funcionava
+
+**Watchdog de timeout (Squad e AI Hub):**
+- Sem timeout, o processo `claude` CLI podia travar indefinidamente → UI congelada por 15+ minutos sem forma de sair
+- Agora: verificação a cada 15s — se nenhum chunk chegar em **90 segundos**, o processo é morto e uma mensagem de erro é exibida no chat: `⏱ Timeout: claude CLI não respondeu em 90s`
+- `lastChunkAt` resetado a cada chunk recebido (evita falsos positivos em respostas lentas mas contínuas)
+- `clearInterval(watchdog)` chamado em `sendErr` e `sendDone` — sem timer órfão
+
+**Cancelamento real do processo (Squad):**
+- `squad:stream:cancel` chamava apenas `squadSvc.cancelStream(streamId)` que não tem efeito no subprocesso do Claude Code
+- Fix: mesma lógica de `ai:stream:cancel` — verifica `claudeProcs.get(streamId)` primeiro; se encontrar, mata o processo (`proc.kill()`) e remove do mapa; senão cai para `squadSvc.cancelStream()`
+- O botão ✕ no chat agora realmente encerra o CLI em vez de deixá-lo rodando em segundo plano
+- Versão: `3.25.0` → `3.26.0`
+
+---
+
 ## [3.25.0] — 2026-06-12
 
 ### Melhorado — IDE: tecnologia VS Code Phase 1 + Squad: robocopy robusto

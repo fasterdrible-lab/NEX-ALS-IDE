@@ -1,6 +1,6 @@
-{
+﻿{
   "name": "@cwm/web",
-  "version": "3.25.0",
+  "version": "3.26.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -35,3 +35,4 @@
     "vite": "^6.0.6"
   }
 }
+
