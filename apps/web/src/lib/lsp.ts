@@ -85,13 +85,13 @@ export function monacoLangToLspKey(monacoLang: string): string | null {
 // Active LSP client instances keyed by language key
 const activeClients = new Map<string, { dispose(): void }>()
 
-export async function connectLSP(monaco: Monaco, langKey: string): Promise<void> {
+export async function connectLSP(monaco: Monaco, langKey: string, portOverride?: number): Promise<void> {
   if (activeClients.has(langKey)) return
 
   const config = LSP_CONFIGS[langKey]
   if (!config) throw new Error(`LSP: linguagem '${langKey}' não suportada`)
 
-  const wsUrl = `ws://localhost:${config.port}`
+  const wsUrl = `ws://localhost:${portOverride ?? config.port}`
 
   const { MonacoLanguageClient } = await import('monaco-languageclient')
   const { WebSocketMessageReader, WebSocketMessageWriter, toSocket } = await import('vscode-ws-jsonrpc')

@@ -83,6 +83,10 @@ export const ipc = {
   settings: {
     get: () => invoke<Settings>('settings:get'),
     update: (data: Partial<SettingsInput>) => invoke<Settings>('settings:update', data),
+    brave: {
+      get: () => invoke<{ braveApiKey: string }>('settings:brave:get'),
+      set: (key: string) => invoke<{ saved: boolean }>('settings:brave:set', key),
+    },
   },
   diagnostics: {
     run: () => invoke<DiagnosticResults>('diagnostics:run'),
@@ -332,6 +336,17 @@ export const ipc = {
         return window.electron.on('squad:shell:line', cb as (...args: unknown[]) => void)
       },
     },
+    memory: {
+      list: (projectKey: string) => invoke<SquadMemory[]>('squad:memory:list', projectKey),
+      save: (data: { projectKey: string; content: string; category?: string; sessionId?: string; agentName?: string }) =>
+        invoke<SquadMemory>('squad:memory:save', data),
+      delete: (id: string) => invoke<{ deleted: boolean }>('squad:memory:delete', id),
+      extract: (data: { sessionId: string; projectKey: string }) =>
+        invoke<SquadMemory[]>('squad:memory:extract', data),
+    },
+  },
+  search: {
+    web: (data: { query: string; count?: number }) => invoke<{ output: string }>('search:web', data),
   },
   shell: {
     openExternal: (url: string) => invoke<{ success: boolean; error?: string }>('shell:openExternal', url),
@@ -372,5 +387,147 @@ export const ipc = {
     update:  (id: string, data: Partial<KnowledgeEntryInput>) => invoke<KnowledgeEntry>('knowledge:update', { id, ...data }),
     delete:  (id: string) => invoke<void>('knowledge:delete', id),
     context: () => invoke<string>('knowledge:context'),
+    search:  (query: string) => invoke<KnowledgeEntry[]>('knowledge:search', query),
   },
+  tasks: {
+    list:   (filters?: { status?: TaskStatus; ownerAgent?: string }) => invoke<AgentTask[]>('tasks:list', filters),
+    get:    (id: string) => invoke<AgentTask | null>('tasks:get', id),
+    create: (data: AgentTaskInput) => invoke<AgentTask>('tasks:create', data),
+    update: (id: string, data: Partial<AgentTaskInput>) => invoke<AgentTask>('tasks:update', { id, ...data }),
+    delete: (id: string) => invoke<void>('tasks:delete', id),
+  },
+  skills: {
+    list:           () => invoke<AgentSkill[]>('skills:list'),
+    get:            (id: string) => invoke<AgentSkill | null>('skills:get', id),
+    create:         (data: AgentSkillInput) => invoke<AgentSkill>('skills:create', data),
+    update:         (id: string, data: Partial<AgentSkillInput>) => invoke<AgentSkill>('skills:update', { id, ...data }),
+    delete:         (id: string) => invoke<void>('skills:delete', id),
+    search:         (query: string) => invoke<AgentSkill[]>('skills:search', query),
+    match:          (text: string) => invoke<AgentSkill[]>('skills:match', text),
+    incrementUsage: (id: string) => invoke<void>('skills:incrementUsage', id),
+  },
+  context: {
+    build: (opts?: { query?: string; maxChars?: number }) =>
+      invoke<{ text: string; knowledgeCount: number; skillCount: number }>('context:build', opts),
+  },
+  search: {
+    global: (query: string) =>
+      invoke<{ knowledge: KnowledgeEntry[]; skills: AgentSkill[]; conversations: ConversationResult[] }>('search:global', query),
+  },
+  infra: {
+    analyze: (report: string) => invoke<string>('infra:analyze', report),
+  },
+  learning: {
+    analyzeFile: (data: { name: string; content: string; language: string }) =>
+      invoke<{ title: string; content: string; category: string; tags: string }>('learning:analyzeFile', data),
+  },
+  workspace: {
+    analyze: (data: { vpsId: string; projectPath: string }) =>
+      invoke<WorkspaceReport>('workspace:analyze', data),
+  },
+  lsp: {
+    start:  (workspacePath: string) => invoke<{ port: number }>('local:lsp:start', workspacePath),
+    stop:   ()                       => invoke<{ ok: boolean }>('local:lsp:stop'),
+    status: ()                       => invoke<{ running: boolean; port: number }>('local:lsp:status'),
+  },
+  jobs: {
+    list:    ()                                                         => invoke<ScheduledJob[]>('jobs:list'),
+    create:  (data: ScheduledJobInput)                                  => invoke<ScheduledJob>('jobs:create', data),
+    update:  (id: string, data: Partial<ScheduledJobInput & { isActive: number }>) => invoke<ScheduledJob>('jobs:update', { id, ...data }),
+    delete:  (id: string)                                               => invoke<void>('jobs:delete', id),
+    toggle:  (id: string, isActive: boolean)                            => invoke<ScheduledJob>('jobs:toggle', { id, isActive }),
+    runNow:  (id: string)                                               => invoke<string>('jobs:runNow', id),
+  },
+}
+
+export interface ScheduledJob {
+  id: string
+  title: string
+  instruction: string
+  agentName: string
+  schedule: string        // JSON-encoded JobSchedule
+  isActive: number        // 0 | 1
+  lastRunAt: string | null
+  lastResult: string | null
+  nextRunAt: string
+  vpsId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ScheduledJobInput {
+  instruction: string
+  title?: string
+  agentName?: string
+  vpsId?: string
+}
+
+export interface ConversationResult {
+  id: string
+  sessionId: string
+  agentName: string
+  role: string
+  snippet: string
+  createdAt: string
+}
+
+// Workspace Intelligence types
+export interface WsArchLayer { name: string; description: string; files: string[] }
+export interface WsModule { name: string; path: string; role: string; imports: string[]; risks: string[] }
+export interface WsFlow { name: string; steps: string[] }
+export interface WsRisk { severity: 'critical' | 'high' | 'medium' | 'low'; type: string; description: string; file?: string }
+export interface WorkspaceReport {
+  summary: string
+  stack: string[]
+  architecture: { layers: WsArchLayer[]; patterns: string[] }
+  modules: WsModule[]
+  flows: WsFlow[]
+  risks: WsRisk[]
+}
+
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE'
+export type TaskPriority = 'low' | 'medium' | 'high'
+export interface AgentTask {
+  id: string; title: string; description: string; status: TaskStatus
+  ownerAgent: string; priority: TaskPriority
+  projectId: string | null; sessionId: string | null
+  createdAt: string; updatedAt: string
+}
+export interface AgentTaskInput {
+  title: string; description?: string; status?: TaskStatus
+  ownerAgent?: string; priority?: TaskPriority; projectId?: string; sessionId?: string
+}
+
+export interface SquadMemory {
+  id: string
+  projectKey: string
+  content: string
+  category: string
+  sessionId: string | null
+  agentName: string
+  createdAt: string
+}
+
+export interface AgentSkill {
+  id: string
+  title: string
+  description: string
+  category: string
+  triggers: string[]
+  content: string
+  examples: string[]
+  usageCount: number
+  autoGenerated: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AgentSkillInput {
+  title: string
+  description?: string
+  category?: string
+  triggers?: string[]
+  content: string
+  examples?: string[]
+  autoGenerated?: boolean
 }

@@ -13,6 +13,7 @@ import {
   Command, Search, PanelBottom, Copy, Files, Check, FolderOpen as FolderOpenIcon,
   MessageSquare, Send, Bot, Columns2, PanelRightClose, Network, Globe, Box, Cpu,
   ExternalLink, Siren, Rocket as RocketDeployIcon, List,
+  BookMarked, Lightbulb,
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
 import { LSP_CONFIGS, monacoLangToLspKey } from '../lib/lsp'
@@ -65,6 +66,7 @@ interface Problem  { file:string; line:number; col:number; message:string; sever
 interface CtxMenu  { x:number; y:number; entry:FileEntry }
 interface GitDiff  { content:string; filePath:string; staged:boolean }
 interface SearchResult { file:string; line:number; preview:string }
+interface KbSuggestion { title: string; content: string; category: string; tags: string }
 interface OutlineSymbol { name:string; kind:number; line:number; endLine:number; detail?:string; children?:OutlineSymbol[] }
 
 // ── Outline helpers ────────────────────────────────────────────────────
@@ -150,6 +152,46 @@ function useResize(initial:number, min:number, max:number, axis:'x'|'y') {
   return [size, start] as const
 }
 
+// ── continuous learning — manifest heuristic ──────────────────────────
+
+const MANIFEST_NAMES = new Set(['package.json','requirements.txt','go.mod','cargo.toml','docker-compose.yml','docker-compose.yaml','pyproject.toml'])
+
+function analyzeManifest(name: string, content: string): KbSuggestion | null {
+  const lower = name.toLowerCase()
+  if (!MANIFEST_NAMES.has(lower)) return null
+  try {
+    if (lower === 'package.json') {
+      const pkg = JSON.parse(content) as Record<string, unknown>
+      const deps = Object.keys({ ...(pkg.dependencies as Record<string,unknown> ?? {}), ...(pkg.devDependencies as Record<string,unknown> ?? {}) }).slice(0, 20)
+      return {
+        title: `Stack Node.js: ${String(pkg.name ?? 'projeto')}`,
+        content: `**Versão:** ${String(pkg.name ?? '')}@${String(pkg.version ?? '')}\n**Runtime:** Node.js\n**Dependências principais:** ${deps.join(', ')}`,
+        category: 'stack',
+        tags: `node,npm,${String(pkg.name ?? '')}`,
+      }
+    }
+    if (lower === 'requirements.txt') {
+      const libs = content.split('\n').filter(l => l.trim() && !l.startsWith('#')).slice(0, 15).join(', ')
+      return { title: 'Stack Python: dependências', content: `**Runtime:** Python\n**Libs:** ${libs}`, category: 'stack', tags: 'python,pip' }
+    }
+    if (lower === 'go.mod') {
+      const mod = content.match(/^module\s+(.+)/m)?.[1] ?? 'go-project'
+      const goVer = content.match(/^go\s+(\S+)/m)?.[1] ?? ''
+      return { title: `Stack Go: ${mod}`, content: `**Module:** ${mod}\n**Go:** ${goVer}`, category: 'stack', tags: 'go,golang' }
+    }
+    if (lower === 'cargo.toml') {
+      const crate = content.match(/^name\s*=\s*"(.+)"/m)?.[1] ?? 'rust-project'
+      const ver = content.match(/^version\s*=\s*"(.+)"/m)?.[1] ?? ''
+      return { title: `Stack Rust: ${crate}`, content: `**Crate:** ${crate} v${ver}\n**Runtime:** Rust`, category: 'stack', tags: 'rust,cargo' }
+    }
+    if (lower.startsWith('docker-compose')) {
+      const services = [...content.matchAll(/^\s{2}(\w[\w-]+):\s*$/gm)].map(m => m[1]).slice(0, 10)
+      return { title: 'Docker Compose: serviços', content: `**Serviços:** ${services.join(', ')}`, category: 'arquitetura', tags: 'docker,compose,containers' }
+    }
+  } catch { /* invalid JSON or parse error — skip */ }
+  return null
+}
+
 // ── main ───────────────────────────────────────────────────────────────
 
 export default function IDEPage() {
@@ -210,7 +252,15 @@ export default function IDEPage() {
       if (isLSPConnected(langKey)) {
         disconnectLSP(langKey)
         setLspStates(s => ({ ...s, [langKey]: false }))
+        if (isLocal) ipc.lsp.stop().catch(() => {})
         showToast(true, `${config.name} desconectado`)
+      } else if (isLocal) {
+        // Auto-start local LSP bridge (spawns typescript-language-server locally)
+        const res = await ipc.lsp.start(localRootRef.current)
+        if ((res as unknown as { error: string }).error) throw new Error((res as unknown as { error: string }).error)
+        await connectLSP(monacoRef.current!, langKey, (res as { port: number }).port)
+        setLspStates(s => ({ ...s, [langKey]: true }))
+        showToast(true, `${config.name} conectado (local)`)
       } else {
         await connectLSP(monacoRef.current!, langKey)
         setLspStates(s => ({ ...s, [langKey]: true }))
@@ -361,6 +411,9 @@ export default function IDEPage() {
   // Ctrl+Shift+T: stack of recently closed tabs (max 15)
   const closedTabsRef = useRef<OpenFile[]>([])
   const [toast,     setToast]     = useState<{ok:boolean;text:string}|null>(null)
+  const [kbSuggestion,  setKbSuggestion]  = useState<KbSuggestion | null>(null)
+  const [aiLearning,    setAiLearning]    = useState(false)
+  const [aiLearnResult, setAiLearnResult] = useState<KbSuggestion | null>(null)
 
   const showToast = (ok:boolean, text:string) => { setToast({ok,text}); setTimeout(()=>setToast(null), 3500) }
   const isDirty = (f:OpenFile) => f.content !== f.savedContent && !f.loading
@@ -800,6 +853,10 @@ export default function IDEPage() {
     if (revealLine) pendingRevealLine.current = revealLine
     const r = await fsReadFile(entry.path)
     setOpenFiles(f=>f.map(fl=>fl.path===entry.path ? {...fl, content:r.success?r.content:`// Erro: ${r.error}`, savedContent:r.success?r.content:'', loading:false} : fl))
+    if (r.success && r.content) {
+      const suggestion = analyzeManifest(entry.name, r.content)
+      if (suggestion) setKbSuggestion(suggestion)
+    }
   }
 
   const handleSave = async (filePath:string) => {
@@ -824,6 +881,27 @@ export default function IDEPage() {
     const idx = openFiles.findIndex(f=>f.path===path)
     const next = openFiles[idx+1]?.path ?? openFiles[idx-1]?.path ?? null
     setOpenFiles(f=>f.filter(fl=>fl.path!==path)); setActiveTab(next)
+  }
+
+  const handleSaveToKb = async (s: KbSuggestion) => {
+    try {
+      await ipc.knowledge.create({ title: s.title, content: s.content, category: s.category as 'geral', tags: s.tags, isActive: true })
+      showToast(true, 'Salvo na KB ✓')
+      setKbSuggestion(null)
+      setAiLearnResult(null)
+    } catch (e) { showToast(false, `Erro ao salvar: ${(e as Error).message}`) }
+  }
+
+  const handleLearnFile = async () => {
+    const file = openFiles.find(f => f.path === activeTab)
+    if (!file || !file.content || aiLearning) return
+    setAiLearning(true)
+    setAiLearnResult(null)
+    try {
+      const result = await ipc.learning.analyzeFile({ name: file.name, content: file.content, language: file.language })
+      setAiLearnResult(result)
+    } catch (e) { showToast(false, `Aprendizado falhou: ${(e as Error).message}`) }
+    finally { setAiLearning(false) }
   }
 
   const handleDelete = async (e:FileEntry) => {
@@ -2422,6 +2500,23 @@ export default function IDEPage() {
                 </div>
               ) : (
                 <>
+                  {/* KB suggestion banner */}
+                  {kbSuggestion && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 text-xs shrink-0"
+                      style={{ background: 'rgba(217,164,65,0.07)', borderBottom: '1px solid rgba(217,164,65,0.14)' }}>
+                      <BookMarked size={11} style={{ color: '#D9A441' }} className="shrink-0" />
+                      <span style={{ color: '#F2C879' }} className="font-medium truncate flex-1">{kbSuggestion.title}</span>
+                      <button
+                        onClick={() => handleSaveToKb(kbSuggestion)}
+                        className="shrink-0 px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+                        style={{ background: 'rgba(217,164,65,0.14)', color: '#D9A441' }}>
+                        Salvar na KB
+                      </button>
+                      <button onClick={() => setKbSuggestion(null)} className="shrink-0 text-slate-600 hover:text-slate-400">
+                        <X size={11} />
+                      </button>
+                    </div>
+                  )}
                   {/* Breadcrumbs — path segments + símbolo atual (VS Code-style) */}
                   <div className="flex items-center gap-0.5 px-3 py-0.5 bg-[#161b22] border-b border-slate-800/60 text-[10px] text-slate-600 overflow-hidden shrink-0 select-none">
                     {activeFile.path.replace(/\\/g,'/').split('/').filter(Boolean).slice(-4).map((seg,i,arr) => (
@@ -3101,8 +3196,74 @@ export default function IDEPage() {
               <PanelBottom size={10}/> Ctrl+`
             </span>
           )}
+          {activeTab && (
+            <button
+              onClick={handleLearnFile}
+              disabled={aiLearning}
+              title="Analisar arquivo com IA e salvar padrões na KB"
+              className={`flex items-center gap-1 transition-colors text-[10px] ${aiLearning ? 'text-yellow-500' : 'text-slate-600 hover:text-yellow-400'}`}>
+              {aiLearning ? <Loader2 size={10} className="animate-spin" /> : <Lightbulb size={10} />}
+              {aiLearning ? ' Aprendendo…' : ' Aprender'}
+            </button>
+          )}
+          {!isLocal && vpsId && (
+            <button
+              onClick={() => {
+                const path = encodeURIComponent(activeDir || '/root')
+                const name = encodeURIComponent(vpsName ?? '')
+                navigate(`/workspace?vpsId=${encodeURIComponent(vpsId)}&path=${path}&name=${name}`)
+              }}
+              title="Workspace Intelligence — mapa de arquitetura do projeto"
+              className="flex items-center gap-1 text-slate-600 hover:text-blue-400 transition-colors text-[10px]">
+              <Network size={10} /> Workspace
+            </button>
+          )}
         </span>
       </div>
+
+      {/* AI learn result modal */}
+      {aiLearnResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.72)' }}>
+          <div className="w-full max-w-lg rounded-xl p-5 shadow-2xl"
+            style={{ background: '#0F0C22', border: '1px solid rgba(217,164,65,0.2)' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <Lightbulb size={14} style={{ color: '#D9A441' }} />
+              <h3 className="text-sm font-semibold" style={{ color: '#F2C879' }}>Padrão detectado pela IA</h3>
+            </div>
+            <div className="space-y-3 mb-5">
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Título</p>
+                <p className="text-sm text-slate-200">{aiLearnResult.title}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Conteúdo</p>
+                <p className="text-xs text-slate-400 whitespace-pre-wrap line-clamp-6">{aiLearnResult.content}</p>
+              </div>
+              <div className="flex gap-6">
+                <div>
+                  <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Categoria</p>
+                  <p className="text-xs text-slate-300">{aiLearnResult.category}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 mb-1 uppercase tracking-wider">Tags</p>
+                  <p className="text-xs text-slate-300">{aiLearnResult.tags}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setAiLearnResult(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                Ignorar
+              </button>
+              <button
+                onClick={() => handleSaveToKb(aiLearnResult)}
+                className="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{ background: 'rgba(217,164,65,0.14)', border: '1px solid rgba(217,164,65,0.28)', color: '#F2C879' }}>
+                Salvar na KB
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* context menu */}
       {ctxMenu && (

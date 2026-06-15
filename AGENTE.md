@@ -156,10 +156,19 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 | `/projects` | Lista de projetos — CRUD + associação |
 | `/accounts` | Contas Claude — CRUD + instruções de login |
 | `/launcher` | Lançador — botão "Abrir Projeto" + botão "IDE" por VPS + "Abrir pasta local" |
-| `/settings` | Configurações — VS Code/SSH + **Backup/Restore JSON** |
+| `/settings` | Configurações — VS Code/SSH + Backup/Restore JSON + **Brave API Key** |
 | `/diagnostics` | Diagnóstico — status de todas as ferramentas |
 | `/help` | Manual de Uso — 9 seções expansíveis |
 | `/knowledge` | KB Global do Desenvolvedor — CRUD de entradas (title, content, category, tags) |
+| `/skills` | Skills — CRUD de habilidades por agente; detecção por gatilho no Squad |
+| `/tasks` | Tarefas — `agent_tasks` SQLite; status TODO/IN_PROGRESS/BLOCKED/DONE |
+| `/search` | Busca Global — pesquisa em conhecimento + skills + sessões |
+| `/automations` | Automações — gatilhos periódicos para Squad |
+| `/planning` | **Planning Mode** — fila de tarefas + automações + contexto por agente |
+| `/workspace` | **Workspace Intelligence** — análise automática do projeto (5 abas) |
+| `/operator` | **Operador** — telemetria VPS + alertas |
+| `/monitor` | Monitor de VPS — CPU/RAM/Disco/Uptime; auto-refresh 30s |
+| `/history` | Histórico de lançamentos |
 | `/terminal/:vpsId/:vpsName` | Terminal SSH fullscreen |
 | `/explorer/:vpsId/:vpsName` | Explorer SFTP fullscreen |
 | `/ide/:vpsId/:vpsName` | **NEX-ALS IDE** modo remoto (VPS) |
@@ -212,22 +221,46 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`v3.25.0` — **NEX-ALS IDE completo + KB Global + Dark Luxury + Squad robusto + IDE Phase 1 VS Code**. IDE com Monaco/xterm/SFTP/Git + **Semantic Highlighting** (TypeScript worker + inlay hints) + **Breadcrumbs bar** (path + símbolo atual) + **Outline View** (TypeScript worker API, regex fallback, OutlineTree). NEX-ALS AI HUB com 6 providers + Claude Code. Squad com 8 agentes, ACTION tags, modo autônomo, Exec auto, Jarvis somente leitura, KB por projeto, **robocopy `/XD node_modules` obrigatório** (fix freeze crítico). **KB Global do Desenvolvedor** (SQLite `knowledge_entries`). **Visual NEX-ALS Dark Luxury** (paleta `#080612`/dourado/roxo). Ver `docs/CURRENT_STATE.md`.
+`v3.49.0` — **NEX-ALS IDE completo + Squad com Pipeline autônomo + Memória Persistente + Busca Web + Planning Mode**. IDE com Monaco/xterm/SFTP/Git + Semantic Highlighting + Breadcrumbs + Outline View + LSP auto-start local. NEX-ALS AI HUB com 6 providers + Claude Code. Squad com **10 agentes** (+ Reviewer + DevOps), ACTION tags (SHELL/READ_FILE/READ_DIR/WRITE_FILE/**SEARCH**), **Modo Pipeline autônomo** (Jarvis→Friday→Reviewer→Tester→DevOps), Exec auto, modo autônomo, KB por projeto, KB Global, robocopy `/XD node_modules`, **Memória Persistente** (tabela `squad_memories`, extração por IA, injeção automática), **Busca Web** (Brave Search API, ACTION SEARCH, Fury reformulado). **Skills + ContextBuilder** (detecção por gatilho, banner pós-pipeline). **Planning Mode** (PlanningPage, fila de tarefas, automações, contexto por agente). **Workspace Intelligence** (WorkspacePage 5 abas). **Visual NEX-ALS Dark Luxury** (paleta `#080612`/dourado/roxo). Ver `docs/CURRENT_STATE.md`.
 
 ## Squad — visão geral
 
-8 agentes especializados com streaming em tempo real, delegação automática e execução de ações:
+10 agentes especializados com streaming em tempo real, delegação automática, execução de ações e **Pipeline autônomo**:
 
 | Agente | Papel | Provider |
 |---|---|---|
 | Jarvis | PM / Orquestrador | Claude |
-| Friday | Engenheira de Software | GPT |
+| Friday | Engenheira de Software Sênior | GPT |
 | Fury | Pesquisa de Mercado | Gemini |
 | Shuri | UX / Design | Claude |
 | Pepper | Marketing / Brand | GPT |
 | Vision | Growth / Métricas | Gemini |
 | Requis | Documentação | Claude |
 | Tester | QA / Testes | GPT |
+| Reviewer | Code Review (OWASP) | Claude |
+| DevOps | CI/CD & Entrega | Claude |
+
+### Modo Pipeline autônomo
+
+Botão **Pipeline** (índigo) no header do Squad. Orquestra o ciclo completo sem interação manual:
+
+```
+🎯 Fase 1 — Jarvis planeja (lista de arquivos, stack, ordem)
+👩‍💻 Fase 2 — Friday implementa (arquivo por arquivo, ACTION por resposta)
+🔎 Fase 3 — Reviewer lê código com READ_FILE, emite [APROVADO] ou [BLOQUEADO]
+       └── [BLOQUEADO] → Fase 3b: Friday corrige issues críticos
+🧪 Fase 4 — Tester escreve e executa testes
+🚀 Fase 5 — DevOps: git add -A → commit → verifica remote → push → PR
+✅ Concluído
+```
+
+**Funções internas:**
+- `runPipeline(task, sid)` — orquestra as fases
+- `runAgentUntilDone(agent, sid, delegatedBy, maxIter)` — loop de execução por agente:
+  - Executa actions do agente → envia resultado → agente responde → repete
+  - Se agente responde com texto-only (sem ACTION): envia push `⚠️ EXECUTE AGORA` (max 3 pushes)
+  - Se agente não responde (mesmo bubble): encerra
+  - Encerra em `[PRONTO]`/`[APROVADO]`/`[DONE]` ou maxIter
 
 ### ACTION tags suportadas
 
@@ -236,11 +269,13 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 [ACTION:READ_FILE path="C:\pasta\arquivo.ts"][/ACTION]
 [ACTION:READ_DIR path="C:\pasta"][/ACTION]
 [ACTION:WRITE_FILE path="C:\pasta\arquivo.ts"]conteúdo[/ACTION]
+[ACTION:SEARCH query="termo de busca"][/ACTION]
 ```
 
 - Execução local (`vpsId: '__local__'`) — `child_process.exec` / `fs.*`
 - Execução remota (VPS) — SSH terminal.exec / SFTP
 - `read_file` em diretório → auto-redireciona para listagem
+- `search` — interceptado antes do IPC; chama Brave Search API via main process; não requer VPS; badge WEB laranja
 
 ### Modo autônomo
 
@@ -386,6 +421,25 @@ git pull
 - `knowledge:update` — atualiza entrada por id
 - `knowledge:delete` — remove entrada por id
 - `knowledge:context` — retorna KB formatada como markdown (para injeção em prompts)
+
+### squad:memory:*
+- `squad:memory:list` — lista memórias por projectKey
+- `squad:memory:save` — salva nova memória (content, category, projectKey, agentName)
+- `squad:memory:delete` — remove memória por id
+- `squad:memory:extract` — extrai memórias da sessão atual via Friday; retorna count de memórias salvas
+
+### search:*
+- `search:web` — busca na internet via Brave Search API; parâmetros: `{ query, count? }`; retorna `{ output: string }` formatado em markdown
+
+### settings:brave:*
+- `settings:brave:get` — retorna braveApiKey do banco
+- `settings:brave:set` — salva braveApiKey no banco
+
+### lsp:*
+- `lsp:start` — spawna `typescript-language-server --stdio` localmente; retorna `{ port }` do WebSocket bridge; para modo local sem VPS
+
+### workspace:*
+- `workspace:analyze` — SSH: lê manifests + fonte do projeto; chama Friday para gerar WorkspaceReport JSON (stack, modules, flows, risks)
 
 ### shell:*
 - `shell:openExternal` — abre URL no navegador padrão (allowlist: claude.ai, anthropic.com)

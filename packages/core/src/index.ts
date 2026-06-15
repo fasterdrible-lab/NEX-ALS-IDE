@@ -14,3 +14,11 @@ export { NotificationMonitor, type NotificationAlert } from './notifications/not
 export { AuthService, type AppUser, type UserRole } from './auth/auth.service.js'
 export { SquadService, AGENTS, AGENT_NAMES, type AgentName, type AgentConfig } from './squad/index.js'
 export { KnowledgeService } from './knowledge/knowledge.service.js'
+export { SkillsService, SKILL_CATEGORIES, type AgentSkill, type AgentSkillInput } from './skills/skills.service.js'
+export { ContextBuilder, type ContextBuildOptions, type BuiltContext } from './context/context-builder.js'
+export { TasksService, type AgentTask, type AgentTaskInput, type TaskStatus, type TaskPriority } from './tasks/tasks.service.js'
+export {
+  ScheduledJobsService,
+  parseSchedule, describeSchedule, computeNextRunAt,
+  type ScheduledJob, type ScheduledJobInput, type JobSchedule,
+} from './jobs/jobs.service.js'

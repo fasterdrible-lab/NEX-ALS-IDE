@@ -567,6 +567,10 @@ export default function SettingsPage() {
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [clearingSquad, setClearingSquad] = useState(false)
   const [clearSquadMsg, setClearSquadMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [braveKey, setBraveKey] = useState('')
+  const [braveKeyVisible, setBraveKeyVisible] = useState(false)
+  const [braveSaving, setBraveSaving] = useState(false)
+  const [braveMsg, setBraveMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [aiProviders, setAiProviders] = useState<AiProviderConfig[]>([])
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
 
@@ -594,6 +598,9 @@ export default function SettingsPage() {
         .then(r => setNotificationsEnabled(r.enabled))
         .catch(() => {}),
       loadUsers(),
+      ipc.settings.brave.get()
+        .then(r => setBraveKey(r.braveApiKey))
+        .catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [loadAiProviders, loadUsers])
 
@@ -816,6 +823,70 @@ export default function SettingsPage() {
           {clearingSquad ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
           Limpar histórico do Squad
         </button>
+      </div>
+
+      {/* Busca Web — Brave Search */}
+      <div className="card space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-300 flex items-center gap-2 mb-1">
+            <span className="text-base">🌐</span> Busca Web (Brave Search)
+          </h2>
+          <p className="text-xs text-slate-500">
+            Permite que o agente Fury (e outros) pesquisem na internet em tempo real com a ACTION SEARCH.
+            Obtenha sua chave gratuita (2.000 buscas/mês) em{' '}
+            <button
+              onClick={() => ipc.shell.openExternal('https://api.search.brave.com/register')}
+              className="text-brand-400 hover:text-brand-300 underline underline-offset-2"
+            >
+              api.search.brave.com/register
+            </button>
+          </p>
+        </div>
+
+        {braveMsg && (
+          <div className={`text-sm px-3 py-2 rounded-lg ${braveMsg.ok ? 'bg-emerald-900/40 text-emerald-300' : 'bg-red-900/40 text-red-300'}`}>
+            {braveMsg.text}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type={braveKeyVisible ? 'text' : 'password'}
+              value={braveKey}
+              onChange={e => setBraveKey(e.target.value)}
+              placeholder="BSA..."
+              className="input w-full pr-9 font-mono text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setBraveKeyVisible(v => !v)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              {braveKeyVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+          <button
+            onClick={async () => {
+              setBraveSaving(true)
+              setBraveMsg(null)
+              try {
+                await ipc.settings.brave.set(braveKey.trim())
+                setBraveMsg({ ok: true, text: 'Chave salva. Fury já pode pesquisar na internet.' })
+              } catch (e) {
+                setBraveMsg({ ok: false, text: e instanceof Error ? e.message : String(e) })
+              } finally {
+                setBraveSaving(false)
+                setTimeout(() => setBraveMsg(null), 4000)
+              }
+            }}
+            disabled={braveSaving}
+            className="btn-primary flex items-center gap-2 text-sm disabled:opacity-40 shrink-0"
+          >
+            {braveSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            Salvar
+          </button>
+        </div>
       </div>
 
       {/* Backup / Restore */}

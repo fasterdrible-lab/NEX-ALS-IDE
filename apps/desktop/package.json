@@ -1,6 +1,6 @@
 {
   "name": "@cwm/desktop",
-  "version": "3.31.0",
+  "version": "3.49.0",
   "description": "NEX-ALS IDE â€” gerenciador de ambientes VPS com IDE integrado",
   "author": "NEX-ALS",
   "private": true,
@@ -18,9 +18,11 @@
     "@cwm/config": "workspace:*",
     "@cwm/core": "workspace:*",
     "@cwm/db": "workspace:*",
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/ws": "^8.5.12",
     "@electron-toolkit/utils": "^4.0.0",
     "@types/node": "^22.0.0",
     "concurrently": "^9.1.0",

@@ -108,6 +108,19 @@ model SquadMessage {
   @@map("squad_messages")
 }
 
+model SquadMemory {
+  id         String   @id @default(cuid())
+  projectKey String
+  content    String
+  category   String   @default("decisão")
+  sessionId  String?
+  agentName  String   @default("jarvis")
+  createdAt  DateTime @default(now())
+
+  @@index([projectKey])
+  @@map("squad_memories")
+}
+
 model KnowledgeEntry {
   id        String   @id @default(cuid())
   title     String

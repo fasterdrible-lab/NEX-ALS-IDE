@@ -23,6 +23,8 @@ export default function KnowledgePage() {
   const [entries, setEntries] = useState<KnowledgeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [searchResults, setSearchResults] = useState<KnowledgeEntry[] | null>(null) // null = sem busca ativa
+  const [searchLoading, setSearchLoading] = useState(false)
   const [filterCat, setFilterCat] = useState<string>('__all__')
   const [editing, setEditing] = useState<string | null>(null) // id or 'new'
   const [form, setForm] = useState<KnowledgeEntryInput>(EMPTY_FORM)
@@ -32,6 +34,23 @@ export default function KnowledgePage() {
 
   useEffect(() => { load() }, [])
   useEffect(() => { if (editing) titleRef.current?.focus() }, [editing])
+
+  // Busca FTS5 debounced — dispara 400ms após o usuário parar de digitar
+  useEffect(() => {
+    if (!search.trim()) { setSearchResults(null); return }
+    setSearchLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const results = await ipc.knowledge.search(search)
+        setSearchResults(results)
+      } catch {
+        setSearchResults(null) // fallback: mostra todos filtrados no cliente
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [search])
 
   async function load() {
     setLoading(true)
@@ -105,12 +124,17 @@ export default function KnowledgePage() {
     }
   }
 
-  const visible = entries.filter(e => {
-    const matchCat = filterCat === '__all__' || e.category === filterCat
-    const q = search.toLowerCase()
-    const matchSearch = !q || e.title.toLowerCase().includes(q) || e.content.toLowerCase().includes(q) || e.tags.toLowerCase().includes(q)
-    return matchCat && matchSearch
-  })
+  // Se há busca FTS ativa, usa os resultados do servidor; filtra por categoria por cima.
+  // Se FTS falhou (searchResults === null mas search não vazio), faz LIKE no cliente como fallback.
+  const baseList = searchResults !== null
+    ? searchResults
+    : search.trim()
+      ? entries.filter(e => {
+          const q = search.toLowerCase()
+          return e.title.toLowerCase().includes(q) || e.content.toLowerCase().includes(q) || e.tags.toLowerCase().includes(q)
+        })
+      : entries
+  const visible = baseList.filter(e => filterCat === '__all__' || e.category === filterCat)
 
   const activeCount = entries.filter(e => e.isActive).length
 
@@ -140,11 +164,14 @@ export default function KnowledgePage() {
           {/* Filtros */}
           <div className="px-6 py-3 border-b border-slate-800 flex gap-3 flex-wrap items-center">
             <div className="relative flex-1 min-w-48">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              {searchLoading
+                ? <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 border border-brand-500 border-t-transparent rounded-full animate-spin" />
+                : <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              }
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Buscar..."
+                placeholder="Buscar com FTS5… (prefix match automático)"
                 className="w-full pl-7 pr-3 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-500"
               />
             </div>

@@ -46,6 +46,13 @@ import DeployAssistantPage from './pages/DeployAssistantPage'
 import LoginPage from './pages/LoginPage'
 import SetupPage from './pages/SetupPage'
 import KnowledgePage from './pages/KnowledgePage'
+import SkillsPage from './pages/SkillsPage'
+import TasksPage from './pages/TasksPage'
+import SearchPage from './pages/SearchPage'
+import AutomationsPage from './pages/AutomationsPage'
+import OperatorPage from './pages/OperatorPage'
+import WorkspacePage from './pages/WorkspacePage'
+import PlanningPage from './pages/PlanningPage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 function AppRoutes() {
@@ -76,10 +83,17 @@ function AppRoutes() {
         <Route path="history" element={<HistoryPage />} />
         <Route path="help" element={<Help />} />
         <Route path="knowledge" element={<KnowledgePage />} />
+        <Route path="skills" element={<SkillsPage />} />
+        <Route path="tasks" element={<TasksPage />} />
+        <Route path="search" element={<SearchPage />} />
+        <Route path="automations" element={<AutomationsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
 
       {/* Ferramentas fullscreen — sem sidebar */}
+      <Route path="/workspace" element={<WorkspacePage />} />
+      <Route path="/planning" element={<PlanningPage />} />
+      <Route path="/operator" element={<OperatorPage />} />
       <Route path="/ai-hub" element={<AIHubPage />} />
       <Route path="/squad" element={<SquadPage />} />
       <Route path="/incident/:vpsId/:vpsName" element={<IncidentModePage />} />

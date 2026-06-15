@@ -935,74 +935,80 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
   {
     id: 'squad',
     icon: Users,
-    title: 'Squad — Equipe de 8 agentes de IA',
+    title: 'Squad — Equipe de 10 agentes + Pipeline autônomo',
     color: 'bg-indigo-600/20 text-indigo-400',
     content: (
       <div className="space-y-4">
         <p>O Squad substitui o chat com um único agente por uma <strong className="text-slate-100">equipe completa de especialistas</strong>. Cada agente tem papel, personalidade e provedor de IA próprios. Acesse pelo botão <strong className="text-slate-100">Squad</strong> na sidebar.</p>
 
         <div className="space-y-2">
-          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Os 8 agentes</p>
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Os 10 agentes</p>
           <KV items={[
             ['🎯 Jarvis  (Claude)',  'PM / Orquestrador — coordena o time e delega tarefas'],
-            ['👩‍💻 Friday  (GPT)',    'Desenvolvedora — escreve e refatora código'],
+            ['👩‍💻 Friday  (GPT)',    'Desenvolvedora Sênior — escreve e refatora código'],
             ['🔍 Fury    (Gemini)', 'Pesquisa de Mercado — analisa concorrência e dados'],
             ['🎨 Shuri   (Claude)', 'UX / Design — cria specs de interface e fluxos'],
             ['📣 Pepper  (GPT)',    'Marketing / Brand — copy, posicionamento e comunicação'],
             ['📊 Vision  (Gemini)', 'Growth / Métricas — funil, conversão e estratégia'],
             ['📋 Requis  (Claude)', 'Documentação — requisitos técnicos com critério de aceite'],
-            ['🧪 Tester  (GPT)',    'QA / Testes — planos de teste e identificação de bugs'],
+            ['🧪 Tester  (GPT)',    'QA / Testes — escreve e executa testes unitários e integração'],
+            ['🔎 Reviewer (Claude)', 'Code Review — lê código implementado, avalia OWASP, emite [APROVADO] ou [BLOQUEADO]'],
+            ['🚀 DevOps  (Claude)', 'Entrega — cria commits Conventional Commits, git push, abre PR com template Markdown'],
           ]}/>
         </div>
 
         <div className="space-y-2">
-          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Como usar</p>
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Como usar — modo manual</p>
           <KV items={[
             ['Selecionar agente', 'Clique no nome do agente no painel esquerdo'],
             ['@mencionar', 'Digite @friday no início da mensagem para direcionar a um agente específico'],
             ['Delegação automática', 'Quando um agente menciona @outro na resposta, aquele agente responde automaticamente'],
+            ['Exec auto', 'Toggle ⚡ no header — executa blocos de ação automaticamente após cada resposta'],
+            ['Modo autônomo', 'Toggle 🤖 — loop contínuo de ação → resultado → próxima ação até [PRONTO]'],
             ['Histórico', 'Conversas salvas por sessão — painel direito'],
           ]}/>
           <Tip>Use <Code>@jarvis planeje o projeto X</Code> para o Jarvis coordenar e delegar automaticamente para Friday, Shuri ou outros agentes.</Tip>
         </div>
 
         <div className="space-y-2">
-          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Blocos de ação — a IA executa na VPS</p>
-          <p className="text-xs">Friday e Tester podem gerar blocos executáveis com um botão <strong className="text-slate-100">Executar</strong>. A IA nunca executa sem você clicar.</p>
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">🚀 Modo Pipeline — execução autônoma completa</p>
+          <p className="text-xs">Clique em <strong className="text-slate-100">Pipeline</strong> (botão índigo no header), descreva a tarefa e pressione Enter. A equipe executa as 6 fases automaticamente, sem intervenção manual.</p>
+          <Block>{`🎯 Fase 1 — Jarvis planeja (arquivos, stack, ordem)
+👩‍💻 Fase 2 — Friday implementa arquivo por arquivo
+🔎 Fase 3 — Reviewer lê e avalia o código
+       ↳ se [BLOQUEADO] → Fase 3b: Friday corrige issues
+🧪 Fase 4 — Tester escreve e executa testes
+🚀 Fase 5 — DevOps faz commit + push + PR
+✅ Concluído`}</Block>
           <KV items={[
-            ['SHELL  (amarelo)', 'Executa um comando no terminal da VPS'],
-            ['WRITE  (azul)',    'Cria ou sobrescreve um arquivo na VPS'],
-            ['READ   (cinza)',   'Lê o conteúdo de um arquivo da VPS'],
+            ['Stepper visual', 'Barra de fases no header mostra qual etapa está ativa em tempo real'],
+            ['[APROVADO]', 'Reviewer aprova → pipeline avança para Tester automaticamente'],
+            ['[BLOQUEADO]', 'Reviewer bloqueia → Friday recebe a lista de issues e corrige → Reviewer revisa novamente'],
+            ['Parar', 'Botão ✕ interrompe o pipeline a qualquer momento'],
+            ['Sem remote git', 'DevOps verifica git remote -v antes do push — se não houver remote, informa o comando para adicionar e encerra com [PRONTO]'],
           ]}/>
-          <Warn>Selecione a VPS correta no seletor "VPS Alvo" antes de executar qualquer bloco de ação.</Warn>
+          <Info>O Pipeline usa o modo Local por padrão. Defina a pasta do projeto em "Pasta local" antes de clicar Pipeline.</Info>
         </div>
 
         <div className="space-y-2">
-          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide flex items-center gap-1.5"><GitBranch size={12}/> Pipeline — Homolog → Produção</p>
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Blocos de ação — a IA executa no PC ou VPS</p>
+          <p className="text-xs">Os agentes geram blocos executáveis. Com <strong className="text-slate-100">Exec auto ⚡</strong> ativo, são executados sem clicar.</p>
+          <KV items={[
+            ['SHELL  (amarelo)', 'Executa um comando no terminal (local ou VPS)'],
+            ['WRITE  (azul)',    'Cria ou sobrescreve um arquivo'],
+            ['READ_FILE  (cinza)',   'Lê o conteúdo de um arquivo'],
+            ['READ_DIR  (cinza)',  'Lista o conteúdo de uma pasta'],
+          ]}/>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide flex items-center gap-1.5"><GitBranch size={12}/> Pipeline Homolog → Produção (modo VPS)</p>
           <p className="text-xs">Modo de segurança para quem tem dois servidores. Testa no Homolog, pede confirmação, depois vai para Produção.</p>
           <Step n={1}><span>Ative o toggle <strong className="text-slate-100">PIPELINE</strong> no painel direito do Squad.</span></Step>
           <Step n={2}><span>Selecione <strong className="text-slate-100">VPS Alvo</strong> (seletor superior) = seu Homolog.</span></Step>
-          <Step n={3}><span>Selecione <strong className="text-slate-100">VPS Prod</strong> (aparece ao ativar) = seu servidor de Produção.</span></Step>
-          <Step n={4}><span>Clique <strong className="text-slate-100">Executar</strong> em qualquer bloco → roda no Homolog → aparece gate âmbar.</span></Step>
+          <Step n={3}><span>Selecione <strong className="text-slate-100">VPS Prod</strong> = seu servidor de Produção.</span></Step>
+          <Step n={4}><span>Clique <strong className="text-slate-100">Executar</strong> em qualquer bloco → roda no Homolog → gate âmbar aparece.</span></Step>
           <Step n={5}><span><strong className="text-emerald-400">Aprovar</strong> → executa em Produção. <strong className="text-slate-400">Rejeitar</strong> → produção intocada.</span></Step>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-amber-900/20 border border-amber-800/30 rounded-lg px-3 py-2">
-              <p className="text-amber-300 font-semibold">Âmbar — Pendente</p>
-              <p className="text-slate-400 text-[11px]">Homolog OK. Aguarda sua aprovação.</p>
-            </div>
-            <div className="bg-green-900/20 border border-green-800/30 rounded-lg px-3 py-2">
-              <p className="text-green-300 font-semibold">Verde — Concluído</p>
-              <p className="text-slate-400 text-[11px]">Deploy em Prod realizado com sucesso.</p>
-            </div>
-            <div className="bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2">
-              <p className="text-red-300 font-semibold">Vermelho — Falha</p>
-              <p className="text-slate-400 text-[11px]">Erro na Prod. Verifique o log abaixo.</p>
-            </div>
-            <div className="bg-slate-800/40 border border-slate-700/30 rounded-lg px-3 py-2">
-              <p className="text-slate-400 font-semibold">Cinza — Rejeitado</p>
-              <p className="text-slate-500 text-[11px]">Você clicou Rejeitar. Prod intocada.</p>
-            </div>
-          </div>
           <Warn>Se "— VPS Prod —" estiver selecionado (sem VPS escolhida), o Aprovar não executa nada. Selecione o servidor de produção antes de usar.</Warn>
         </div>
       </div>
@@ -1023,7 +1029,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            ['Versão', '3.11.0'],
+            ['Versão', '3.34.0'],
             ['Runtime', 'Electron + Node.js 22'],
             ['Interface', 'React 18 + Tailwind CSS'],
             ['Banco de dados', 'SQLite local (Prisma ORM)'],
@@ -1058,7 +1064,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.11.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de 8 agentes, Pipeline Homolog→Prod, Claude Code (conta Pro sem API Key), Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.34.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de 10 agentes com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), Claude Code (conta Pro sem API Key), Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}

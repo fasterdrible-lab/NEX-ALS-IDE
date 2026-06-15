@@ -23,9 +23,19 @@ import {
   SquadService,
   AGENTS,
   KnowledgeService,
+  SkillsService,
+  ContextBuilder,
+  TasksService,
   type AppUser,
   type AgentName,
+  type AgentSkillInput,
+  type AgentTaskInput,
+  type TaskStatus,
+  ScheduledJobsService,
+  type ScheduledJobInput,
 } from '@cwm/core'
+import { JobExecutor } from '../jobs/job-executor.js'
+import { LocalLspBridge } from '../lsp/local-lsp.js'
 
 function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
   return fn().catch((err: unknown) => ({
@@ -90,6 +100,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const aiSvc = new AiService()
   const squadSvc = new SquadService(aiSvc)
   const knowledgeSvc = new KnowledgeService()
+  const skillsSvc = new SkillsService()
+  const tasksSvc = new TasksService()
+  const jobsSvc = new ScheduledJobsService()
+  const jobExecutor = new JobExecutor()
+  const ctxBuilder = new ContextBuilder()
   const memorySvc = new ProjectMemoryService()
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
@@ -98,6 +113,25 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
   // ── Estado em memória das notificações ───────────────────────────────────────
   const db = getPrismaClient()
+
+  // Auto-adicionar coluna braveApiKey na tabela settings (silencioso se já existir)
+  void db.$executeRawUnsafe(`ALTER TABLE settings ADD COLUMN braveApiKey TEXT NOT NULL DEFAULT ''`).catch(() => {})
+
+  // Auto-criar tabela squad_memories (compatibilidade sem pnpm db:push)
+  void db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS squad_memories (
+      id TEXT PRIMARY KEY,
+      projectKey TEXT NOT NULL DEFAULT '__global__',
+      content TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'decisão',
+      sessionId TEXT,
+      agentName TEXT NOT NULL DEFAULT 'jarvis',
+      createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `).catch(() => {})
+  void db.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS idx_squad_memories_project ON squad_memories(projectKey)`
+  ).catch(() => {})
   let notificationsEnabled = true
   // Lê preferência salva no banco assincronamente
   void (db.$queryRawUnsafe(
@@ -959,6 +993,155 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
   )
 
+  // ── Squad — Memória Persistente (SQUAD-01) ───────────────────────────────────
+  ipcMain.handle('squad:memory:list', (_, projectKey: string) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const key = projectKey || '__global__'
+      return db.$queryRawUnsafe(
+        `SELECT id, projectKey, content, category, sessionId, agentName, createdAt FROM squad_memories WHERE projectKey = ? ORDER BY createdAt ASC`,
+        key
+      )
+    })
+  )
+
+  ipcMain.handle('squad:memory:save', (_, data: { projectKey: string; content: string; category?: string; sessionId?: string; agentName?: string }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const VALID_CATS = ['decisão', 'arquitetura', 'padrão', 'correção', 'outro']
+      const id = 'mem_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+      const key = data.projectKey || '__global__'
+      const cat = VALID_CATS.includes(data.category ?? '') ? data.category! : 'outro'
+      const now = new Date().toISOString()
+      await db.$executeRawUnsafe(
+        `INSERT INTO squad_memories (id, projectKey, content, category, sessionId, agentName, createdAt) VALUES (?,?,?,?,?,?,?)`,
+        id, key, data.content.slice(0, 600), cat, data.sessionId ?? null, data.agentName ?? 'jarvis', now
+      )
+      return { id, projectKey: key, content: data.content.slice(0, 600), category: cat, sessionId: data.sessionId ?? null, agentName: data.agentName ?? 'jarvis', createdAt: now }
+    })
+  )
+
+  ipcMain.handle('squad:memory:delete', (_, id: string) =>
+    wrapHandler(async () => {
+      requireAuth()
+      await db.$executeRawUnsafe(`DELETE FROM squad_memories WHERE id = ?`, id)
+      return { deleted: true }
+    })
+  )
+
+  ipcMain.handle('squad:memory:extract', (_, data: { sessionId: string; projectKey: string }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      type RawMsg = { role: string; agentName: string; content: string }
+      const msgs = await db.$queryRawUnsafe(
+        `SELECT role, agentName, content FROM squad_messages WHERE sessionId = ? AND role != 'result' ORDER BY createdAt ASC LIMIT 40`,
+        data.sessionId
+      ) as RawMsg[]
+      if (msgs.length < 2) throw new Error('Sessão sem conteúdo suficiente para extrair memórias')
+
+      const conversation = msgs
+        .map(m => `[${m.agentName}/${m.role}]: ${m.content.slice(0, 300)}`)
+        .join('\n---\n')
+        .slice(0, 6000)
+
+      const res = await aiSvc.chatAgent({
+        provider: AGENTS.friday.preferredProvider,
+        messages: [{
+          role: 'user',
+          content: `Analise esta conversa de um squad de agentes de IA e extraia as MEMÓRIAS mais importantes para persistir entre sessões futuras.\n\nCONVERSA:\n${conversation}\n\nResponda SOMENTE com JSON array válido (sem markdown):\n[{"content":"...","category":"decisão|arquitetura|padrão|correção|outro"}]\n\nRegras:\n- Máximo 6 memórias\n- Cada memória: factual, concisa (1-2 frases), útil para um agente novo que não viu esta conversa\n- category deve ser exatamente: decisão, arquitetura, padrão, correção, ou outro\n- Ignore saudações e trivialidades`,
+        }],
+        systemPrompt: 'Extrator de memórias de squad. Responda SOMENTE com JSON array válido, sem blocos de código markdown.',
+        tools: [],
+        maxTokens: 900,
+      })
+
+      const text = res.type === 'text' ? res.content : ((res as unknown as { text?: string }).text ?? '')
+      const match = text.match(/\[[\s\S]+\]/)
+      if (!match) throw new Error('IA não retornou JSON válido')
+
+      const items = JSON.parse(match[0]) as Array<{ content: string; category: string }>
+      const VALID_CATS = ['decisão', 'arquitetura', 'padrão', 'correção', 'outro']
+      const key = data.projectKey || '__global__'
+
+      type SavedMemory = { id: string; projectKey: string; content: string; category: string; sessionId: string; agentName: string; createdAt: string }
+      const saved: SavedMemory[] = []
+      for (const item of items.slice(0, 6)) {
+        if (!item.content?.trim()) continue
+        const id = 'mem_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+        const category = VALID_CATS.includes(item.category) ? item.category : 'outro'
+        const now = new Date().toISOString()
+        await db.$executeRawUnsafe(
+          `INSERT INTO squad_memories (id, projectKey, content, category, sessionId, agentName, createdAt) VALUES (?,?,?,?,?,?,?)`,
+          id, key, item.content.trim().slice(0, 600), category, data.sessionId, 'friday', now
+        )
+        saved.push({ id, projectKey: key, content: item.content.trim().slice(0, 600), category, sessionId: data.sessionId, agentName: 'friday', createdAt: now })
+      }
+      return saved
+    })
+  )
+
+  // ── Brave Search — busca web em tempo real (SQUAD-02) ────────────────────────
+  ipcMain.handle('settings:brave:get', () =>
+    wrapHandler(async () => {
+      const rows = await db.$queryRawUnsafe(
+        `SELECT braveApiKey FROM settings WHERE id = 'default'`
+      ) as Array<{ braveApiKey: string }>
+      return { braveApiKey: rows[0]?.braveApiKey ?? '' }
+    })
+  )
+
+  ipcMain.handle('settings:brave:set', (_, key: string) =>
+    wrapHandler(async () => {
+      await db.$executeRawUnsafe(
+        `INSERT OR IGNORE INTO settings (id, vscodePath, vscodeInsidersPath, sshKeyPath, updatedAt) VALUES ('default', 'code', 'code-insiders', '', datetime('now'))`
+      )
+      await db.$executeRawUnsafe(
+        `UPDATE settings SET braveApiKey = ?, updatedAt = datetime('now') WHERE id = 'default'`,
+        key
+      )
+      return { saved: true }
+    })
+  )
+
+  ipcMain.handle('search:web', (_, data: { query: string; count?: number }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const rows = await db.$queryRawUnsafe(
+        `SELECT braveApiKey FROM settings WHERE id = 'default'`
+      ) as Array<{ braveApiKey: string }>
+      const apiKey = rows[0]?.braveApiKey?.trim() ?? ''
+      if (!apiKey) throw new Error('Brave Search API key não configurada. Configure em Configurações → Busca Web.')
+
+      const count = Math.min(data.count ?? 5, 10)
+      const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(data.query)}&count=${count}`
+
+      const https = await import('node:https')
+      const raw = await new Promise<string>((resolve, reject) => {
+        const req = https.default.get(url, {
+          headers: { 'Accept': 'application/json', 'X-Subscription-Token': apiKey },
+        }, (res) => {
+          const chunks: Buffer[] = []
+          res.on('data', (chunk: Buffer) => chunks.push(chunk))
+          res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+          res.on('error', reject)
+        })
+        req.on('error', reject)
+        req.setTimeout(15000, () => { req.destroy(); reject(new Error('Busca web timeout (15s)')) })
+      })
+
+      type BraveResult = { title: string; url: string; description?: string }
+      type BraveResponse = { web?: { results?: BraveResult[] } }
+      const json = JSON.parse(raw) as BraveResponse
+      const results = json.web?.results ?? []
+      if (results.length === 0) return { output: 'Nenhum resultado encontrado para a query.' }
+
+      const formatted = results
+        .map((r, i) => `${i + 1}. **${r.title}**\nURL: ${r.url}\n${r.description ?? ''}`)
+        .join('\n\n')
+      return { output: `Resultados para "${data.query}":\n\n${formatted}` }
+    })
+  )
+
   ipcMain.handle('squad:stream:start', (event, data: {
     agent: AgentName
     message: string
@@ -995,14 +1178,14 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         }
       } catch { /* ignora — usa preferredProvider do agente */ }
 
-      // Carrega KB global uma vez por stream
-      const globalKBContext = await knowledgeSvc.buildContext().catch(() => '')
+      // ContextBuilder: KB global + skills matched pela mensagem (Ponto 8 — contexto inteligente)
+      const ctxResult = await ctxBuilder.build({ query: data.message }).catch(() => ({ text: '', knowledgeCount: 0, skillCount: 0 }))
 
       // Monta system prompt com contexto de projeto e/ou execução local
       function buildSystemPrompt(base: string): string {
         let sys = base
-        if (globalKBContext) {
-          sys += `\n\n${globalKBContext}`
+        if (ctxResult.text) {
+          sys += `\n\n${ctxResult.text}`
         }
         if (data.localPath) {
           sys += `\n\nEXECUÇÃO LOCAL ATIVA (Windows PC):\n- Pasta base do projeto: ${data.localPath}\n- Use SEMPRE caminhos Windows em ACTION tags. Exemplos:\n  [ACTION:READ_DIR path="${data.localPath}"][/ACTION] — lista arquivos da raiz do projeto\n  [ACTION:READ_FILE path="${data.localPath}\\src\\index.ts"][/ACTION]\n  [ACTION:SHELL cwd="${data.localPath}"]npm install[/ACTION]\n- Use READ_DIR para explorar a estrutura antes de READ_FILE\n- NÃO use caminhos Linux (/home/...) — o código roda diretamente no PC do usuário.`
@@ -1168,6 +1351,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           if (resolvedCwd) {
             try { await fs.mkdir(resolvedCwd, { recursive: true }) } catch { /* already exists */ }
           }
+
+          // Detect long-running server/watcher commands — they never exit, so we capture
+          // the first 8s of output and kill the process, leaving it "started in background".
+          const isServerCmd = /(?:^|\s)(?:next|nuxt|vite|webpack-dev-server|react-scripts|nest start|fastapi|uvicorn|flask)\s+(?:dev|start|serve|build --watch)|npm\s+run\s+(?:dev|start|serve|watch)|yarn\s+(?:dev|start|serve)|npx\s+(?:next|vite|nuxt)\s+dev/i.test(data.content.trim())
+
           return new Promise<{ output: string }>(resolve => {
             const proc = spawn(data.content.trim(), [], { cwd: resolvedCwd, shell: true, windowsHide: true })
             const chunks: string[] = []
@@ -1178,6 +1366,32 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
             }
             proc.stdout?.on('data', onData)
             proc.stderr?.on('data', onData)
+
+            if (isServerCmd) {
+              // Capture startup output for 8s then kill — server continues running until app closes
+              const serverTimer = setTimeout(() => {
+                proc.kill()
+                const out = chunks.join('').trim()
+                const portMatch = out.match(/(?:localhost|0\.0\.0\.0|127\.0\.0\.1):(\d+)/i)
+                const port = portMatch ? portMatch[1] : '3000'
+                resolve({
+                  output: (out || '(inicializando...)') +
+                    `\n\n✅ Servidor iniciado em background — acesse http://localhost:${port}\n` +
+                    `[SERVIDOR EM EXECUÇÃO — não emita outro comando de servidor. Inclua [PRONTO] na próxima resposta.]`,
+                })
+              }, 8_000)
+              proc.on('close', () => {
+                clearTimeout(serverTimer)
+                const out = chunks.join('').trim()
+                resolve({ output: out || '✓ Processo encerrado' })
+              })
+              proc.on('error', err => {
+                clearTimeout(serverTimer)
+                resolve({ output: `[SHELL_ERROR] ${err.message}` })
+              })
+              return
+            }
+
             // scaffold commands (npx create-*) can take 5+ min — use 10min timeout
             const timeoutMs = /npx|npm install|npm ci|yarn install|pnpm install|robocopy/i.test(data.content) ? 600_000 : 120_000
             const timer = setTimeout(() => {
@@ -1519,5 +1733,260 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
   ipcMain.handle('knowledge:context', () =>
     wrapHandler(() => knowledgeSvc.buildContext())
+  )
+
+  // ── Agent Skills ─────────────────────────────────────────────────────────────
+  ipcMain.handle('skills:list', () =>
+    wrapHandler(() => { requireAuth(); return skillsSvc.list() })
+  )
+
+  ipcMain.handle('skills:get', (_, id: string) =>
+    wrapHandler(() => { requireAuth(); return skillsSvc.get(id) })
+  )
+
+  ipcMain.handle('skills:create', (_, data: AgentSkillInput) =>
+    wrapHandler(() => { requireAdmin(); return skillsSvc.create(data) })
+  )
+
+  ipcMain.handle('skills:update', (_, { id, ...data }: { id: string } & AgentSkillInput) =>
+    wrapHandler(() => { requireAdmin(); return skillsSvc.update(id, data) })
+  )
+
+  ipcMain.handle('skills:delete', (_, id: string) =>
+    wrapHandler(() => { requireAdmin(); return skillsSvc.delete(id) })
+  )
+
+  ipcMain.handle('skills:search', (_, query: string) =>
+    wrapHandler(() => { requireAuth(); return skillsSvc.search(query) })
+  )
+
+  ipcMain.handle('skills:match', (_, text: string) =>
+    wrapHandler(() => { requireAuth(); return skillsSvc.matchTriggers(text) })
+  )
+
+  ipcMain.handle('skills:incrementUsage', (_, id: string) =>
+    wrapHandler(() => skillsSvc.incrementUsage(id))
+  )
+
+  // ── Tasks (Ponto 6 — Planejamento Persistente) ────────────────────────────────
+  ipcMain.handle('tasks:list', (_, filters?: { status?: TaskStatus; ownerAgent?: string }) =>
+    wrapHandler(() => { requireAuth(); return tasksSvc.list(filters) })
+  )
+  ipcMain.handle('tasks:get', (_, id: string) =>
+    wrapHandler(() => { requireAuth(); return tasksSvc.get(id) })
+  )
+  ipcMain.handle('tasks:create', (_, data: AgentTaskInput) =>
+    wrapHandler(() => { requireAuth(); return tasksSvc.create(data) })
+  )
+  ipcMain.handle('tasks:update', (_, data: { id: string } & Partial<AgentTaskInput>) =>
+    wrapHandler(() => { requireAuth(); const { id, ...rest } = data; return tasksSvc.update(id, rest) })
+  )
+  ipcMain.handle('tasks:delete', (_, id: string) =>
+    wrapHandler(() => { requireAuth(); return tasksSvc.delete(id) })
+  )
+
+  // ── Context Builder ───────────────────────────────────────────────────────────
+  ipcMain.handle('context:build', (_, data?: { query?: string; maxChars?: number }) =>
+    wrapHandler(() => { requireAuth(); return ctxBuilder.build(data) })
+  )
+
+  // ── Busca de conhecimento (FTS5) ─────────────────────────────────────────────
+  ipcMain.handle('knowledge:search', (_, query: string) =>
+    wrapHandler(() => { requireAuth(); return knowledgeSvc.search(query) })
+  )
+
+  // ── Automações agendadas ──────────────────────────────────────────────────────
+  ipcMain.handle('jobs:list', () =>
+    wrapHandler(() => { requireAuth(); return jobsSvc.list() })
+  )
+  ipcMain.handle('jobs:create', (_, data: ScheduledJobInput) =>
+    wrapHandler(() => { requireAuth(); return jobsSvc.create(data) })
+  )
+  ipcMain.handle('jobs:update', (_, data: { id: string } & Partial<ScheduledJobInput & { isActive: number }>) =>
+    wrapHandler(() => { requireAuth(); const { id, ...rest } = data; return jobsSvc.update(id, rest) })
+  )
+  ipcMain.handle('jobs:delete', (_, id: string) =>
+    wrapHandler(() => { requireAuth(); return jobsSvc.delete(id) })
+  )
+  ipcMain.handle('jobs:toggle', (_, data: { id: string; isActive: boolean }) =>
+    wrapHandler(() => { requireAuth(); return jobsSvc.update(data.id, { isActive: data.isActive ? 1 : 0 }) })
+  )
+  ipcMain.handle('jobs:runNow', (_, id: string) =>
+    wrapHandler(() => { requireAuth(); return jobExecutor.runNow(id) })
+  )
+
+  // ── Aprendizado Contínuo — análise de arquivo com IA ────────────────────────
+  ipcMain.handle('learning:analyzeFile', (_, data: { name: string; content: string; language: string }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const VALID_CATS = ['geral','arquitetura','padrões','bibliotecas','convenções','snippets','regras','stack']
+      const snippet = data.content.slice(0, 3000)
+      const res = await aiSvc.chatAgent({
+        provider: AGENTS.friday.preferredProvider,
+        messages: [{
+          role: 'user',
+          content: `Analise este arquivo de código e extraia os padrões mais relevantes para uma base de conhecimento.\n\nArquivo: ${data.name} (${data.language})\n\`\`\`\n${snippet}\n\`\`\`\n\nResponda SOMENTE em JSON (sem markdown):\n{"title":"...","content":"...","category":"padrões","tags":"..."}\n\nCategorias válidas: ${VALID_CATS.join('|')}\ncontent: markdown conciso descrevendo exports, classes, funções principais (máx 500 chars)`,
+        }],
+        systemPrompt: 'Analista de código. Responda SOMENTE com JSON válido, sem blocos de código markdown.',
+        tools: [],
+        maxTokens: 512,
+      })
+      const text = res.type === 'text' ? res.content : (res.text ?? '')
+      const match = text.match(/\{[\s\S]+\}/)
+      if (!match) throw new Error('Analisador não retornou JSON')
+      const raw = JSON.parse(match[0]) as Record<string, unknown>
+      return {
+        title: String(raw.title ?? data.name).slice(0, 80),
+        content: String(raw.content ?? '').slice(0, 800),
+        category: VALID_CATS.includes(String(raw.category)) ? String(raw.category) : 'padrões',
+        tags: String(raw.tags ?? 'auto,ide'),
+      }
+    })
+  )
+
+  // ── Workspace Intelligence — análise estruturada do projeto ─────────────────
+  ipcMain.handle('workspace:analyze', (_, data: { vpsId: string; projectPath: string }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const SAFE_PATH = /^[/~]?[a-zA-Z0-9_./-]+$/
+      if (!SAFE_PATH.test(data.projectPath)) throw new Error('Caminho do projeto inválido')
+      const base = data.projectPath.replace(/\/+$/, '')
+
+      // Collect project info in parallel
+      const [treeOut, pkgOut, goOut, reqOut, dcOut, cargoOut, pyOut] = await Promise.allSettled([
+        terminal.exec(data.vpsId, `find "${base}" -maxdepth 3 -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/vendor/*' -not -path '*/__pycache__/*' -not -path '*/dist/*' -not -path '*/.next/*' -type f 2>/dev/null | sort | head -80`, 30000),
+        terminal.exec(data.vpsId, `cat "${base}/package.json" 2>/dev/null | head -c 1500 || echo ""`, 10000),
+        terminal.exec(data.vpsId, `cat "${base}/go.mod" 2>/dev/null | head -c 600 || echo ""`, 10000),
+        terminal.exec(data.vpsId, `cat "${base}/requirements.txt" 2>/dev/null | head -c 600 || echo ""`, 10000),
+        terminal.exec(data.vpsId, `cat "${base}/docker-compose.yml" 2>/dev/null | head -c 1000 || cat "${base}/docker-compose.yaml" 2>/dev/null | head -c 1000 || echo ""`, 10000),
+        terminal.exec(data.vpsId, `cat "${base}/Cargo.toml" 2>/dev/null | head -c 600 || echo ""`, 10000),
+        terminal.exec(data.vpsId, `cat "${base}/pyproject.toml" 2>/dev/null | head -c 600 || echo ""`, 10000),
+      ])
+
+      const val = (r: PromiseSettledResult<string>) => r.status === 'fulfilled' ? r.value.trim() : ''
+
+      // Find and read key source files
+      const srcOut = await terminal.exec(data.vpsId,
+        `find "${base}/src" "${base}/cmd" "${base}/app" "${base}/lib" "${base}/pkg" -maxdepth 2 -type f \\( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.go' -o -name '*.py' -o -name '*.rs' \\) 2>/dev/null | head -15 || echo ""`,
+        15000
+      ).catch(() => '')
+
+      const srcFiles = srcOut.trim().split('\n').filter(Boolean).slice(0, 6)
+      const snippets: string[] = []
+      await Promise.allSettled(
+        srcFiles.map(async (f) => {
+          const content = await terminal.exec(data.vpsId, `head -c 700 "${f.trim()}" 2>/dev/null || echo ""`, 8000).catch(() => '')
+          if (content.trim()) snippets.push(`=== ${f.trim()} ===\n${content}`)
+        })
+      )
+
+      const parts: string[] = []
+      if (val(pkgOut))   parts.push(`=== package.json ===\n${val(pkgOut)}`)
+      if (val(goOut))    parts.push(`=== go.mod ===\n${val(goOut)}`)
+      if (val(reqOut))   parts.push(`=== requirements.txt ===\n${val(reqOut)}`)
+      if (val(cargoOut)) parts.push(`=== Cargo.toml ===\n${val(cargoOut)}`)
+      if (val(pyOut))    parts.push(`=== pyproject.toml ===\n${val(pyOut)}`)
+      if (val(dcOut))    parts.push(`=== docker-compose ===\n${val(dcOut)}`)
+      if (val(treeOut))  parts.push(`=== Árvore de arquivos ===\n${val(treeOut)}`)
+      parts.push(...snippets)
+
+      const context = parts.join('\n\n').slice(0, 7000)
+      if (!context.trim()) throw new Error('Não foi possível ler o projeto. Verifique o caminho e permissões SSH.')
+
+      const res = await aiSvc.chatAgent({
+        provider: AGENTS.friday.preferredProvider,
+        messages: [{
+          role: 'user',
+          content: `Analise este projeto e retorne UM JSON com a estrutura EXATA abaixo. SOMENTE JSON válido, sem markdown.\n\nPROJETO (${base}):\n${context}\n\nESTRUTURA:\n{"summary":"resumo em 2-3 frases","stack":["tech1","tech2"],"architecture":{"layers":[{"name":"...","description":"...","files":["..."]}],"patterns":["padrão1"]},"modules":[{"name":"...","path":"...","role":"controller|service|model|utility|config","imports":["..."],"risks":["..."]}],"flows":[{"name":"...","steps":["passo1","passo2"]}],"risks":[{"severity":"critical|high|medium|low","type":"...","description":"...","file":"..."}]}`,
+        }],
+        systemPrompt: 'Arquiteto de software sênior. Responda SOMENTE com JSON válido e completo. Sem blocos de código markdown.',
+        tools: [],
+        maxTokens: 3000,
+      })
+
+      const text = res.type === 'text' ? res.content : (res.text ?? '')
+      const match = text.match(/\{[\s\S]+\}/)
+      if (!match) throw new Error('IA não retornou análise estruturada')
+      const raw = JSON.parse(match[0]) as Record<string, unknown>
+
+      return {
+        summary: String(raw.summary ?? ''),
+        stack: Array.isArray(raw.stack) ? (raw.stack as unknown[]).map(String) : [],
+        architecture: {
+          layers: Array.isArray((raw.architecture as Record<string,unknown>)?.layers) ? (raw.architecture as Record<string,unknown[]>).layers : [],
+          patterns: Array.isArray((raw.architecture as Record<string,unknown>)?.patterns) ? ((raw.architecture as Record<string,unknown[]>).patterns as unknown[]).map(String) : [],
+        },
+        modules: Array.isArray(raw.modules) ? raw.modules : [],
+        flows: Array.isArray(raw.flows) ? raw.flows : [],
+        risks: Array.isArray(raw.risks) ? raw.risks : [],
+      }
+    })
+  )
+
+  // ── Operador de Infraestrutura — análise IA ──────────────────────────────────
+  ipcMain.handle('infra:analyze', (_, report: string) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const cfg = AGENTS.devops
+      const res = await aiSvc.chatAgent({
+        provider: cfg.preferredProvider,
+        messages: [{
+          role: 'user',
+          content: `Analise este relatório de infraestrutura. Identifique problemas críticos, causas prováveis e ações imediatas recomendadas:\n\n${report}`,
+        }],
+        systemPrompt: cfg.systemPrompt,
+        tools: [],
+        maxTokens: 2048,
+      })
+      return res.type === 'text' ? res.content : (res.text ?? '')
+    })
+  )
+
+  // Inicia o executor após setup dos handlers
+  jobExecutor.start()
+
+  // ── LSP local — bridge stdio↔WebSocket para modo local ──────────────────────
+  const localLsp = new LocalLspBridge()
+
+  ipcMain.handle('local:lsp:start', (_, workspacePath: string) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const port = await localLsp.start(workspacePath ?? process.cwd())
+      return { port }
+    })
+  )
+  ipcMain.handle('local:lsp:stop', () =>
+    wrapHandler(() => { localLsp.stop(); return { ok: true } })
+  )
+  ipcMain.handle('local:lsp:status', () =>
+    wrapHandler(() => ({ running: localLsp.isRunning(), port: localLsp.getPort() }))
+  )
+
+  // ── Busca Global unificada (FTS5 em knowledge + skills + squad_messages) ──────
+  ipcMain.handle('search:global', (_, query: string) =>
+    wrapHandler(async () => {
+      requireAuth()
+      if (!query?.trim()) return { knowledge: [], skills: [], conversations: [] }
+      const db = getPrismaClient()
+      const [knowledge, skills, conversations] = await Promise.all([
+        knowledgeSvc.search(query, 10),
+        skillsSvc.search(query, 10),
+        db.$queryRawUnsafe<{
+          id: string; sessionId: string; agentName: string; role: string
+          snippet: string; createdAt: string
+        }[]>(
+          `SELECT sm.id, sm.sessionId, sm.agentName, sm.role, sm.createdAt,
+                  snippet(squad_messages_fts, 0, '[[', ']]', '…', 24) AS snippet
+           FROM squad_messages_fts
+           JOIN squad_messages sm ON squad_messages_fts.rowid = sm.rowid
+           WHERE squad_messages_fts MATCH ?
+             AND sm.role != 'system'
+           ORDER BY rank
+           LIMIT 15`,
+          query.trim(),
+        ).catch(() => []),
+      ])
+      return { knowledge, skills, conversations }
+    })
   )
 }

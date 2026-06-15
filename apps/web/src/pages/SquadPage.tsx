@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronRight, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw, BookOpen, Sparkles, RotateCw, BarChart2, Activity, FilePen, Cpu, Clock, FileCheck2 } from 'lucide-react'
-import { ipc } from '../lib/ipc'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronRight, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw, BookOpen, Sparkles, RotateCw, BarChart2, Activity, FilePen, Cpu, Clock, FileCheck2, Brain } from 'lucide-react'
+import { ipc, type AgentSkill, type SquadMemory } from '../lib/ipc'
 
 // ── Agent metadata (UI only) ─────────────────────────────────────────────────
 const AGENT_NAMES = [
-  'jarvis', 'friday', 'fury', 'shuri', 'pepper', 'vision', 'requis', 'tester',
+  'jarvis', 'friday', 'fury', 'shuri', 'pepper', 'vision', 'requis', 'tester', 'reviewer', 'devops',
 ] as const
 type AgentName = typeof AGENT_NAMES[number]
 
@@ -20,7 +20,9 @@ const AGENT_META: Record<AgentName, {
   pepper:  { label: 'Pepper',  role: 'Marketing / Brand',       provider: 'GPT',    emoji: '📣', colorClass: 'text-pink-400',   bgClass: 'bg-pink-900/20',   borderClass: 'border-pink-700/40' },
   vision:  { label: 'Vision',  role: 'Growth / Métricas',       provider: 'Gemini', emoji: '📊', colorClass: 'text-teal-400',   bgClass: 'bg-teal-900/20',   borderClass: 'border-teal-700/40' },
   requis:  { label: 'Requis',  role: 'Documentação',            provider: 'Claude',  emoji: '📋', colorClass: 'text-yellow-400', bgClass: 'bg-yellow-900/20', borderClass: 'border-yellow-700/40' },
-  tester:  { label: 'Tester',  role: 'QA / Testes',             provider: 'GPT',    emoji: '🧪', colorClass: 'text-red-400',    bgClass: 'bg-red-900/20',    borderClass: 'border-red-700/40' },
+  tester:   { label: 'Tester',   role: 'QA / Testes',      provider: 'GPT',    emoji: '🧪', colorClass: 'text-red-400',    bgClass: 'bg-red-900/20',    borderClass: 'border-red-700/40' },
+  reviewer: { label: 'Reviewer', role: 'Code Review',      provider: 'Claude', emoji: '🔎', colorClass: 'text-cyan-400',   bgClass: 'bg-cyan-900/20',   borderClass: 'border-cyan-700/40' },
+  devops:   { label: 'DevOps',   role: 'CI/CD & Entrega',  provider: 'Claude', emoji: '🚀', colorClass: 'text-indigo-400', bgClass: 'bg-indigo-900/20', borderClass: 'border-indigo-700/40' },
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +34,7 @@ interface ChatBubble {
   delegatedBy?: AgentName
   isStreaming?: boolean
   actions?: ActionBlock[]
+  isActionResult?: boolean  // injected into history but hidden from chat UI
 }
 
 interface VpsItem { id: string; name: string; host: string }
@@ -109,8 +112,17 @@ const KB_TEMPLATES: Record<string, Partial<KnowledgeBase>> = {
   },
 }
 
+// ── Memória persistente — estilos de categoria ───────────────────────────────
+const MEM_CAT_STYLE: Record<string, string> = {
+  'decisão':     'bg-blue-900/30 text-blue-400 border-blue-700/40',
+  'arquitetura': 'bg-purple-900/30 text-purple-400 border-purple-700/40',
+  'padrão':      'bg-green-900/30 text-green-400 border-green-700/40',
+  'correção':    'bg-red-900/30 text-red-400 border-red-700/40',
+  'outro':       'bg-slate-700/30 text-slate-400 border-slate-600/40',
+}
+
 // ── ACTION tags ──────────────────────────────────────────────────────────────
-type ActionType = 'shell' | 'write_file' | 'read_file' | 'read_dir'
+type ActionType = 'shell' | 'write_file' | 'read_file' | 'read_dir' | 'search'
 interface ActionBlock { id: string; type: ActionType; cwd?: string; path?: string; content: string }
 type ActionState = { status: 'idle' | 'running' | 'ok' | 'error'; output?: string }
 type PipelineGate = {
@@ -239,13 +251,48 @@ function extractTask(text: string, target: AgentName): string {
   return text.slice(0, 1200)
 }
 
+// ── Ponto 5: Delegação estruturada ───────────────────────────────────────────
+interface DelegationItem { agent: AgentName; objective: string }
+interface DelegationPlan { items: DelegationItem[] }
+
+function parseDelegationPlan(text: string): DelegationPlan | null {
+  const m = text.match(/\[DELEGAÇÃO\]([\s\S]*?)\[\/DELEGAÇÃO\]/i)
+  if (!m) return null
+  const items: DelegationItem[] = []
+  for (const line of m[1].trim().split('\n')) {
+    const lm = line.trim().match(/^(\w+)\s*:\s*(.+)/)
+    if (lm) {
+      const agent = lm[1].toLowerCase() as AgentName
+      if ((AGENT_NAMES as readonly string[]).includes(agent)) {
+        items.push({ agent, objective: lm[2].trim() })
+      }
+    }
+  }
+  return items.length > 0 ? { items } : null
+}
+
 // ── Error recovery hints (padrão Aider: dicas específicas por causa) ────────
 function buildErrorHint(output: string, type: string, desc: string): string {
   const o = output.toLowerCase()
   const hints: string[] = []
   if (o.includes('enoent') || o.includes('no such file or directory') || o.includes('cannot find path')) {
-    if (type === 'write_file') hints.push('→ CORREÇÃO: O diretório pai não existe. Use [ACTION:SHELL] com "mkdir -p <diretório>" ANTES do WRITE_FILE.')
-    else hints.push('→ CORREÇÃO: O caminho não existe. Use READ_DIR para verificar a estrutura antes.')
+    if (type === 'write_file') {
+      hints.push('→ CORREÇÃO: O diretório pai não existe. Use [ACTION:SHELL] com "mkdir -p <diretório>" ANTES do WRITE_FILE.')
+    } else if (type === 'read_dir') {
+      // Extract the path from the desc for a more specific hint
+      const pathHint = desc ? desc.replace('path:', '').trim() : ''
+      const parentPath = pathHint.includes('\\')
+        ? pathHint.slice(0, pathHint.lastIndexOf('\\')) || pathHint
+        : pathHint
+      hints.push(
+        `→ CORREÇÃO: A pasta "${pathHint || 'indicada'}" NÃO EXISTE — pare de tentar subpastas.` +
+        `\nPRÓXIMA AÇÃO OBRIGATÓRIA: leia a pasta raiz do projeto para descobrir a estrutura real:` +
+        `\n[ACTION:READ_DIR path="${parentPath || 'C:\\\\caminho-raiz'}"][/ACTION]` +
+        `\nSÓ use subpastas APÓS confirmar que elas aparecem no resultado do READ_DIR da raiz.`
+      )
+    } else {
+      hints.push('→ CORREÇÃO: O caminho não existe. Use READ_DIR na pasta raiz do projeto para verificar a estrutura real antes.')
+    }
   }
   if (o.includes('eacces') || o.includes('permission denied') || o.includes('access is denied')) {
     hints.push('→ CORREÇÃO: Permissão negada. Tente executar o comando em outro diretório ou verifique se o arquivo está em uso.')
@@ -264,15 +311,63 @@ function buildErrorHint(output: string, type: string, desc: string): string {
   if (o.includes('timeout') || o.includes('timed out')) {
     hints.push('→ CORREÇÃO: Timeout. Comandos como npx/npm install levam 3-8 min. Verifique se o comando anterior completou antes de prosseguir.')
   }
+  if (o.includes('comando shell vazio') || o.includes('sem nenhum comando dentro')) {
+    hints.push('→ CORREÇÃO IMEDIATA: Escreva APENAS o ACTION tag com o comando dentro. Nenhum texto antes. Nenhum texto depois:\n[ACTION:SHELL cwd="C:\\\\caminho"]\nseu-comando\n[/ACTION]')
+  }
+  if (o.includes('no configured push destination') || o.includes('does not appear to be a git repository') || (o.includes('fatal') && o.includes('remote'))) {
+    hints.push('→ REMOTE NÃO CONFIGURADO: Não tente git push novamente. O commit local já foi criado com sucesso. Informe o usuário que para publicar deve executar:\n  git remote add origin <url-do-repositório>\n  git push -u origin main\nInclua [PRONTO] e encerre.')
+  }
   if (hints.length === 0 && type === 'shell') {
     hints.push('→ CORREÇÃO: Analise o erro acima, identifique a causa e emita um comando diferente. Não repita o mesmo.')
   }
   return hints.join('\n')
 }
 
+// ── Smart routing (Phase B) ──────────────────────────────────────────────────
+type RoutingResult = { agent: AgentName; confidence: 'high' | 'medium'; reason: string }
+
+const ROUTING_RULES: { agent: AgentName; label: string; score: number; pattern: RegExp }[] = [
+  { agent: 'friday',   label: 'Implementação',     score: 3, pattern: /\b(implement(?:ar|e)?|criar?\s+(?:arquivo|função|component|api|rota|endpoint|hook|service|class)|escrever\s+(?:o\s+)?código|fix|corrigir|bug|refactor|refatorar|adicionar\s+(?:feature|funcionalidade)|desenvolver)\b/i },
+  { agent: 'friday',   label: 'Implementação',     score: 1, pattern: /\b(typescript|tsx?|react|vue|svelte|node\.?js|python|go|java|rust|laravel|express|fastapi|django|spring)\b/i },
+  { agent: 'tester',   label: 'Testes / QA',       score: 3, pattern: /\b(test(?:ar|e|es)?|unit\s+test|integration\s+test|cobertura|coverage|qa|quality|vitest|jest|pytest|spec|assert|e2e|cypress|playwright|escrever\s+testes)\b/i },
+  { agent: 'reviewer', label: 'Code Review',       score: 3, pattern: /\b(review|revisar|revisão|security|segurança|owasp|vuln(?:erabilidade)?|audit(?:oria)?|code\s*review|anali(?:sar|se)\s+(?:o\s+)?código|boas\s+práticas)\b/i },
+  { agent: 'devops',   label: 'DevOps / Deploy',   score: 3, pattern: /\b(deploy(?:ment)?|ci\/cd|dockerfile?|kubernetes|k8s|nginx|apache|release|infra(?:estrutura)?|produção\s+(?:server|servidor)|git\s+push|github\s+actions|vercel|railway|render|cloudflare|aws|gcp)\b/i },
+  { agent: 'shuri',    label: 'UX / Design',       score: 3, pattern: /\b(ux|ui\s+design|interface\s+(?:do\s+)?usuário|wireframe|prot[óo]tipo|prototype|figma|acessibilidade|accessibility|tailwind|design\s+system|layout\s+(?:da\s+)?(?:tela|página))\b/i },
+  { agent: 'pepper',   label: 'Marketing / Copy',  score: 3, pattern: /\b(marketing|copy(?:writing)?|brand(?:ing)?|campanha|campaign|seo|social\s+media|redes\s+sociais|email\s+marketing|newsletter|an[úu]ncio|landing\s+page|pitch|slogan|tagline)\b/i },
+  { agent: 'vision',   label: 'Métricas / Growth', score: 3, pattern: /\b(m[ée]trica|metric|analytics|growth\s+hack|crescimento|kpi|a\/b\s+test|convers[ãa]o|conversion\s+rate|dashboard\s+de|relat[óo]rio\s+de|funil|funnel|cohort|retention)\b/i },
+  { agent: 'requis',   label: 'Documentação',      score: 3, pattern: /\b(document(?:ar|a[çc][ãa]o|ation)|docs?\s+(?:para|do)|requisito|requirement|prd|product\s+requirements|especifica[çc][ãa]o|manual\s+(?:do|de)|guia\s+(?:de\s+uso|para)|atualizar\s+(?:o\s+)?readme|changelog)\b/i },
+  { agent: 'fury',     label: 'Pesquisa',          score: 3, pattern: /\b(pesquis(?:ar|a)\s+(?:sobre|de)|research|mercado|market\s+(?:analysis|research)|concorrente|competitor|benchmark|an[áa]lise\s+comparativa|tend[êe]ncia|trend\s+(?:analysis|report))\b/i },
+  { agent: 'jarvis',   label: 'Planejamento',      score: 2, pattern: /\b(planejar|plan(?:ejar|ning)?|arquitetura|architecture|estrat[ée]gia|strategy|roadmap|priorizar|organizar\s+(?:o\s+)?projeto|vis[ãa]o\s+geral|overview|como\s+(?:devemos|devo|should)\s+(?:organizar|estruturar|abordar))\b/i },
+]
+
+function routeTask(text: string): RoutingResult | null {
+  if (text.trim().length < 10) return null
+  const scores: Partial<Record<AgentName, { total: number; label: string }>> = {}
+  for (const rule of ROUTING_RULES) {
+    const matches = text.match(new RegExp(rule.pattern.source, 'gi'))
+    if (matches) {
+      const prev = scores[rule.agent]
+      scores[rule.agent] = {
+        total: (prev?.total ?? 0) + rule.score * matches.length,
+        label: prev?.label ?? rule.label,
+      }
+    }
+  }
+  const ranked = (Object.entries(scores) as [AgentName, { total: number; label: string }][])
+    .sort((a, b) => b[1].total - a[1].total)
+  if (ranked.length === 0) return null
+  const [topAgent, topInfo] = ranked[0]
+  return {
+    agent: topAgent,
+    confidence: topInfo.total >= 3 ? 'high' : 'medium',
+    reason: topInfo.label,
+  }
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 export default function SquadPage() {
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [activeAgent, setActiveAgent] = useState<AgentName>('jarvis')
   const [bubbles, setBubbles] = useState<ChatBubble[]>([])
@@ -291,7 +386,13 @@ export default function SquadPage() {
   const [kb, setKb] = useState<KnowledgeBase>(() => loadKB('__global__'))
   const [kbOpen, setKbOpen] = useState(false)
   const [kbSection, setKbSection] = useState<keyof KnowledgeBase | null>(null)
-  const projectContext = useMemo(() => buildKBString(kb), [kb])
+  const projectContext = useMemo(() => {
+    const kbStr = buildKBString(kb)
+    if (memories.length === 0) return kbStr
+    const recent = memories.slice(-20)
+    const memStr = `## MEMÓRIAS DO PROJETO (${recent.length})\n${recent.map(m => `- [${m.category}] ${m.content}`).join('\n')}`
+    return [memStr, kbStr].filter(Boolean).join('\n\n')
+  }, [kb, memories])
   const [executionMode, setExecutionMode] = useState<'vps' | 'local'>('vps')
   const [localPath, setLocalPath] = useState('')
 
@@ -312,6 +413,13 @@ export default function SquadPage() {
   const maxAutoIterRef = useRef(30)
   const [syncingKB, setSyncingKB] = useState(false)
 
+  // Pipeline de agentes (Jarvis→Friday→Reviewer→Tester→DevOps)
+  type PipelinePhase = 'planning' | 'implementing' | 'reviewing' | 'fixing' | 'testing' | 'devops' | 'done'
+  const [agentPipelineMode, setAgentPipelineMode] = useState(false)
+  const [agentPipelinePhase, setAgentPipelinePhase] = useState<PipelinePhase | null>(null)
+  const [isPipelineRunning, setIsPipelineRunning] = useState(false)
+  const agentPipelineModeRef = useRef(false)
+
   // Auto-executar ações (padrão ON — sem precisar clicar "Executar" em cada action)
   const [autoExecute, setAutoExecute] = useState(() => localStorage.getItem('squad_auto_execute') !== 'false')
   const autoExecuteRef = useRef(autoExecute)
@@ -331,6 +439,18 @@ export default function SquadPage() {
   const activeAgentRef = useRef<AgentName>('jarvis')
   const rootAgentRef = useRef<AgentName>('jarvis')
 
+  // Skills detection
+  const [matchedSkills, setMatchedSkills] = useState<AgentSkill[]>([])
+  const [skillSaveBanner, setSkillSaveBanner] = useState<{ task: string } | null>(null)
+  const [savingSkill, setSavingSkill] = useState(false)
+
+  // Ponto 1: Memory save banner
+  const [memorySaveBanner, setMemorySaveBanner] = useState<{ task: string; resolution: string } | null>(null)
+  const [savingMemory, setSavingMemory] = useState(false)
+
+  // Phase B: smart routing suggestion
+  const [suggestedRoute, setSuggestedRoute] = useState<RoutingResult | null>(null)
+
   // ── Activity panel ───────────────────────────────────────────────────────────
   const [liveShellOutput, setLiveShellOutput] = useState('')
   const liveShellRef = useRef<HTMLDivElement>(null)
@@ -340,7 +460,11 @@ export default function SquadPage() {
   const sessionStatsRef = useRef<SessionStats>({ reads: 0, writes: 0, shells: 0, errors: 0 })
   const [modifiedFiles, setModifiedFiles] = useState<string[]>([])
   const modifiedFilesRef = useRef<string[]>([])
-  const [rightTab, setRightTab] = useState<'history' | 'activity' | 'context'>('history')
+  const [rightTab, setRightTab] = useState<'history' | 'activity' | 'context' | 'memories'>('history')
+
+  // ── Memória persistente ──────────────────────────────────────────────────────
+  const [memories, setMemories] = useState<SquadMemory[]>([])
+  const [extracting, setExtracting] = useState(false)
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
 
   // ── Explorer state ────────────────────────────────────────────────────────────
@@ -448,6 +572,19 @@ export default function SquadPage() {
     }).catch(console.error)
   }, [])
 
+  // Auto-fill from PlanningPage navigation (runTask sends { autoMessage, agent })
+  useEffect(() => {
+    const state = location.state as { autoMessage?: string; agent?: string } | null
+    if (!state) return
+    if (state.agent && (AGENT_NAMES as readonly string[]).includes(state.agent)) {
+      setActiveAgent(state.agent as AgentName)
+      activeAgentRef.current = state.agent as AgentName
+    }
+    if (state.autoMessage) setInput(state.autoMessage)
+    // Clear state so back-navigation doesn't re-trigger
+    window.history.replaceState({}, '')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-scroll
   useEffect(() => {
     if (autoScroll) endRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -469,6 +606,7 @@ export default function SquadPage() {
   }, [])
 
   useEffect(() => { autonomousModeRef.current = autonomousMode }, [autonomousMode])
+  useEffect(() => { agentPipelineModeRef.current = agentPipelineMode }, [agentPipelineMode])
   useEffect(() => { activeAgentRef.current = activeAgent }, [activeAgent])
   useEffect(() => { maxAutoIterRef.current = maxAutoIter }, [maxAutoIter])
   useEffect(() => {
@@ -477,6 +615,27 @@ export default function SquadPage() {
   }, [autoExecute])
   // Reload KB when project (localPath) changes
   useEffect(() => { setKb(loadKB(localPath || '__global__')) }, [localPath])
+
+  useEffect(() => {
+    const key = localPath || '__global__'
+    ipc.squad.memory.list(key).then(setMemories).catch(console.error)
+  }, [localPath])
+
+  // Skill trigger detection (debounced 600ms)
+  useEffect(() => {
+    if (!input.trim()) { setMatchedSkills([]); return }
+    const t = setTimeout(async () => {
+      try { setMatchedSkills(await ipc.skills.match(input)) } catch { setMatchedSkills([]) }
+    }, 600)
+    return () => clearTimeout(t)
+  }, [input])
+
+  // Phase B: smart routing detection (debounced 500ms)
+  useEffect(() => {
+    if (!input.trim() || /^@\w+/.test(input.trim())) { setSuggestedRoute(null); return }
+    const t = setTimeout(() => setSuggestedRoute(routeTask(input)), 500)
+    return () => clearTimeout(t)
+  }, [input])
 
   // Explorer watcher — start/stop when localPath changes
   useEffect(() => {
@@ -637,12 +796,15 @@ export default function SquadPage() {
   }
 
   // Core: stream a single agent
+  // excludeFromHistoryId: bubble ID that is already passed as `message` — exclude from history to avoid duplication
   async function streamAgent(
     agent: AgentName,
     message: string,
     sid: string,
     delegatedBy: AgentName | undefined,
-    depth: number
+    depth: number,
+    excludeFromHistoryId?: string,
+    isolatedHistory?: Array<{ role: string; content: string }>,
   ): Promise<void> {
     return new Promise(resolve => {
       void (async () => {
@@ -660,16 +822,23 @@ export default function SquadPage() {
           isStreaming: true,
         }])
 
-        const history = bubblesRef.current
-          .filter(b => !b.isStreaming && b.type !== 'system')
+        const history = isolatedHistory ?? bubblesRef.current
+          .filter(b => !b.isStreaming && b.type !== 'system' && b.id !== excludeFromHistoryId)
           .slice(-20)
           .map(b => ({ role: b.type === 'user' ? 'user' : 'assistant', content: b.content }))
+
+        // Inject per-agent context configured in Planning Mode
+        const agentContexts = (() => { try { return JSON.parse(localStorage.getItem('planning_agent_contexts') ?? '{}') as Record<string, string> } catch { return {} } })()
+        const agentCtx = agentContexts[agent]?.trim() ?? ''
+        const combinedContext = agentCtx
+          ? [projectContext, `## Instruções específicas para @${agent}:\n${agentCtx}`].filter(Boolean).join('\n\n')
+          : (projectContext || undefined)
 
         let streamId: string
         try {
           const res = await ipc.squad.stream.start({
             agent, message, history,
-            projectContext: projectContext || undefined,
+            projectContext: combinedContext || undefined,
             localPath: executionMode === 'local' ? (localPath || undefined) : undefined,
             autonomous: autonomousModeRef.current,
           })
@@ -708,19 +877,52 @@ export default function SquadPage() {
               delegatedBy: delegatedBy ?? null,
             }).catch(console.error)
 
-            // Auto-delegation (depth=0 only)
+            // Delegação (depth=0 only)
             if (depth === 0 && finalContent) {
-              const delegations = detectDelegations(agent, finalContent)
               void (async () => {
-                for (const target of delegations) {
-                  if (stopRequestedRef.current) break // usuário cancelou durante delegação
-                  const task = extractTask(finalContent, target)
+                const plan = parseDelegationPlan(finalContent)
+                if (plan) {
+                  // Ponto 5: delegação estruturada — sub-agentes com contexto isolado
                   setAndRefBubbles(prev => [...prev, {
                     id: crypto.randomUUID(),
                     type: 'system',
-                    content: `@${agent} delegou para @${target}`,
+                    content: `🎯 @${agent} criou um plano com ${plan.items.length} sub-tarefa${plan.items.length !== 1 ? 's' : ''}`,
                   }])
-                  await streamAgent(target, task, sid, agent, 1)
+                  for (const item of plan.items) {
+                    if (stopRequestedRef.current) break
+                    setAndRefBubbles(prev => [...prev, {
+                      id: crypto.randomUUID(),
+                      type: 'system',
+                      content: `⚙ Delegando para @${item.agent}: ${item.objective.length > 80 ? item.objective.slice(0, 80) + '…' : item.objective}`,
+                    }])
+                    // Sub-agente recebe APENAS o objetivo — histórico zerado
+                    await streamAgent(item.agent, item.objective, sid, agent, 1, undefined, [])
+                  }
+                  if (!stopRequestedRef.current) {
+                    setAndRefBubbles(prev => [...prev, {
+                      id: crypto.randomUUID(),
+                      type: 'system',
+                      content: `✓ Delegações concluídas — sintetizando resultados…`,
+                    }])
+                    await streamAgent(
+                      agent,
+                      `Todas as ${plan.items.length} delegações foram concluídas. Examine os resultados acima e apresente ao usuário um resumo coeso do que foi realizado por cada agente.`,
+                      sid, undefined, 1,
+                    )
+                  }
+                } else {
+                  // Fallback: delegação simples por @mention
+                  const delegations = detectDelegations(agent, finalContent)
+                  for (const target of delegations) {
+                    if (stopRequestedRef.current) break
+                    const task = extractTask(finalContent, target)
+                    setAndRefBubbles(prev => [...prev, {
+                      id: crypto.randomUUID(),
+                      type: 'system',
+                      content: `@${agent} delegou para @${target}`,
+                    }])
+                    await streamAgent(target, task, sid, agent, 1)
+                  }
                 }
                 resolve()
               })()
@@ -761,13 +963,19 @@ export default function SquadPage() {
         message = mentionMatch[2].trim()
         setActiveAgent(targetAgent)
       }
+    } else if (suggestedRoute?.confidence === 'high' && suggestedRoute.agent !== activeAgent) {
+      // Phase B: auto-route to the detected best agent
+      targetAgent = suggestedRoute.agent
+      setActiveAgent(targetAgent)
     }
+    setSuggestedRoute(null)
 
     setInput('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     textareaRef.current?.focus()
 
-    setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'user', content: text }])
+    const userBubbleId = crypto.randomUUID()
+    setAndRefBubbles(prev => [...prev, { id: userBubbleId, type: 'user', content: text }])
 
     // Create session if needed
     let sid = sessionId
@@ -788,10 +996,17 @@ export default function SquadPage() {
     }).catch(console.error)
 
     rootAgentRef.current = targetAgent
-    await streamAgent(targetAgent, message, sid, undefined, 0)
+    await streamAgent(targetAgent, message, sid, undefined, 0, userBubbleId)
 
-    if (autonomousModeRef.current) {
+    if (agentPipelineModeRef.current) {
+      await runPipeline(message, sid)
+      setSkillSaveBanner({ task: message.slice(0, 300) })
+      const lastRes = bubblesRef.current.filter(b => b.type === 'agent' && !b.isStreaming).at(-1)?.content ?? ''
+      if (lastRes) setMemorySaveBanner({ task: message.slice(0, 200), resolution: lastRes.slice(0, 600) })
+    } else if (autonomousModeRef.current) {
       await autonomousLoop(sid)
+      const lastRes = bubblesRef.current.filter(b => b.type === 'agent' && !b.isStreaming).at(-1)?.content ?? ''
+      if (lastRes) setMemorySaveBanner({ task: message.slice(0, 200), resolution: lastRes.slice(0, 600) })
     } else if (autoExecuteRef.current) {
       // Exec auto: executa actions e envia resultados de volta (até 6 rodadas por mensagem)
       await autoExecRound(sid)
@@ -804,10 +1019,11 @@ export default function SquadPage() {
       const msgs = await ipc.squad.session.messages(s.id)
       const loaded: ChatBubble[] = msgs.map(m => ({
         id: m.id,
-        type: m.role === 'user' ? 'user' : 'agent',
+        type: m.role === 'result' ? 'user' : m.role === 'user' ? 'user' : 'agent',
         agentName: m.role === 'agent' ? (m.agentName as AgentName) : undefined,
         content: m.content,
         delegatedBy: m.delegatedBy ? (m.delegatedBy as AgentName) : undefined,
+        isActionResult: m.role === 'result',
       }))
       setBubbles(loaded)
       bubblesRef.current = loaded
@@ -875,20 +1091,74 @@ export default function SquadPage() {
     setSyncingKB(false)
   }
 
+  async function extractMemories() {
+    if (!sessionId || extracting) return
+    setExtracting(true)
+    try {
+      const key = localPath || '__global__'
+      const saved = await ipc.squad.memory.extract({ sessionId, projectKey: key })
+      if (saved.length > 0) {
+        setMemories(prev => [...prev, ...saved])
+        setRightTab('memories')
+      }
+    } catch (e) { console.error(e) } finally { setExtracting(false) }
+  }
+
+  async function deleteMemory(id: string) {
+    try {
+      await ipc.squad.memory.delete(id)
+      setMemories(prev => prev.filter(m => m.id !== id))
+    } catch (e) { console.error(e) }
+  }
+
   async function executeActionsAuto(actions: ActionBlock[]): Promise<Array<{ type: string; desc: string; output: string; ok: boolean }>> {
     const results: Array<{ type: string; desc: string; output: string; ok: boolean }> = []
+    let skipRemainingReadDirs = false  // cancela READ_DIRs seguintes após ENOENT
     for (const action of actions) {
       if (stopRequestedRef.current) break // cancel signal (padrão Devin)
+
+      // Skip READ_DIRs em cascata após ENOENT — evita 5+ erros de subpastas que não existem
+      if (action.type === 'read_dir' && skipRemainingReadDirs) {
+        results.push({
+          type: action.type, desc: action.path ? `path:${action.path}` : '', ok: false,
+          output: '[CANCELADO] READ_DIR cancelado — a pasta pai já retornou ENOENT. Leia a pasta raiz primeiro.',
+        })
+        continue
+      }
 
       // Skip empty SHELL — agent produced [ACTION:SHELL][/ACTION] with no command
       if (action.type === 'shell' && !action.content.trim()) {
         const projPath = (executionMode === 'local' && localPath) ? localPath : 'C:\\projeto'
         results.push({
           type: action.type, desc: '', ok: false,
-          output: `[ERRO] Comando SHELL vazio. O comando DEVE ficar entre as tags, assim:\n\n[ACTION:SHELL cwd="${projPath}"]\nseu-comando-aqui\n[/ACTION]\n\nVocê escreveu o comando FORA ou ANTES do tag. Repita com o comando dentro.`,
+          output: `[ERRO] Comando SHELL vazio — o agente emitiu [ACTION:SHELL] sem nenhum comando dentro.\n\nCORREÇÃO OBRIGATÓRIA — na próxima resposta escreva APENAS isso (sem texto antes, sem texto depois):\n\n[ACTION:SHELL cwd="${projPath}"]\nSEU_COMANDO_AQUI\n[/ACTION]\n\nSubstitua SEU_COMANDO_AQUI pelo comando real. O comando vai DENTRO das tags, não antes delas.`,
         })
         continue
       }
+      // SEARCH — executa via ipc.search.web sem necessidade de VPS
+      if (action.type === 'search') {
+        const query = (action.content.trim() || action.path || '').trim()
+        if (!query) {
+          results.push({ type: 'search', desc: '', output: '[ERRO] Query de busca vazia.', ok: false })
+          continue
+        }
+        const startTs = Date.now()
+        setActionStates(prev => ({ ...prev, [action.id]: { status: 'running' } }))
+        pushActivity({ id: action.id, ts: startTs, type: 'search', label: query, status: 'running' })
+        try {
+          const res = await ipc.search.web({ query, count: 5 })
+          setActionStates(prev => ({ ...prev, [action.id]: { status: 'ok', output: res.output } }))
+          updateActivity(action.id, 'ok', res.output, startTs)
+          results.push({ type: 'search', desc: query, output: res.output, ok: true })
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          setActionStates(prev => ({ ...prev, [action.id]: { status: 'error', output: msg } }))
+          updateActivity(action.id, 'error', msg, startTs)
+          results.push({ type: 'search', desc: query, output: msg, ok: false })
+        }
+        continue
+      }
+
       const desc = action.cwd ? `cwd:${action.cwd}` : action.path ? `path:${action.path}` : ''
       const label = action.path || (action.content.slice(0, 70).replace(/\n/g, ' '))
       const startTs = Date.now()
@@ -908,10 +1178,12 @@ export default function SquadPage() {
         const res = await ipc.squad.action.execute({ type: action.type, content: action.content, cwd, path: action.path, vpsId })
         // Detect backend-signalled shell errors (ENOENT, non-zero exit code, etc.)
         const isShellErr = action.type === 'shell' && res.output.startsWith('[SHELL_ERROR')
-        const actionStatus = isShellErr ? 'error' : 'ok'
+        const isReadDirEnoent = action.type === 'read_dir' && /enoent|no such file/i.test(res.output)
+        if (isReadDirEnoent) skipRemainingReadDirs = true  // cancela READ_DIRs subsequentes desta rodada
+        const actionStatus = (isShellErr || isReadDirEnoent) ? 'error' : 'ok'
         setActionStates(prev => ({ ...prev, [action.id]: { status: actionStatus, output: res.output } }))
         updateActivity(action.id, actionStatus, res.output, startTs)
-        results.push({ type: action.type, desc, output: res.output, ok: !isShellErr })
+        results.push({ type: action.type, desc, output: res.output, ok: !isShellErr && !isReadDirEnoent })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         setActionStates(prev => ({ ...prev, [action.id]: { status: 'error', output: msg } }))
@@ -1007,7 +1279,15 @@ export default function SquadPage() {
         const resultAgent = isRootBubble ? rootAgentRef.current : (lastBubble.agentName ?? rootAgentRef.current)
         const resultDepth = isRootBubble ? 0 : 1
         const resultDelegatedBy = isRootBubble ? undefined : lastBubble.delegatedBy
-        await streamAgent(resultAgent, lines.join('\n'), sid, resultDelegatedBy, resultDepth)
+        // Add result as hidden user bubble so it appears in conversation history for future turns
+        const resultBubbleId = crypto.randomUUID()
+        setAndRefBubbles(prev => [...prev, {
+          id: resultBubbleId, type: 'user', content: lines.join('\n'), isActionResult: true,
+        }])
+        ipc.squad.session.addMsg({
+          sessionId: sid, agentName: 'user', role: 'result', content: lines.join('\n').slice(0, 4000), delegatedBy: null,
+        }).catch(console.error)
+        await streamAgent(resultAgent, lines.join('\n'), sid, resultDelegatedBy, resultDepth, resultBubbleId)
       }
       if (!stopRequestedRef.current && autoIterRef.current >= maxAutoIterRef.current) {
         setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: `⚠️ Limite de ${maxAutoIterRef.current} iterações atingido` }])
@@ -1025,6 +1305,153 @@ export default function SquadPage() {
       setIsAutonomousRunning(false)
       setAutoIteration(0)
       autoIterRef.current = 0
+    }
+  }
+
+  // Pipeline helper: executa actions do agente em loop até [PRONTO].
+  // Quando o agente responde com texto sem ACTION tags, empurra com um prompt de execução
+  // (igual ao autonomousLoop) em vez de sair — máximo de 3 pushes consecutivos sem ação.
+  async function runAgentUntilDone(
+    agent: AgentName,
+    sid: string,
+    delegatedBy: AgentName | undefined,
+    maxIter = 20,
+  ): Promise<void> {
+    let noActionStreak = 0
+    let lastSeenId: string | undefined
+
+    for (let i = 0; i < maxIter; i++) {
+      if (stopRequestedRef.current) break
+
+      const lastBubble = bubblesRef.current
+        .filter(b => b.type === 'agent' && !b.isStreaming && b.agentName === agent)
+        .at(-1)
+
+      if (!lastBubble) break
+      if (/\[PRONTO\]|\[DONE\]|\[CONCLUÍDO\]|\[APROVADO\]/i.test(lastBubble.content)) break
+
+      // Mesma bolha que a iteração anterior → agente não respondeu (travado)
+      if (lastBubble.id === lastSeenId) break
+      lastSeenId = lastBubble.id
+
+      // Agente respondeu com texto mas sem ACTION — empurra para executar
+      if (!lastBubble.actions?.length) {
+        noActionStreak++
+        if (noActionStreak >= 3) break  // desiste após 3 pushes sem ação
+
+        const projPath = (executionMode === 'local' && localPath) ? localPath : 'C:\\projeto'
+        const pushMsg = [
+          '⚠️ EXECUTE AGORA — nenhuma ACTION foi emitida nesta resposta.',
+          'Emita EXATAMENTE um ACTION tag. Formato correto:',
+          `[ACTION:WRITE_FILE path="${projPath}\\arquivo.ext"]`,
+          'conteúdo do arquivo aqui',
+          '[/ACTION]',
+          'ou:',
+          `[ACTION:SHELL cwd="${projPath}"]`,
+          'comando aqui',
+          '[/ACTION]',
+          'Nenhum texto antes ou depois. Apenas o ACTION tag. Se já concluiu tudo, escreva [PRONTO].',
+        ].join('\n')
+        const pushId = crypto.randomUUID()
+        setAndRefBubbles(prev => [...prev, { id: pushId, type: 'user', content: pushMsg, isActionResult: true }])
+        ipc.squad.session.addMsg({ sessionId: sid, agentName: 'user', role: 'result', content: pushMsg.slice(0, 4000), delegatedBy: null }).catch(console.error)
+        await streamAgent(agent, pushMsg, sid, delegatedBy, 1, pushId)
+        continue
+      }
+
+      // Agente emitiu actions — reseta streak e executa
+      noActionStreak = 0
+
+      const results = await executeActionsAuto(lastBubble.actions)
+      if (stopRequestedRef.current) break
+
+      const hasErrors = results.some(r => !r.ok)
+      const lines: string[] = [`[RESULTADO DAS AÇÕES — iteração ${i + 1}]`]
+      for (const r of results) {
+        lines.push(`\n${r.type.toUpperCase()}${r.desc ? ` (${r.desc})` : ''}:\n${r.ok ? '✅ Sucesso' : '❌ ERRO — LEIA E CORRIJA'}`)
+        lines.push(r.output.slice(0, 2000))
+        if (!r.ok) lines.push(buildErrorHint(r.output, r.type, r.desc))
+      }
+      lines.push(hasErrors
+        ? '\n⚠️ Corrija os erros acima. Não repita o mesmo comando. Se concluiu tudo, inclua [PRONTO].'
+        : '\nContinue com o próximo passo. Se concluiu tudo, inclua [PRONTO].',
+      )
+
+      const resultBubId = crypto.randomUUID()
+      setAndRefBubbles(prev => [...prev, { id: resultBubId, type: 'user', content: lines.join('\n'), isActionResult: true }])
+      ipc.squad.session.addMsg({ sessionId: sid, agentName: 'user', role: 'result', content: lines.join('\n').slice(0, 4000), delegatedBy: null }).catch(console.error)
+      await streamAgent(agent, lines.join('\n'), sid, delegatedBy, 1, resultBubId)
+    }
+  }
+
+  // Pipeline principal: Jarvis → Friday → Reviewer → (fix?) → Tester → DevOps
+  async function runPipeline(task: string, sid: string): Promise<void> {
+    setIsPipelineRunning(true)
+    stopRequestedRef.current = false
+    try {
+      // ── 1. Planejamento ────────────────────────────────────────────────────
+      setAgentPipelinePhase('planning')
+      setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '🎯 Pipeline — Fase 1: Planejamento (Jarvis)' }])
+      await streamAgent('jarvis',
+        `MODO PIPELINE AUTÔNOMO.\n\nTarefa: ${task}\n\nCrie um plano de implementação DETALHADO: quais arquivos criar/editar, stack, ordem de execução. NÃO delegue agora — apenas planeje em lista numerada. Não use ACTION tags.`,
+        sid, undefined, 1)
+      if (stopRequestedRef.current) return
+
+      const jarvisContent = bubblesRef.current.filter(b => b.agentName === 'jarvis' && !b.isStreaming).at(-1)?.content ?? ''
+
+      // ── 2. Implementação ───────────────────────────────────────────────────
+      setAgentPipelinePhase('implementing')
+      setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '👩‍💻 Pipeline — Fase 2: Implementação (Friday)' }])
+      await streamAgent('friday',
+        `PIPELINE — IMPLEMENTAR:\n\nPlano do Jarvis:\n${jarvisContent}\n\nTarefa: ${task}\n\nImplemente AGORA. Um ACTION por resposta. Quando terminar TUDO, inclua [PRONTO].`,
+        sid, 'jarvis', 1)
+      await runAgentUntilDone('friday', sid, 'jarvis', 30)
+      if (stopRequestedRef.current) return
+
+      // ── 3. Code Review ────────────────────────────────────────────────────
+      setAgentPipelinePhase('reviewing')
+      setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '🔎 Pipeline — Fase 3: Revisão de Código (Reviewer)' }])
+      await streamAgent('reviewer',
+        `PIPELINE — REVISÃO:\n\nRevise o código implementado nesta sessão.\n1. Use READ_FILE para ler cada arquivo criado/modificado\n2. Avalie: bugs, segurança (OWASP), qualidade, edge cases\n3. Liste issues por severidade (Crítico/Alto/Médio/Baixo)\n4. Termine com [APROVADO] ou [BLOQUEADO: lista de issues críticas]`,
+        sid, undefined, 1)
+      await runAgentUntilDone('reviewer', sid, undefined, 6)
+      if (stopRequestedRef.current) return
+
+      const reviewContent = bubblesRef.current.filter(b => b.agentName === 'reviewer' && !b.isStreaming).at(-1)?.content ?? ''
+
+      // ── 3b. Correções (se bloqueado) ───────────────────────────────────────
+      if (/\[BLOQUEADO/i.test(reviewContent)) {
+        setAgentPipelinePhase('fixing')
+        setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '🔧 Pipeline — Fase 3b: Correções obrigatórias (Friday)' }])
+        await streamAgent('friday',
+          `PIPELINE — CORREÇÕES DO REVIEWER:\n\n${reviewContent}\n\nCorrijia TODOS os problemas críticos e altos. Um ACTION por resposta. Quando terminar, [PRONTO].`,
+          sid, 'reviewer', 1)
+        await runAgentUntilDone('friday', sid, 'reviewer', 15)
+        if (stopRequestedRef.current) return
+      }
+
+      // ── 4. Testes ─────────────────────────────────────────────────────────
+      setAgentPipelinePhase('testing')
+      setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '🧪 Pipeline — Fase 4: Testes (Tester)' }])
+      await streamAgent('tester',
+        `PIPELINE — TESTES:\n\n1. Leia os arquivos implementados com READ_FILE\n2. Escreva testes unitários e/ou de integração adequados\n3. Execute os testes com o comando correto\n4. Todos aprovados? Inclua [PRONTO]. Falhou? Corrija e rode novamente.`,
+        sid, undefined, 1)
+      await runAgentUntilDone('tester', sid, undefined, 15)
+      if (stopRequestedRef.current) return
+
+      // ── 5. DevOps / PR ────────────────────────────────────────────────────
+      setAgentPipelinePhase('devops')
+      setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '🚀 Pipeline — Fase 5: Pull Request (DevOps)' }])
+      await streamAgent('devops',
+        `PIPELINE — PULL REQUEST:\n\nTarefa: ${task}\n\nCrie o commit e PR:\n1. git add -A\n2. git commit -m "feat: <descrição curta>" (Conventional Commits)\n3. git remote -v  ← verificar se remote existe ANTES de push\n4. Se remote existe → git push; se NÃO existe → escreva "Commit criado. Nenhum remote configurado — adicione com: git remote add origin <url>" e inclua [PRONTO]\n5. Se fez push → descreva o PR:\n## O que foi feito\n## Como testar\n## Testes realizados\n\nInclua [PRONTO] ao final.`,
+        sid, undefined, 1)
+      await runAgentUntilDone('devops', sid, undefined, 8)
+
+      // ── Concluído ─────────────────────────────────────────────────────────
+      setAgentPipelinePhase('done')
+      setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '✅ Pipeline concluído — implementação, revisão, testes e PR criados' }])
+    } finally {
+      setIsPipelineRunning(false)
     }
   }
 
@@ -1065,7 +1492,15 @@ export default function SquadPage() {
       // Route results to the agent that produced the actions (not always root)
       const isRoot = lastBubble.agentName === rootAgentRef.current
       const resultAgent = isRoot ? rootAgentRef.current : (lastBubble.agentName ?? rootAgentRef.current)
-      await streamAgent(resultAgent, lines.join('\n'), sid, isRoot ? undefined : lastBubble.delegatedBy, isRoot ? 0 : 1)
+      // Add result as hidden user bubble so it appears in conversation history for future turns
+      const resultBubId = crypto.randomUUID()
+      setAndRefBubbles(prev => [...prev, {
+        id: resultBubId, type: 'user', content: lines.join('\n'), isActionResult: true,
+      }])
+      ipc.squad.session.addMsg({
+        sessionId: sid, agentName: 'user', role: 'result', content: lines.join('\n').slice(0, 4000), delegatedBy: null,
+      }).catch(console.error)
+      await streamAgent(resultAgent, lines.join('\n'), sid, isRoot ? undefined : lastBubble.delegatedBy, isRoot ? 0 : 1, resultBubId)
     }
     if (round >= maxRounds) {
       setAndRefBubbles(prev => [...prev, {
@@ -1302,6 +1737,12 @@ export default function SquadPage() {
                 autônomo · {autoIteration}/{maxAutoIter}
               </span>
             )}
+            {isPipelineRunning && agentPipelinePhase && (
+              <span className="flex items-center gap-1.5 text-xs text-indigo-400 font-medium ml-2">
+                <Loader2 size={11} className="animate-spin" />
+                pipeline · {agentPipelinePhase === 'planning' ? 'planejando' : agentPipelinePhase === 'implementing' ? 'implementando' : agentPipelinePhase === 'reviewing' ? 'revisando' : agentPipelinePhase === 'fixing' ? 'corrigindo' : agentPipelinePhase === 'testing' ? 'testando' : agentPipelinePhase === 'devops' ? 'PR' : 'concluído'}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -1319,7 +1760,7 @@ export default function SquadPage() {
             </button>
             <button
               onClick={() => setAutonomousMode(v => !v)}
-              disabled={isStreaming || isAutonomousRunning}
+              disabled={isStreaming || isAutonomousRunning || isPipelineRunning}
               title={autonomousMode ? 'Modo autônomo ON — clique para desativar' : 'Ativar modo autônomo (executa ações sozinho até concluir)'}
               className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded border transition-colors disabled:opacity-40 ${
                 autonomousMode
@@ -1329,6 +1770,19 @@ export default function SquadPage() {
             >
               <Bot size={10} />
               Auto
+            </button>
+            <button
+              onClick={() => setAgentPipelineMode(v => !v)}
+              disabled={isStreaming || isAutonomousRunning || isPipelineRunning}
+              title={agentPipelineMode ? 'Modo Pipeline ON — Jarvis→Friday→Reviewer→Tester→DevOps (clique para desativar)' : 'Ativar Pipeline: executa o ciclo completo de agentes automaticamente'}
+              className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded border transition-colors disabled:opacity-40 ${
+                agentPipelineMode
+                  ? 'bg-indigo-900/30 border-indigo-700/50 text-indigo-400'
+                  : 'bg-transparent border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-700'
+              }`}
+            >
+              <Cpu size={10} />
+              Pipeline
             </button>
             {autonomousMode && (
               <input
@@ -1374,6 +1828,7 @@ export default function SquadPage() {
           )}
 
           {bubbles.map(bubble => {
+            if (bubble.isActionResult) return null  // hidden from chat — only used for conversation history
             if (bubble.type === 'system') {
               return (
                 <div key={bubble.id} className="flex justify-center">
@@ -1425,8 +1880,8 @@ export default function SquadPage() {
                     <div className="mt-2 space-y-2">
                       {bubble.actions.map(action => {
                         const st = actionStates[action.id] ?? { status: 'idle' }
-                        const label = action.type === 'shell' ? 'SHELL' : action.type === 'write_file' ? 'WRITE' : action.type === 'read_dir' ? 'DIR' : 'READ'
-                        const labelColor = action.type === 'shell' ? 'text-yellow-400 bg-yellow-900/30 border-yellow-700/40' : action.type === 'write_file' ? 'text-blue-400 bg-blue-900/30 border-blue-700/40' : action.type === 'read_dir' ? 'text-cyan-400 bg-cyan-900/30 border-cyan-700/40' : 'text-slate-400 bg-slate-800 border-slate-700/40'
+                        const label = action.type === 'shell' ? 'SHELL' : action.type === 'write_file' ? 'WRITE' : action.type === 'read_dir' ? 'DIR' : action.type === 'search' ? 'WEB' : 'READ'
+                        const labelColor = action.type === 'shell' ? 'text-yellow-400 bg-yellow-900/30 border-yellow-700/40' : action.type === 'write_file' ? 'text-blue-400 bg-blue-900/30 border-blue-700/40' : action.type === 'read_dir' ? 'text-cyan-400 bg-cyan-900/30 border-cyan-700/40' : action.type === 'search' ? 'text-orange-400 bg-orange-900/30 border-orange-700/40' : 'text-slate-400 bg-slate-800 border-slate-700/40'
                         return (
                           <div key={action.id} className="border border-slate-700/50 rounded-xl overflow-hidden bg-slate-900/60">
                             <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800/60 border-b border-slate-700/40">
@@ -1503,6 +1958,158 @@ export default function SquadPage() {
           )}
         </div>
 
+        {/* Pipeline phase stepper */}
+        {(agentPipelineMode || isPipelineRunning) && (() => {
+          const phases: { key: string; label: string; emoji: string }[] = [
+            { key: 'planning',     label: 'Planejar',   emoji: '🎯' },
+            { key: 'implementing', label: 'Implementar', emoji: '👩‍💻' },
+            { key: 'reviewing',    label: 'Revisar',    emoji: '🔎' },
+            { key: 'testing',      label: 'Testar',     emoji: '🧪' },
+            { key: 'devops',       label: 'PR',         emoji: '🚀' },
+            { key: 'done',         label: 'Pronto',     emoji: '✅' },
+          ]
+          const phaseOrder = phases.map(p => p.key)
+          const currentIdx = agentPipelinePhase ? phaseOrder.indexOf(agentPipelinePhase) : -1
+          return (
+            <div className="px-6 py-2 border-t border-slate-800 bg-indigo-950/20 shrink-0">
+              <div className="flex items-center gap-1 overflow-x-auto">
+                {phases.map((p, i) => {
+                  const done = currentIdx > i
+                  const active = currentIdx === i
+                  return (
+                    <div key={p.key} className="flex items-center gap-1 shrink-0">
+                      <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border transition-all ${
+                        done   ? 'border-indigo-700/60 bg-indigo-900/30 text-indigo-300' :
+                        active ? 'border-indigo-500 bg-indigo-800/50 text-indigo-200 font-semibold' :
+                                 'border-slate-800 text-slate-600'
+                      }`}>
+                        {p.emoji} {p.label}
+                        {active && isPipelineRunning && <Loader2 size={8} className="animate-spin ml-0.5" />}
+                      </span>
+                      {i < phases.length - 1 && <span className="text-slate-700 text-[10px]">→</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Skill save banner — shown after pipeline completes */}
+        {skillSaveBanner && !isPipelineRunning && (
+          <div className="mx-6 mb-2 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-xs" style={{ background: 'rgba(183,141,255,0.08)', border: '1px solid rgba(183,141,255,0.2)' }}>
+            <div className="flex items-center gap-2" style={{ color: '#B78DFF' }}>
+              <BookOpen size={12} className="shrink-0" />
+              <span>Pipeline concluído. Deseja salvar esta solução como uma Skill reutilizável?</span>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                disabled={savingSkill}
+                onClick={async () => {
+                  setSavingSkill(true)
+                  try {
+                    await ipc.skills.create({
+                      title: skillSaveBanner.task.slice(0, 80),
+                      description: 'Criada automaticamente pelo pipeline do Squad',
+                      category: 'desenvolvimento',
+                      triggers: skillSaveBanner.task.toLowerCase().split(/\s+/).slice(0, 5),
+                      content: `## Tarefa\n${skillSaveBanner.task}\n\n## Notas\n[Adicione os passos específicos desta solução]`,
+                      autoGenerated: true,
+                    })
+                    setSkillSaveBanner(null)
+                  } catch (e) { console.error(e) } finally { setSavingSkill(false) }
+                }}
+                className="px-3 py-1 rounded-lg font-medium transition-all"
+                style={{ background: 'rgba(183,141,255,0.18)', border: '1px solid rgba(183,141,255,0.3)', color: '#B78DFF' }}
+              >
+                {savingSkill ? '…' : 'Salvar Skill'}
+              </button>
+              <button onClick={() => setSkillSaveBanner(null)} style={{ color: 'rgba(248,248,252,0.3)' }}>
+                <X size={13} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Ponto 1: Memory save banner — shown after pipeline/autonomous completes */}
+        {memorySaveBanner && !isPipelineRunning && !isAutonomousRunning && (
+          <div className="mx-6 mb-2 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-xs" style={{ background: 'rgba(217,164,65,0.06)', border: '1px solid rgba(217,164,65,0.18)' }}>
+            <div className="flex items-center gap-2 min-w-0" style={{ color: '#F2C879' }}>
+              <Sparkles size={12} className="shrink-0" />
+              <span className="truncate">Salvar esta solução na Memória do projeto?</span>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                disabled={savingMemory}
+                onClick={async () => {
+                  setSavingMemory(true)
+                  try {
+                    await ipc.knowledge.create({
+                      title: memorySaveBanner.task.slice(0, 80),
+                      content: `## Tarefa\n${memorySaveBanner.task}\n\n## Resolução\n${memorySaveBanner.resolution}`,
+                      category: 'geral',
+                      tags: 'squad,auto',
+                      isActive: true,
+                    })
+                    setMemorySaveBanner(null)
+                  } catch (e) { console.error(e) } finally { setSavingMemory(false) }
+                }}
+                className="px-3 py-1 rounded-lg font-medium transition-all"
+                style={{ background: 'rgba(217,164,65,0.14)', border: '1px solid rgba(217,164,65,0.25)', color: '#F2C879' }}
+              >
+                {savingMemory ? '…' : 'Salvar Memória'}
+              </button>
+              <button onClick={() => setMemorySaveBanner(null)} style={{ color: 'rgba(248,248,252,0.3)' }}>
+                <X size={13} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Skill match badge — shown when input matches skill triggers */}
+        {matchedSkills.length > 0 && !isStreaming && (
+          <div className="mx-6 mb-1.5 flex items-center gap-2 flex-wrap">
+            <span className="text-[10px]" style={{ color: 'rgba(248,248,252,0.3)' }}>Skills:</span>
+            {matchedSkills.map(s => (
+              <span
+                key={s.id}
+                title={s.description}
+                className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                style={{ background: 'rgba(183,141,255,0.1)', border: '1px solid rgba(183,141,255,0.2)', color: '#B78DFF' }}
+              >
+                ⚡ {s.title}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Phase B: Smart routing badge */}
+        {suggestedRoute && suggestedRoute.agent !== activeAgent && !/^@\w+/.test(input.trim()) && !isStreaming && (
+          <div className="mx-6 mb-1 flex items-center gap-2">
+            <span className="text-[10px]" style={{ color: 'rgba(248,248,252,0.25)' }}>🎯</span>
+            <button
+              onClick={() => { setActiveAgent(suggestedRoute.agent); setSuggestedRoute(null) }}
+              title={`Redirecionar para ${AGENT_META[suggestedRoute.agent].label} (${suggestedRoute.reason})`}
+              className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium transition-all"
+              style={{
+                background: suggestedRoute.confidence === 'high' ? 'rgba(217,164,65,0.08)' : 'rgba(100,116,139,0.08)',
+                border: `1px solid ${suggestedRoute.confidence === 'high' ? 'rgba(217,164,65,0.22)' : 'rgba(100,116,139,0.2)'}`,
+                color: suggestedRoute.confidence === 'high' ? '#F2C879' : 'rgba(248,248,252,0.35)',
+              }}
+            >
+              {AGENT_META[suggestedRoute.agent].emoji}
+              <span>{AGENT_META[suggestedRoute.agent].label}</span>
+              <span style={{ color: 'rgba(248,248,252,0.25)' }}>— {suggestedRoute.reason}</span>
+              {suggestedRoute.confidence === 'high' && (
+                <span
+                  className="text-[9px] px-1 py-0.5 rounded font-semibold"
+                  style={{ background: 'rgba(217,164,65,0.12)', color: '#D9A441', border: '1px solid rgba(217,164,65,0.18)' }}
+                >auto</span>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* Input */}
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/30 shrink-0">
           <div className="flex gap-3 items-end">
@@ -1513,16 +2120,16 @@ export default function SquadPage() {
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() }
               }}
-              placeholder={isAutonomousRunning ? 'Agente trabalhando autonomamente…' : `Mensagem para @${activeAgent}… (Shift+Enter = nova linha)`}
-              disabled={isAutonomousRunning}
+              placeholder={isPipelineRunning ? 'Pipeline em execução…' : isAutonomousRunning ? 'Agente trabalhando autonomamente…' : agentPipelineMode ? 'Descreva a tarefa — o pipeline Jarvis→Friday→Reviewer→Tester→DevOps roda automaticamente…' : `Mensagem para @${activeAgent}… (Shift+Enter = nova linha)`}
+              disabled={isAutonomousRunning || isPipelineRunning}
               rows={1}
               className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 resize-none focus:outline-none focus:border-brand-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ maxHeight: '120px', overflowY: 'auto' }}
             />
-            {(isStreaming || isAutonomousRunning) ? (
+            {(isStreaming || isAutonomousRunning || isPipelineRunning) ? (
               <button
-                onClick={isAutonomousRunning ? stopAutonomous : cancelStream}
-                title={isAutonomousRunning ? 'Parar execução autônoma' : 'Cancelar'}
+                onClick={isPipelineRunning || isAutonomousRunning ? stopAutonomous : cancelStream}
+                title={isPipelineRunning ? 'Parar pipeline' : isAutonomousRunning ? 'Parar execução autônoma' : 'Cancelar'}
                 className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl bg-red-900/40 border border-red-700/40 text-red-400 hover:bg-red-900/60 transition-colors"
               >
                 <X size={16} />
@@ -1767,6 +2374,7 @@ export default function SquadPage() {
             { key: 'history',  icon: Clock,    label: 'Histórico' },
             { key: 'activity', icon: Activity, label: 'Atividade' },
             { key: 'context',  icon: Cpu,      label: 'Contexto'  },
+            { key: 'memories', icon: Brain,    label: 'Memórias'  },
           ] as const).map(({ key, icon: Icon, label }) => (
             <button
               key={key}
@@ -1781,6 +2389,9 @@ export default function SquadPage() {
               {label}
               {key === 'activity' && activityLog.length > 0 && (
                 <span className="ml-0.5 bg-brand-600/40 text-brand-300 text-[9px] px-1 rounded-full">{activityLog.length}</span>
+              )}
+              {key === 'memories' && memories.length > 0 && (
+                <span className="ml-0.5 bg-purple-600/40 text-purple-300 text-[9px] px-1 rounded-full">{memories.length}</span>
               )}
             </button>
           ))}
@@ -1916,7 +2527,7 @@ export default function SquadPage() {
                 <p className="text-xs text-slate-600 px-4 py-4">Nenhuma ação executada nesta sessão.</p>
               ) : (
                 activityLog.map(entry => {
-                  const typeIcon = entry.type === 'shell' ? '⚡' : entry.type === 'write_file' ? '✏️' : entry.type === 'read_dir' ? '📂' : '📖'
+                  const typeIcon = entry.type === 'shell' ? '⚡' : entry.type === 'write_file' ? '✏️' : entry.type === 'read_dir' ? '📂' : entry.type === 'search' ? '🌐' : '📖'
                   const isExpanded = expandedLogId === entry.id
                   return (
                     <div key={entry.id} className="border-b border-slate-800/50">
@@ -2004,6 +2615,68 @@ export default function SquadPage() {
               )}
             </div>
 
+          </div>
+        )}
+
+        {/* ── Tab: Memórias ───────────────────────────────────────────── */}
+        {rightTab === 'memories' && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Header com botão Extrair */}
+            <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between gap-2 shrink-0">
+              <span className="text-[10px] text-slate-500">
+                {memories.length} memória{memories.length !== 1 ? 's' : ''} · {localPath ? localPath.split(/[\\/]/).pop() : 'Global'}
+              </span>
+              <button
+                onClick={() => void extractMemories()}
+                disabled={!sessionId || bubbles.filter(b => !b.isActionResult).length < 3 || extracting}
+                title="Extrair memórias da sessão atual usando IA"
+                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-all border disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.2)', color: '#c084fc' }}
+                onMouseEnter={e => { (e.currentTarget).style.background = 'rgba(168,85,247,0.16)' }}
+                onMouseLeave={e => { (e.currentTarget).style.background = 'rgba(168,85,247,0.08)' }}
+              >
+                <Brain size={10} />
+                {extracting ? 'Extraindo…' : 'Extrair da sessão'}
+              </button>
+            </div>
+
+            {/* Lista de memórias */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-2">
+              {memories.length === 0 ? (
+                <div className="px-4 py-8 text-center">
+                  <Brain size={28} className="mx-auto mb-3 text-slate-700" />
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Nenhuma memória salva.<br />
+                    Execute o Squad e clique<br />
+                    "Extrair da sessão".
+                  </p>
+                </div>
+              ) : (
+                [...memories].reverse().map(m => (
+                  <div
+                    key={m.id}
+                    className="px-3 py-2.5 rounded-lg border border-slate-700/40 bg-slate-800/30 group relative"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${MEM_CAT_STYLE[m.category] ?? MEM_CAT_STYLE['outro']}`}>
+                        {m.category}
+                      </span>
+                      <button
+                        onClick={() => void deleteMemory(m.id)}
+                        title="Remover memória"
+                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-all text-slate-600 hover:text-red-400 hover:bg-red-900/20"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">{m.content}</p>
+                    <p className="text-[9px] text-slate-600 mt-1">
+                      {new Date(m.createdAt).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 

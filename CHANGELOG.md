@@ -1,5 +1,554 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.49.0] — 2026-06-14
+
+### Adicionado — SQUAD-02: Fury com Busca Web em Tempo Real
+
+**`packages/core/src/squad/agents.ts`:**
+- `FURY_ACTION_INSTRUCTIONS` — novo bloco de instrução exclusivo para Fury com regras de uso da ACTION SEARCH
+- `ACTION_INSTRUCTIONS` — adicionada ACTION SEARCH a todos os agentes com ACTION tags (`[ACTION:SEARCH query="..."][/ACTION]`)
+- System prompt de Fury atualizado: nunca inventa dados, sempre executa buscas reais antes de afirmar qualquer coisa, cita URL da fonte
+
+**`apps/desktop/src/ipc/handlers.ts`:**
+- DDL `ALTER TABLE settings ADD COLUMN braveApiKey TEXT NOT NULL DEFAULT ''` (silencioso se coluna já existir)
+- Handler `settings:brave:get()` — retorna `{ braveApiKey }` da tabela settings
+- Handler `settings:brave:set(key)` — upsert do `braveApiKey` na tabela settings
+- Handler `search:web({ query, count? })` — lê `braveApiKey` do banco, chama `GET https://api.search.brave.com/res/v1/web/search` com header `X-Subscription-Token`, retorna `{ output }` formatado como markdown (título, URL, descrição)
+- Timeout de 15s; retorna erro amigável se chave não configurada
+
+**`apps/desktop/src/preload.ts`:** canais `search:web`, `settings:brave:get`, `settings:brave:set`
+
+**`apps/web/src/lib/ipc.ts`:**
+- `ipc.search.web({ query, count? })` → `{ output: string }`
+- `ipc.settings.brave.get()` → `{ braveApiKey: string }`
+- `ipc.settings.brave.set(key)` → `{ saved: boolean }`
+
+**`apps/web/src/pages/SquadPage.tsx`:**
+- `ActionType` expandido com `'search'`
+- `executeActionsAuto`: branch para `action.type === 'search'` — executa `ipc.search.web` diretamente (sem VPS), registra no activity log com ícone 🌐
+- Display de ACTION tag: badge **WEB** laranja para SEARCH
+- Activity log: ícone `🌐` para entradas de busca
+
+**`apps/web/src/pages/SettingsPage.tsx`:**
+- Seção **Busca Web (Brave Search)**: campo de API key com toggle show/hide, botão Salvar, link para registro, mensagem de feedback
+
+**Comportamento resultante (SQUAD-02 fechado):**
+- Fury pesquisa a internet automaticamente antes de emitir qualquer dado de mercado ✅
+- Qualquer agente pode usar `[ACTION:SEARCH query="..."]` para buscar docs, pacotes, soluções ✅
+- Badge **WEB** laranja no chat + ícone 🌐 no Activity log ✅
+- Chave configurada uma vez em Configurações → Busca Web ✅
+- Plano gratuito Brave: 2.000 buscas/mês ✅
+
+---
+
+## [3.48.0] — 2026-06-14
+
+### Adicionado — SQUAD-01: Memória Persistente entre Sessões
+
+**`packages/db/prisma/schema.prisma`:**
+- Novo modelo `SquadMemory`: campos `id`, `projectKey` (localPath ou `__global__`), `content`, `category` (decisão/arquitetura/padrão/correção/outro), `sessionId?`, `agentName`, `createdAt`; index em `projectKey`
+
+**`apps/desktop/src/ipc/handlers.ts`:**
+- DDL `CREATE TABLE IF NOT EXISTS squad_memories` executado na inicialização (auto-migração para instâncias sem db:push)
+- Handler `squad:memory:list(projectKey)` — lista memórias do projeto em ordem cronológica
+- Handler `squad:memory:save({ projectKey, content, category, sessionId?, agentName? })` — salva uma memória manualmente
+- Handler `squad:memory:delete(id)` — remove memória por id
+- Handler `squad:memory:extract({ sessionId, projectKey })` — lê até 40 mensagens da sessão, monta contexto de conversa, chama Friday via `chatAgent` pedindo 1-6 memórias em JSON, salva e retorna lista
+
+**`apps/desktop/src/preload.ts`:** canais `squad:memory:list`, `squad:memory:save`, `squad:memory:delete`, `squad:memory:extract`
+
+**`apps/web/src/lib/ipc.ts`:**
+- Tipo `SquadMemory` exportado
+- `ipc.squad.memory.list(projectKey)`, `.save(data)`, `.delete(id)`, `.extract({ sessionId, projectKey })`
+
+**`apps/web/src/pages/SquadPage.tsx`:**
+- `MEM_CAT_STYLE` — mapa de estilos por categoria (azul/roxo/verde/vermelho/cinza)
+- Estado `memories: SquadMemory[]` + `extracting: boolean`
+- `projectContext` (useMemo) injeta as 20 memórias mais recentes como `## MEMÓRIAS DO PROJETO` antes do KB manual
+- `useEffect([localPath])` carrega memórias do projeto via `ipc.squad.memory.list`
+- `extractMemories()` — chama `squad:memory:extract`, adiciona resultado ao estado, navega para aba Memórias
+- `deleteMemory(id)` — remove do backend e atualiza estado
+- Aba **Memórias** (4ª, ícone `Brain`, badge roxo com contagem) no painel direito:
+  - Header com projeto atual + botão "Extrair da sessão" (habilitado quando há sessão + ≥3 mensagens)
+  - Cards por memória: badge de categoria colorido, conteúdo, data, botão excluir (hover)
+  - Empty state com ícone Brain e instrução
+
+**Comportamento resultante (SQUAD-01 fechado):**
+- Agentes têm acesso automático às decisões de sessões anteriores ✅
+- Extração com 1 clique: Friday analisa a conversa e gera 1-6 memórias estruturadas ✅
+- Memórias injetadas no `projectContext` → todos os agentes recebem como contexto ✅
+- Escopo por projeto (localPath) — projetos diferentes têm memórias separadas ✅
+- Sem nova coluna de dados sensíveis — apenas fatos técnicos extraídos pela IA ✅
+
+---
+
+## [3.47.0] — 2026-06-14
+
+### Adicionado — Phase C: Planning Mode
+
+**`apps/web/src/pages/PlanningPage.tsx`** (NOVO — fullscreen):
+- **Coluna esquerda — Fila de tarefas**: lista de tarefas com agente-dono, prioridade (critical/high/medium/low), status (pending/running/done/blocked), filtro por agente + status, ordenação por urgência; clicar no status avança o ciclo; botão ▶ executa a tarefa navegando para `/squad` com `autoMessage` e `agent` no `location.state`
+- **Coluna direita — Automações**: espelha automações do `AutomationsPage` (toggle ativo/inativo, próximo disparo calculado, botão "Executar agora")
+- **Faixa inferior — Contexto por agente**: aba por agente (`jarvis`, `friday`, `fury`, `shuri`, `pepper`, `vision`, `requis`, `tester`, `reviewer`, `devops`), textarea de instruções específicas, persistido em `localStorage` (`planning_agent_contexts`)
+- Botão "+ Nova Tarefa" com modal completo (título, agente, prioridade, descrição)
+
+**`apps/web/src/pages/SquadPage.tsx`:**
+- `useLocation` adicionado ao import de `react-router-dom`
+- `useEffect` on mount lê `location.state as { autoMessage?, agent? }` → pré-preenche input e seleciona agente automaticamente; limpa state com `window.history.replaceState` para evitar re-trigger no back
+- Injeção de contexto por agente: lê `planning_agent_contexts` do `localStorage` e mescla com `projectContext` antes de `stream.start`
+
+**`apps/web/src/components/Layout.tsx`:**
+- Botão **PLANEJAR** (amber, ícone `CalendarClock`, acima de WORKSPACE) → `/planning`
+- Versão → `v3.47.0`
+
+**`apps/web/src/App.tsx`:** rota `/planning` → `PlanningPage` (fullscreen, fora do Layout)
+
+**Comportamento resultante (Phase C fechada):**
+- Sidebar → PLANEJAR → fila visual de tarefas + automações + contextos por agente ✅
+- Clicar ▶ numa tarefa → SquadPage com agente certo + mensagem pré-preenchida ✅
+- Contexto específico por agente é injetado automaticamente em cada sessão Squad ✅
+- Automações visíveis e executáveis sem sair do Planning ✅
+
+---
+
+## [3.46.0] — 2026-06-14
+
+### Adicionado — Phase 2: LSP Auto-start Local
+
+**`apps/desktop/src/lsp/local-lsp.ts`** (NOVO):
+- Classe `LocalLspBridge`: detecta `typescript-language-server` (spawn com `--version`), spawna o servidor com `--stdio`, faz bridge Content-Length ↔ WebSocket em porta dinâmica (OS-assigned via `listen(0)`)
+- Parsing de protocolo LSP: loop de `Content-Length: N\r\n\r\n{body}` no buffer stdout → mensagem JSON enviada via WebSocket; sentido inverso: JSON do WS → `Content-Length: N\r\n\r\n` no stdin
+- Múltiplos clientes WS suportados via `Set<{ readyState, send, close }>`
+- Erro amigável se servidor não instalado: "Instale com: npm install -g typescript-language-server typescript"
+
+**`apps/desktop/src/ipc/handlers.ts`:**
+- Handlers `local:lsp:start(workspacePath)`, `local:lsp:stop()`, `local:lsp:status()` → instância única de `LocalLspBridge`
+
+**`apps/desktop/src/preload.ts`:** canais `local:lsp:start`, `local:lsp:stop`, `local:lsp:status`
+
+**`apps/desktop/package.json`:** dep `ws@^8.18.0`, devDep `@types/ws@^8.5.12`
+
+**`apps/web/src/lib/ipc.ts`:** `ipc.lsp.start(workspacePath)`, `ipc.lsp.stop()`, `ipc.lsp.status()`
+
+**`apps/web/src/lib/lsp.ts`:** `connectLSP(monaco, langKey, portOverride?)` — aceita porta dinâmica local
+
+**`apps/web/src/pages/IDEPage.tsx`:**
+- `toggleLSP` detecta modo local (`isLocal`) → chama `ipc.lsp.start(localRootRef.current)` e passa porta retornada para `connectLSP` via `portOverride`
+- Toast diferenciado: "TS LSP conectado (local)" vs "(remoto via túnel)"
+
+**Comportamento resultante (Phase 2 fechada):**
+- IDE local: clicar "TS LSP" na status bar → conecta TypeScript LSP sem abrir túnel SSH ✅
+- IDE remoto: comportamento original preservado (túnel porta 6009) ✅
+- Sem conflito de porta: local usa porta aleatória do OS ✅
+
+---
+
+## [3.45.0] — 2026-06-14
+
+### Adicionado — Ponto 11: Workspace Intelligence
+
+**`apps/desktop/src/ipc/handlers.ts`:**
+- Handler `workspace:analyze({ vpsId, projectPath })` — coleta dados do projeto via SSH (`find`, `cat` de manifests, `head` de arquivos-fonte), valida `projectPath` contra regex de segurança (`/^[/~]?[a-zA-Z0-9_./-]+$/`), monta contexto de até 7.000 chars e chama Friday via `chatAgent` para retornar `WorkspaceReport` JSON estruturado
+- Execução em paralelo (`Promise.allSettled`) para todos os manifests; depois lê até 6 arquivos-fonte (700 chars cada)
+- Sanitização de saída: verifica campos `summary`, `stack`, `architecture.layers`, `architecture.patterns`, `modules`, `flows`, `risks` antes de retornar
+
+**`apps/desktop/src/preload.ts`:** adicionado canal `workspace:analyze`
+
+**`apps/web/src/lib/ipc.ts`:**
+- Tipos: `WsArchLayer`, `WsModule`, `WsFlow`, `WsRisk`, `WorkspaceReport`
+- `ipc.workspace.analyze({ vpsId, projectPath })` → `WorkspaceReport`
+
+**`apps/web/src/pages/WorkspacePage.tsx`** (NOVO — fullscreen):
+- **Modo seletor** (sem query params): VPS dropdown + path input + botão "Analisar Projeto"
+- **Modo análise** (com `?vpsId=X&path=Y`): auto-analisa ao montar
+- **Top bar**: back, VPS/projeto breadcrumb, badges de risco (crítico/alto), botão Reanalisar
+- **Left rail** (visível com relatório): tabs de navegação + mini painel de contagem de riscos por severidade
+- **Tabs de conteúdo:**
+  - *Resumo*: parágrafo de summary + stack badges + patterns checklist
+  - *Arquitetura*: layer cards com nome, descrição e arquivos
+  - *Módulos*: cards com nome, path, role badge (controller/service/model/utility/config), imports count, risks count
+  - *Fluxos*: accordion expandível com etapas numeradas
+  - *Riscos*: cards coloridos por severidade (critical/high/medium/low), ordenados do mais grave
+- Risco zero → card verde "Projeto em boas condições"
+
+**`apps/web/src/components/Layout.tsx`:**
+- Botão **WORKSPACE** (azul, acima de OPERADOR) na sidebar → `/workspace`
+- Versão → `v3.45.0`
+
+**`apps/web/src/App.tsx`:** rota `/workspace` → `WorkspacePage` (fullscreen, fora do Layout)
+
+**`apps/web/src/pages/IDEPage.tsx`:**
+- Botão **Workspace** na status bar (ao lado de Aprender, somente VPS remota) → abre `/workspace?vpsId=X&path={activeDir}&name={vpsName}`
+
+**Comportamento resultante (Ponto 11 fechado):**
+- Clicar "WORKSPACE" na sidebar → selector de VPS + path ✅
+- Clicar "Workspace" na status bar do IDE → análise imediata do diretório aberto ✅
+- IA mapeia camadas, módulos, fluxos e riscos em ~30s ✅
+- Reanalisar a qualquer momento para atualizar o mapa ✅
+- Segurança: path validado com regex; sem injeção de shell possível ✅
+
+---
+
+## [3.44.0] — 2026-06-14
+
+### Adicionado — Ponto 10: Aprendizado Contínuo
+
+**`apps/desktop/src/ipc/handlers.ts`:**
+- Handler `learning:analyzeFile({ name, content, language })` — usa Friday (claude-opus) para extrair título, conteúdo resumido, categoria e tags de qualquer arquivo de código; responde em JSON puro (máx 512 tokens); sanitiza categoria contra lista allowlist
+
+**`apps/desktop/src/preload.ts`:** adicionado canal `learning:analyzeFile`
+
+**`apps/web/src/lib/ipc.ts`:** adicionado `ipc.learning.analyzeFile(data)`
+
+**`apps/web/src/pages/IDEPage.tsx`:**
+- Função `analyzeManifest(name, content)` (módulo-nível, sem IA): parseia heuristicamente `package.json`, `requirements.txt`, `go.mod`, `Cargo.toml`, `docker-compose.yml` e retorna `KbSuggestion` ou `null`
+- Estado: `kbSuggestion`, `aiLearning`, `aiLearnResult`
+- Hook em `openFile()`: após carregar conteúdo, chama `analyzeManifest` → se retornar sugestão → `setKbSuggestion()` (sem IA, sem latência)
+- **Banner KB** (entre tabs e breadcrumbs): aparece dourado quando `kbSuggestion` ativo — ícone BookMarked + título truncado + botão "Salvar na KB" + dismiss
+- **Botão "💡 Aprender"** na status bar (rightmost): chama `ipc.learning.analyzeFile()` com arquivo ativo → abre modal de resultado
+- **Modal de aprendizado IA**: exibe título/conteúdo/categoria/tags extraídos pela IA com botões "Ignorar" e "Salvar na KB"
+- `handleSaveToKb(s)`: chama `ipc.knowledge.create()` + toast de confirmação + fecha banner/modal
+
+**Comportamento resultante (Ponto 10 fechado):**
+- Abrir `package.json` → banner dourado aparece instantaneamente com stack detectada ✅
+- Botão Aprender na status bar analisa qualquer arquivo via IA → propõe entrada KB ✅
+- Um clique para salvar padrão detectado na Knowledge Base ✅
+- Zero latência para manifests (heurística local); IA sob demanda para código ✅
+
+---
+
+## [3.43.0] — 2026-06-14
+
+### Adicionado — Ponto 9: Operador de Infraestrutura
+
+**`apps/desktop/src/ipc/handlers.ts`:**
+- Handler `infra:analyze(report: string)` — chama `AiService.chatAgent()` com AGENTS.devops + prompt de análise de infraestrutura; retorna análise textual
+
+**`OperatorPage` (`apps/web/src/pages/OperatorPage.tsx`) — fullscreen, sem sidebar:**
+- Top bar: breadcrumb "← Operador de Infraestrutura" + badges (N críticos / N atenção / N ok) + botão "Analisar com DevOps" + botão "Verificar Tudo"
+- Auto-load: busca VPS list ao montar; reseta status para 'checking' e chama `ipc.monitor.getStats(vpsId)` para TODOS em paralelo (Promise.all)
+- Auto-refresh: `setInterval` de 5 minutos
+- **Thresholds:** CPU ≥80% warn / ≥95% critical; RAM ≥85% warn / ≥95% critical; Disco ≥80% warn / ≥90% critical
+- **VPS grid** (auto-fill minmax 280px): cards coloridos por status (verde/amarelo/vermelho/cinza), mini progress bars para CPU/RAM/Disco, uptime, lista de alertas por card
+- **Alert feed** (painel direito): acumula alertas por nível (critical/warn) com timestamp e nome da VPS — até 50 entradas
+- **AI panel**: botão "Analisar com DevOps" formata relatório completo (todas VPS + métricas + alertas) e chama `infra:analyze` → exibe análise no painel direito acima do feed
+- `StatusDot` component: dot colorido com glow + label texto (Online/Atenção/Crítico/Offline)
+- `MiniBar`: progress bar compacta com cor dinâmica baseada nos thresholds
+
+**`Layout.tsx`:** botão "OPERADOR" destacado em vermelho na sidebar (acima de SQUAD), estilo idêntico aos outros botões de acesso rápido
+
+**Rota:** `/operator` fullscreen (fora do bloco Layout, como `/ai-hub` e `/squad`)
+
+**Comportamento resultante (Ponto 9 fechado):**
+- Visão unificada de TODAS as VPS em um único painel ✅
+- Health checks automáticos na abertura e a cada 5 minutos ✅
+- Alertas proativos com threshold configurado (CPU/RAM/Disco) ✅
+- Análise IA com @devops para interpretar o estado da infraestrutura ✅
+- Sem nova tabela no DB — alertas em memória, métricas via SSH existente ✅
+
+---
+
+## [3.42.0] — 2026-06-14
+
+### Adicionado — Ponto 7: Automações naturais
+
+**DB (`packages/db/src/index.ts`):**
+- Tabela `scheduled_jobs`: id, title, instruction, agentName, schedule (JSON), isActive, lastRunAt, lastResult, nextRunAt, vpsId, createdAt, updatedAt
+
+**`packages/core/src/jobs/jobs.service.ts`** (novo):
+- `JobSchedule` — union type: `interval | hourly | daily | weekly`
+- `parseSchedule(text)` — parser NL em PT/EN: detecta "todo dia às 8h", "toda segunda", "a cada 30 min", "de manhã", "à noite", extrai hora com regex flexível
+- `describeSchedule(schedule)` — "Diariamente às 08:00", "Toda Seg às 09:00", "A cada 30 min"
+- `computeNextRunAt(schedule, from?)` — calcula próxima execução para cada tipo de schedule
+- `ScheduledJobsService`: `list()`, `get()`, `getDue()`, `create()`, `update()`, `delete()`, `markRan()` — raw SQL em `scheduled_jobs`
+- `create()` detecta schedule automaticamente da instruction; `update()` re-parseia se instruction mudar
+
+**`apps/desktop/src/jobs/job-executor.ts`** (novo):
+- `JobExecutor` — executa no main process (Electron)
+- `start()` — `setInterval(60s)` + execução imediata
+- `checkDueJobs()` — consulta `getDue()`, usa Set interno para evitar execuções duplicadas
+- `executeJob(job)` — chama `AiService.chatAgent()` com system prompt do agente + contexto do ContextBuilder; retorna resposta textual
+- Após execução: `Notification.show()` com título do job e primeiros 150 chars da resposta
+- `markRan()` chamado antes da execução para avançar nextRunAt (evita re-execução em reinícios lentos)
+- `runNow(id)` — execução imediata sob demanda via IPC
+
+**IPC (6 handlers):** `jobs:list`, `jobs:create`, `jobs:update`, `jobs:delete`, `jobs:toggle`, `jobs:runNow` — todos com `requireAuth()`
+
+**`AutomationsPage` (`apps/web/src/pages/AutomationsPage.tsx`):**
+- Header com contador: "N jobs · N ativos"
+- Cards com: emoji do agente, título, badge ativo/pausado, schedule description, próxima execução (relativa), último run
+- Expandir card: exibe instruction completa + último resultado
+- Ações por card: ▶ Executar agora · ToggleRight ativar/pausar · Trash excluir
+- Modal "Nova automação": textarea com instrução NL + preview live do schedule detectado + select do agente
+- Auto-refresh a cada 30s (atualiza nextRunAt / lastRunAt sem reload completo)
+- Rota `/automations` + nav item "Automações" com ícone `Timer`
+
+**Comportamento resultante (Ponto 7 fechado):**
+- Usuário escreve "Verifique esta VPS todo dia às 8h" → schedule detectado automaticamente ✅
+- Executor roda em background no main process mesmo sem interação do usuário ✅
+- Resultado aparece como notificação desktop + salvo em lastResult ✅
+- Cada agente pode ter suas próprias automações com KB context relevante ✅
+
+---
+
+## [3.41.0] — 2026-06-14
+
+### Adicionado — Ponto 5: Delegação estruturada (hierarquia de sub-agentes)
+
+**`packages/core/src/squad/agents.ts` — Jarvis system prompt:**
+- Jarvis agora conhece o formato `[DELEGAÇÃO]...[/DELEGAÇÃO]` para criar planos multi-agente
+- Instrução: cada linha `agentName: <objetivo autocontido>` — sub-agente receberá APENAS essa linha como contexto
+- Mantém delegação simples `@agente task` para casos de agente único
+
+**`apps/web/src/pages/SquadPage.tsx`:**
+- `DelegationItem { agent, objective }` + `DelegationPlan { items }` — interfaces locais
+- `parseDelegationPlan(text)` — parser do bloco `[DELEGAÇÃO]...[/DELEGAÇÃO]`; valida agent names; retorna `null` se bloco ausente
+- `streamAgent` — novo parâmetro `isolatedHistory?`: quando fornecido, substitui `bubblesRef.current` como histórico enviado ao backend → sub-agentes recebem `history: []` (contexto zerado)
+- Delegação estruturada (prioridade alta):
+  - Sistema exibe: `"🎯 @jarvis criou um plano com N sub-tarefas"`
+  - Por sub-tarefa: `"⚙ Delegando para @agent: objetivo truncado…"` → `streamAgent(agent, objective, sid, 'jarvis', 1, undefined, [])`
+  - Após todas: `"✓ Delegações concluídas — sintetizando resultados…"` → Jarvis recebe síntese com histórico completo (vê resultados de todos os sub-agentes)
+- Delegação simples `@mention` — mantida como fallback quando não há bloco estruturado
+
+**Comportamento resultante (Ponto 5 fechado):**
+- Jarvis decompõe tarefas complexas em sub-objetivos isolados ✅
+- Sub-agentes trabalham sem "ruído" da conversa completa — apenas seu objetivo específico ✅
+- Jarvis sintetiza os resultados automaticamente após todas as delegações ✅
+- Backward compatible: delegação por `@mention` continua funcionando ✅
+
+---
+
+## [3.40.0] — 2026-06-14
+
+### Adicionado — Ponto 4: Busca semântica em conversas
+
+**DB (`packages/db/src/index.ts`):**
+- `squad_messages_fts` — FTS5 virtual table indexando `content` e `agentName` de `squad_messages`
+- 4 triggers de sincronização: `smsg_ai` (INSERT), `smsg_ad` (DELETE), `smsg_au_del` / `smsg_au_ins` (UPDATE)
+- Migration idempotente: `INSERT INTO squad_messages_fts(squad_messages_fts) VALUES ('rebuild')`
+
+**`search:global` IPC handler:**
+- Agora retorna `{ knowledge, skills, conversations }` — terceiro campo com resultados de squad_messages
+- Query FTS5 com `snippet(squad_messages_fts, 0, '[[', ']]', '…', 24)` para highlight de trechos relevantes
+- Filtra mensagens `role != 'system'`, ordena por relevância FTS5 (`rank`), limite 15 resultados
+
+**`apps/web/src/lib/ipc.ts`:**
+- Interface `ConversationResult { id, sessionId, agentName, role, snippet, createdAt }` exportada
+- `ipc.search.global()` atualizado com tipo `conversations: ConversationResult[]`
+
+**`SearchPage` (`apps/web/src/pages/SearchPage.tsx`) — nova página:**
+- Input com debounce 350ms chamando `ipc.search.global()`
+- Resultados agrupados por categoria: Conversas (roxo) · Conhecimento (dourado) · Skills (verde)
+- Highlight automático dos termos encontrados — delimitadores `[[...]]` renderizados como `<mark>` estilizado
+- Cards de conversa mostram: emoji do agente, @nome, role, data, prefixo do sessionId
+- Empty state com ícones por categoria; estado "nenhum resultado" com sugestão
+- Rota `/search` adicionada ao Layout com ícone `Search`
+
+**Comportamento resultante (Ponto 4 fechado):**
+- Usuário pesquisa "erro nginx", "refactor", "deploy" e encontra mensagens antigas do Squad ✅
+- Resultados de KB e Skills aparecem na mesma tela ✅
+- Índice FTS5 mantido sincronizado automaticamente via triggers ✅
+- Conversas antigas indexadas via rebuild na inicialização ✅
+
+---
+
+## [3.39.0] — 2026-06-14
+
+### Adicionado — Ponto 6: Planejamento Persistente
+
+**TasksService (`packages/core/src/tasks/tasks.service.ts`):**
+- `AgentTask` interface: `id, title, description, status (TODO|IN_PROGRESS|BLOCKED|DONE), ownerAgent, priority (low|medium|high), projectId, sessionId, createdAt, updatedAt`
+- `list(filters?)`, `listActive()`, `get(id)`, `create(input)`, `update(id, input)`, `delete(id)` — queries raw SQLite em `agent_tasks` (tabela já existia desde v3.35.0)
+- `buildContext(tasks)` — formata tarefas pendentes como bloco `## TAREFAS PENDENTES DO SQUAD` com prioridade e status por extenso
+
+**IPC (5 handlers):** `tasks:list`, `tasks:get`, `tasks:create`, `tasks:update`, `tasks:delete` — todos com `requireAuth()`
+
+**ContextBuilder P3:** `this.tasks.listActive()` adicionado como terceira camada de contexto — até 20 tarefas não-DONE são injetadas automaticamente em todo stream do Squad
+
+**TasksPage (`apps/web/src/pages/TasksPage.tsx`):**
+- Kanban com 4 colunas: A fazer (cinza) · Em andamento (azul) · Bloqueada (vermelho) · Concluída (verde)
+- Cards com dot de prioridade colorido, emoji do agente dono, descrição truncada
+- Hover: botão "Iniciar / Concluir / Resetar" (avança status) + botão delete
+- Click no card: modal de edição com título, descrição, status, prioridade e agente
+- Botão "+ Nova tarefa" no header abre modal de criação
+- Counter no header: total de tarefas e quantas concluídas
+- Rota `/tasks` adicionada ao Layout com ícone `ClipboardList`
+
+**Comportamento resultante (Ponto 6 fechado):**
+- O usuário gerencia tarefas via Kanban visual ✅
+- Os agentes do Squad veem automaticamente as tarefas pendentes antes de responder ✅
+- Jarvis (e outros) podem criar/mover tarefas via IPC no futuro ✅
+
+---
+
+## [3.38.0] — 2026-06-14
+
+### Adicionado — Ponto 1: Memória Persistente (loop completo)
+
+**ContextBuilder — busca por relevância (FTS5):**
+- `KnowledgeService.buildContextFromEntries(entries, header?)` — novo método que formata um array de entradas como bloco de contexto; reutilizado por `buildContext()` e pelo novo fluxo FTS
+- `ContextBuilder.build()` atualizado: quando `query` é fornecido, chama `knowledge.search(query, 8)` (FTS5) para obter APENAS as entradas relevantes para a tarefa atual; fallback para `buildContext()` (todas as ativas) se a busca retornar vazio; quando sem query, comportamento original (todas as ativas)
+- `knowledgeCount` agora retorna o número real de entradas encontradas (antes era sempre 0 ou 1)
+
+**Loop de aprendizado — banner "Salvar Memória":**
+- Após pipeline completar: exibe banner dourado "Salvar esta solução na Memória do projeto?" junto ao banner de Skills
+- Após modo autônomo completar: mesmo banner disparado com task + último conteúdo do agente (até 600 chars) como resolução
+- Salva `knowledge_entry` com `category: 'geral'`, `tags: 'squad,auto'`, `isActive: true` via `ipc.knowledge.create()`
+- O usuário pode dispensar (X) ou confirmar — a entrada fica imediatamente pesquisável via FTS5 e é injetada nos próximos streams como memória relevante
+
+**Comportamento resultante (Ponto 1 fechado):**
+- Agente consulta memória automaticamente (v3.37.0 — ContextBuilder no stream) ✅
+- Memória consultada é filtrada por relevância à tarefa (FTS5) ✅
+- Novas memórias podem ser salvas automaticamente após tarefas ✅
+- Memória é pesquisável (FTS5 — v3.35.1) ✅
+
+---
+
+## [3.37.0] — 2026-06-14
+
+### Adicionado — Ponto 8: Contexto Inteligente Automático no Squad
+
+**ContextBuilder agora alimenta todos os streams do Squad:**
+- `ctxBuilder.build({ query: data.message })` substituiu a chamada direta a `knowledgeSvc.buildContext()` no handler `squad:stream:start`
+- O contexto injetado agora inclui dois níveis automáticos:
+  - **P1 — Knowledge Base ativa:** todas as entradas `isActive=true` de `knowledge_entries`, montadas por `KnowledgeService.buildContext()`
+  - **P2 — Skills matched:** `SkillsService.matchTriggers(message)` compara a mensagem do usuário contra os gatilhos de cada skill e inclui apenas as skills relevantes
+- Budget de 12 000 chars com truncamento automático (`[...contexto truncado]`) — evita inflação de contexto
+- Fallback gracioso: se o banco estiver indisponível ou FTS falhar, `ctxResult.text` fica vazio e o stream continua sem contexto (sem quebrar o fluxo)
+- O `projectContext` manual (formulário KB da sidebar) continua sendo injetado depois do contexto automático — o usuário mantém controle total sobre o contexto do projeto
+
+**Comportamento resultante:**
+- Todo agente do Squad (Jarvis, Friday, Tester, etc.) recebe automaticamente o conhecimento acumulado na KB e as skills relevantes para a tarefa atual
+- Não requer nenhuma ação do usuário — funciona em background a cada mensagem enviada
+
+---
+
+## [3.36.0] — 2026-06-14
+
+### Adicionado — Phase B: Delegação Inteligente (Agent Operating System)
+
+**Roteamento automático de tarefas no Squad:**
+- `ROUTING_RULES` — 11 regras com regex e score por agente: `friday` (implementação/código), `tester` (QA/testes), `reviewer` (code review/segurança), `devops` (deploy/infra), `shuri` (UX/design), `pepper` (marketing/copy), `vision` (métricas/growth), `requis` (documentação), `fury` (pesquisa), `jarvis` (planejamento)
+- `routeTask(text)` — score acumulativo por RegExp pattern, retorna `{ agent, confidence: 'high'|'medium', reason }` — confidence 'high' quando score ≥ 3
+- **Badge "🎯 Sugestão"** no Squad — aparece acima do textarea quando o texto digitado corresponde a um agente diferente do ativo; clique no badge muda o agente ativo; badge oculto quando input começa com `@agente` ou isStreaming
+- **Auto-route on send** — quando `confidence === 'high'` e não há `@mention` explícito, `handleSend` troca `targetAgent` e `activeAgent` automaticamente antes de enviar
+- Routing limpo no `handleSend` — `setSuggestedRoute(null)` após o envio, evita re-exibição do badge
+- Detecção debounced 500ms via `useEffect` — não bloqueia typing; reseta ao detectar `^@\w+`
+
+---
+
+## [3.35.1] — 2026-06-14
+
+### Adicionado — FTS5 virtual tables: busca semântica real
+
+**SQLite FTS5 para knowledge_entries e agent_skills:**
+- `CREATE VIRTUAL TABLE knowledge_fts USING fts5(...)` com `content_rowid="rowid"` — índice FTS5 externo sincronizado com a tabela de conteúdo
+- `CREATE VIRTUAL TABLE skills_fts USING fts5(...)` — mesmo padrão para skills
+- 8 triggers SQLite (`*_ai`, `*_ad`, `*_au_del`, `*_au_ins`) criados com `CREATE TRIGGER IF NOT EXISTS` — UPDATE split em 2 triggers separados para evitar BEGIN...END multi-statement
+- `INSERT INTO *_fts(*_fts) VALUES ('rebuild')` na seção de migrations — rebuild idempotente do índice ao inicializar (seguro para DBs existentes)
+- `buildFtsQuery(raw)` — helper que sanitiza input, split em palavras, adiciona `*` para prefix matching e retorna query FTS5 segura
+- `KnowledgeService.search(query, limit?)` — busca FTS5 com JOIN em `knowledge_entries` + `ORDER BY rank`; fallback LIKE automático se FTS indisponível
+- `SkillsService.search(query, limit?)` — mesma abordagem para `agent_skills` / `skills_fts`
+- `search:global` atualizado para usar `knowledgeSvc.search()` + `skillsSvc.search()` (FTS) ao invés de LIKE em memória
+- `knowledge:search` — novo IPC handler expondo `knowledgeSvc.search()` diretamente
+- `ipc.knowledge.search(query)` — novo método client-side em `ipc.ts`
+- **KnowledgePage** — busca agora usa FTS via `ipc.knowledge.search()` com debounce 400ms; spinner durante busca; fallback LIKE no cliente se FTS falhar
+- **SkillsPage** — busca agora usa FTS via `ipc.skills.search()` com debounce 400ms; spinner durante busca
+
+---
+
+## [3.35.0] — 2026-06-14
+
+### Adicionado — Phase A: Skills + Context Builder (Agent Operating System)
+
+**Sistema de Skills:**
+- Nova tabela `agent_skills` no SQLite — skills com título, descrição, categoria, gatilhos, conteúdo e exemplos
+- `SkillsService` em `packages/core/src/skills/` — CRUD completo, busca por LIKE, detecção por gatilhos (`matchTriggers`)
+- IPC handlers: `skills:list`, `skills:get`, `skills:create`, `skills:update`, `skills:delete`, `skills:search`, `skills:match`, `skills:incrementUsage`
+- **SkillsPage** (`/skills`) — lista, busca, criação, edição e exclusão de skills com UI dark
+
+**Integração Squad:**
+- Badge de skills pré-tarefa: quando o input do usuário dispara gatilhos de uma skill, exibe chips `⚡ NomeSkill` acima do textarea
+- Banner pós-pipeline: após pipeline concluído, pergunta "Deseja salvar esta solução como uma Skill reutilizável?" com botão de salvar automático
+- Detecção debounced (600ms) para não sobrecarregar
+
+**Context Builder:**
+- `ContextBuilder` em `packages/core/src/context/` — monta contexto priorizado: KB global → Skills por gatilho
+- IPC `context:build` retorna `{ text, knowledgeCount, skillCount }` com budget de 12.000 chars
+- IPC `search:global` retorna `{ knowledge, skills }` com busca unificada
+
+**Banco de dados:**
+- Novos campos em `knowledge_entries`: `source`, `projectId`, `relevanceScore`, `autoGenerated`, `usageCount`
+- Nova tabela `agent_tasks` para rastreamento de tarefas por agente (futuro)
+- Migrações incrementais aplicadas ao inicializar o banco
+
+**Navegação:**
+- Item "Skills" adicionado ao sidebar com ícone `BookOpenCheck`
+- Rota `/skills` registrada no App.tsx
+
+---
+
+## [3.34.0] — 2026-06-13
+
+### Corrigido — Pipeline completava prematuramente sem fazer nada
+
+**Problema:** Pipeline percorria todas as fases (Planejar → Implementar → Revisar → Testar → PR) em segundos sem que nenhum agente executasse trabalho real no projeto.
+
+**Causa raiz 1 — `runAgentUntilDone` saía quando agente respondia com texto:**
+- Quando Friday recebia os resultados de um READ_DIR e respondia com um plano em texto (sem ACTION tags), a função quebrava o loop com `if (!lastBubble.actions?.length) break`
+- O pipeline imediatamente avançava para Reviewer mesmo com nenhum arquivo criado
+- **Fix:** Ao invés de sair, envia um prompt de push `⚠️ EXECUTE AGORA — nenhuma ACTION foi emitida` com formato explícito, idêntico ao mecanismo do `autonomousLoop`. Máximo de 3 pushes consecutivos sem ação antes de desistir. Tracker `lastSeenId` previne loop infinito se agente não responder.
+
+**Causa raiz 2 — Jarvis e Reviewer chamados com `depth=0`:**
+- `depth=0` ativa auto-delegação ao final da stream — se Jarvis ou Reviewer mencionassem outro agente no texto, a delegação automática disparava Friday/Tester paralelamente ao pipeline, criando conflito
+- **Fix:** Ambos agora chamados com `depth=1` no pipeline (sem auto-delegação). Mensagem do Jarvis inclui instrução explícita "NÃO use ACTION tags" durante a fase de planejamento.
+
+---
+
+## [3.33.0] — 2026-06-13
+
+### Adicionado — Pipeline de agentes autônomo + Reviewer + DevOps
+
+**2 novos agentes:**
+- **Reviewer** (`🔎`) — revisa código com `READ_FILE`, avalia bugs/segurança (OWASP), emite `[APROVADO]` ou `[BLOQUEADO]`
+- **DevOps** (`🚀`) — cria commits (Conventional Commits), `git push`, abre PR com template Markdown
+
+**Modo Pipeline:**
+- Botão "Pipeline" no header — orquestra ciclo completo automaticamente ao receber uma tarefa
+- Stepper visual de fases: `🎯 Planejar → 👩‍💻 Implementar → 🔎 Revisar → 🧪 Testar → 🚀 PR → ✅ Pronto`
+- Se Reviewer emite `[BLOQUEADO]`, Friday corrige automaticamente antes de avançar para testes
+- Indicador de fase ativa no header durante execução
+
+---
+
+## [3.32.0] — 2026-06-14
+
+### Corrigido — Agentes não progrediam: 3 causas raiz resolvidas
+
+**Diagnóstico:** logs do SQLite (`cwm.db`) analisados — 64 mensagens da sessão revelaram 3 bugs críticos
+
+**Bug 1 (CRÍTICO) — Resultados das ações fora do histórico de conversa**
+- `streamAgent` passava o resultado como `message` para a API (correto para a iteração atual), mas nunca adicionava ao `bubblesRef` como bubble
+- Na próxima iteração, o `history` reconstruído do `bubblesRef` não incluía o resultado → histórico com mensagens consecutivas do assistente sem user turn entre elas → agentes sem contexto do que aconteceu
+- **Fix:** antes de chamar `streamAgent(agent, result, ...)` em `autonomousLoop` e `autoExecRound`, o resultado é adicionado como bubble oculto (`type:'user', isActionResult:true`) e salvo no DB com `role:'result'`
+- `streamAgent` recebe `excludeFromHistoryId` para evitar duplicação na API call atual, mas preserva o bubble para iterações futuras
+- `handleSend` também passa o ID do bubble do usuário como `excludeFromHistoryId`
+- `loadSession` mapeia `role:'result'` → `{ type:'user', isActionResult:true }` para restaurar contexto ao reabrir sessão
+- Chat UI filtra `isActionResult:true` (invisível para o usuário, só existe para o histórico do LLM)
+
+**Bug 2 (CRÍTICO) — `next dev` / `npm start` nunca terminavam**
+- SHELL action com `npx next dev` nunca saía → watchdog de 90s matava → agente recebia "Timeout" e travava
+- **Fix:** `handlers.ts` detecta comandos de servidor (`next dev`, `vite dev`, `npm run dev`, etc.) e usa lógica especial: captura os primeiros 8s de output, mata o processo, retorna output + mensagem "Servidor iniciado em background — acesse http://localhost:PORT"
+- O servidor CONTINUA rodando em background até a app fechar
+
+**Bug 3 — Agentes declaravam [PRONTO] sem evidência real**
+- Shuri declarou "aplicação rodando em localhost" apenas após criar diretórios (nenhum servidor foi iniciado)
+- **Fix:** `agents.ts` — adicionadas regras E9 (nunca [PRONTO] sem output REAL) e E10 (comportamento esperado de servidores em background)
+
+- Versão: `3.31.0` → `3.32.0`
+
+---
+
 ## [3.31.0] — 2026-06-13
 
 ### Corrigido — Travamentos + Agentes mais autônomos (soluções validadas pelo mercado)

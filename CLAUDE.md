@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`3.3.1` — Manual de Uso redesenhado (Mapa do App em cards por objetivo, guia para iniciantes); versão sincronizada em todos os arquivos
+`3.49.0` — SQUAD-02: Busca Web em Tempo Real — ACTION SEARCH para todos os agentes via Brave Search API; Fury reformulado para nunca inventar dados; badge WEB laranja no chat
 
 ## Regras de desenvolvimento
 

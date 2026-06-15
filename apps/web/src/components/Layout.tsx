@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Server, FolderOpen, Rocket,
   Settings, Activity, BookOpen, BarChart3, History,
-  Sparkles, Users, LogOut, User, BookMarked,
+  Sparkles, Users, LogOut, User, BookMarked, BookOpenCheck, ClipboardList, Search, Timer, Shield, Network, CalendarClock,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import logoUrl from '/logo-nexals.png'
@@ -18,6 +18,10 @@ const navItems = [
   { to: '/settings',    label: 'Configurações',  icon: Settings },
   { to: '/diagnostics', label: 'Diagnóstico',    icon: Activity },
   { to: '/knowledge',   label: 'Conhecimento',   icon: BookMarked },
+  { to: '/skills',      label: 'Skills',         icon: BookOpenCheck },
+  { to: '/tasks',       label: 'Tarefas',        icon: ClipboardList },
+  { to: '/search',      label: 'Busca',          icon: Search },
+  { to: '/automations', label: 'Automações',     icon: Timer },
   { to: '/help',        label: 'Manual',         icon: BookOpen },
 ]
 
@@ -113,6 +117,81 @@ export default function Layout() {
           >
             <Sparkles size={13} className="shrink-0" />
             AI HUB
+          </button>
+
+          <button
+            onClick={() => navigate('/planning')}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200"
+            style={{
+              background: 'rgba(245,158,11,0.07)',
+              border: '1px solid rgba(245,158,11,0.2)',
+              color: '#fcd34d',
+            }}
+            onMouseEnter={e => {
+              const t = e.currentTarget
+              t.style.background = 'rgba(245,158,11,0.14)'
+              t.style.borderColor = 'rgba(245,158,11,0.4)'
+              t.style.boxShadow = '0 0 16px rgba(245,158,11,0.12)'
+            }}
+            onMouseLeave={e => {
+              const t = e.currentTarget
+              t.style.background = 'rgba(245,158,11,0.07)'
+              t.style.borderColor = 'rgba(245,158,11,0.2)'
+              t.style.boxShadow = 'none'
+            }}
+          >
+            <CalendarClock size={13} className="shrink-0" />
+            PLANEJAR
+          </button>
+
+          <button
+            onClick={() => navigate('/workspace')}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200"
+            style={{
+              background: 'rgba(96,165,250,0.07)',
+              border: '1px solid rgba(96,165,250,0.18)',
+              color: '#93c5fd',
+            }}
+            onMouseEnter={e => {
+              const t = e.currentTarget
+              t.style.background = 'rgba(96,165,250,0.14)'
+              t.style.borderColor = 'rgba(96,165,250,0.35)'
+              t.style.boxShadow = '0 0 16px rgba(96,165,250,0.1)'
+            }}
+            onMouseLeave={e => {
+              const t = e.currentTarget
+              t.style.background = 'rgba(96,165,250,0.07)'
+              t.style.borderColor = 'rgba(96,165,250,0.18)'
+              t.style.boxShadow = 'none'
+            }}
+          >
+            <Network size={13} className="shrink-0" />
+            WORKSPACE
+          </button>
+
+          <button
+            onClick={() => navigate('/operator')}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200"
+            style={{
+              background: 'rgba(248,113,113,0.07)',
+              border: '1px solid rgba(248,113,113,0.18)',
+              color: '#f87171',
+            }}
+            onMouseEnter={e => {
+              const t = e.currentTarget
+              t.style.background = 'rgba(248,113,113,0.14)'
+              t.style.borderColor = 'rgba(248,113,113,0.35)'
+              t.style.boxShadow = '0 0 16px rgba(248,113,113,0.1)'
+            }}
+            onMouseLeave={e => {
+              const t = e.currentTarget
+              t.style.background = 'rgba(248,113,113,0.07)'
+              t.style.borderColor = 'rgba(248,113,113,0.18)'
+              t.style.boxShadow = 'none'
+            }}
+          >
+            <Shield size={13} className="shrink-0" />
+            OPERADOR
           </button>
 
           <button
@@ -214,7 +293,7 @@ export default function Layout() {
 
           <div>
             <p className="text-[10px] font-medium" style={{ color: 'rgba(217,164,65,0.6)' }}>
-              v3.31.0
+              v3.49.0
             </p>
             <p
               className="text-[9px] tracking-widest uppercase font-light"

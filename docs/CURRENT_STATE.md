@@ -1,17 +1,91 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
-**Data:** 2026-06-12
-**Versão:** 3.25.0
+**Data:** 2026-06-14
+**Versão:** 3.49.0
 **Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
 
 ## Estado atual
 
-**NEX-ALS IDE 3.25.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (8 agentes especializados com chat, ACTION tags SSH/local, KB por projeto, rootAgentRef, Pipeline homolog→prod, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude, **robocopy `/XD node_modules` obrigatório**), **KB Global do Desenvolvedor** (SQLite `knowledge_entries`, KnowledgeService, CRUD completo, injeção automática em Squad + AI HUB), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. **Visual NEX-ALS Dark Luxury** (paleta `#080612`/`#D9A441`/`#B78DFF`, logo, Inter font, glassmorphism). **IDE Phase 1 VS Code** (Semantic Highlighting via TypeScript worker, Breadcrumbs bar, Outline View). `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.49.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (10 agentes especializados com chat, ACTION tags SSH/local, KB por projeto, rootAgentRef, **Pipeline autônomo Jarvis→Friday→Reviewer→Tester→DevOps**, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude, **robocopy `/XD node_modules` obrigatório**, **Memória Persistente** entre sessões via SQLite com extração por IA, **Busca Web** via Brave Search API com ACTION SEARCH), **KB Global do Desenvolvedor** (SQLite `knowledge_entries`, KnowledgeService, CRUD completo, injeção automática em Squad + AI HUB), **Skills + Context Builder** (tabela `agent_skills`, SkillsPage, detecção automática por gatilhos, banner pós-pipeline, budget 12k chars), **Planning Mode** (PlanningPage com fila de tarefas + automações + contexto por agente configurável em localStorage, integração com SquadPage via `location.state`), **Workspace Intelligence** (análise automática via SSH lê manifests + fonte, WorkspacePage com 5 abas: Resumo/Arquitetura/Módulos/Fluxos/Riscos), **LSP auto-start local** (LocalLspBridge spawna `typescript-language-server --stdio` sem VPS, bridge Content-Length↔WebSocket em porta dinâmica), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. **Visual NEX-ALS Dark Luxury** (paleta `#080612`/`#D9A441`/`#B78DFF`, logo, Inter font, glassmorphism). **IDE Phase 1 VS Code** (Semantic Highlighting via TypeScript worker, Breadcrumbs bar, Outline View). `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
 
 ### Dois modos de operação
 
 - **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat IA (API direta ou claude -p); badge vermelho "Produção" na top bar.
 - **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
+
+## Phase C — Planning Mode (v3.47.0)
+
+- [x] **PlanningPage** (`/planning`) — fila de tarefas com ciclo de status (pendente → em progresso → concluída → falhou); automações configuráveis; strip de contexto por agente (localStorage `planning_agent_contexts`); botão "Executar" envia tarefa para SquadPage via `navigate('/squad', { state: { autoMessage, agent } })`
+- [x] **SquadPage — `location.state` handler** — `useEffect` no mount lê `state.agent` e `state.autoMessage`; pré-seleciona o agente e pré-preenche o input; `window.history.replaceState({}, '')` limpa o state após leitura
+- [x] **Layout.tsx — botão PLANEJAR** — botão âmbar (`rgba(245,158,11,...)`) acima de WORKSPACE; ícone `CalendarClock`; navigate para `/planning`
+- [x] **Contexto por agente** — cada agente (Jarvis, Friday, Fury…) tem campo de contexto individual; injetado no system prompt antes de `squad:stream:start`
+
+## SQUAD-02 — Busca Web em Tempo Real (v3.49.0)
+
+- [x] **ACTION SEARCH** — novo tipo `[ACTION:SEARCH query="..."][/ACTION]` para todos os agentes; interceptado em `executeActionsAuto` antes do IPC regular; chama `ipc.search.web` que acessa Brave Search API do main process (sem VPS)
+- [x] **Brave Search API** — handler `search:web` em `handlers.ts`; lê `braveApiKey` do banco; `GET https://api.search.brave.com/res/v1/web/search` com `X-Subscription-Token`; retorna markdown formatado com título/URL/descrição; free tier 2.000 queries/mês
+- [x] **`settings:brave:get` / `settings:brave:set`** — coluna `braveApiKey` adicionada via `ALTER TABLE settings ADD COLUMN` (idempotente); configurável em SettingsPage → seção "Busca Web"
+- [x] **Fury reformulado** — `FURY_ACTION_INSTRUCTIONS` com regras SEARCH-only; nunca inventa dados; sempre executa ACTION SEARCH antes de responder; cita URLs nas fontes
+- [x] **Badge WEB laranja** — ações do tipo search exibem badge `bg-orange-900/30 text-orange-400`; ícone 🌐 no activity log
+- [x] **SettingsPage — Brave API Key** — campo input com show/hide toggle, botão Salvar, link para registro na API Brave
+
+## SQUAD-01 — Memória Persistente (v3.48.0)
+
+- [x] **Tabela `squad_memories`** — auto-criada via `CREATE TABLE IF NOT EXISTS` no `handlers.ts` (sem db:push); colunas: id, projectKey, content, category, sessionId, agentName, createdAt; índice em `projectKey`
+- [x] **Schema Prisma** — modelo `SquadMemory` adicionado em `schema.prisma`; mapeado para `squad_memories`; todas as queries usam `$queryRawUnsafe` / `$executeRawUnsafe` (Prisma client não regenerado em runtime)
+- [x] **4 handlers IPC** — `squad:memory:list` (por projectKey), `squad:memory:save`, `squad:memory:delete`, `squad:memory:extract` (extrai até 6 memórias via Friday, persiste no banco)
+- [x] **`squad:memory:extract`** — carrega até 40 mensagens da sessão; chama Friday `chatAgent` com instrução de retornar JSON `[{content, category}]`; parseia e salva cada item; categorias: decisão/arquitetura/padrão/correção/outro
+- [x] **Injeção no `projectContext`** — `useMemo` em SquadPage mescla as últimas 20 memórias do projeto com a KB local antes de enviar ao squad stream
+- [x] **Aba "Memórias"** — 4ª aba no painel direito (ícone `Brain`, badge roxo com contagem); cards com badge de categoria colorido, conteúdo, data formatada, botão excluir no hover; botão "Extrair da sessão" (chama `squad:memory:extract`)
+- [x] **Escopo por projeto** — `projectKey = localPath || '__global__'`; memórias isoladas por projeto, mesma lógica da KB
+
+## Phase 2 — LSP auto-start local (v3.46.0)
+
+- [x] **`LocalLspBridge`** — spawna `typescript-language-server --stdio` via `child_process.spawn`; faz bridge entre Content-Length framing do LSP e mensagens WebSocket; servidor em porta dinâmica (0 → OS assign)
+- [x] **IPC `lsp:start`** — retorna `{ port }` para o renderer usar como `ws://localhost:{port}`; registrado no preload
+- [x] **`toggleLSP` no IDEPage** — detecta modo local (`isLocal`); usa `ipc.lsp.start()` com `portOverride` em vez de pedir porta manual ao usuário
+
+## Workspace Intelligence (v3.45.0) + Aprendizado Contínuo (v3.44.0)
+
+- [x] **`workspace:analyze`** — IPC handler: SSH lê manifests (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`), lê fonte de até 10 arquivos-chave, monta contexto 7k chars, chama Friday para retornar `WorkspaceReport` JSON (stack, modules, flows, risks)
+- [x] **WorkspacePage** (`/workspace`) — 5 abas: Resumo, Arquitetura, Módulos, Fluxos, Riscos; botão WORKSPACE na sidebar + botão na status bar do IDE
+- [x] **Aprendizado Contínuo (v3.44.0)** — IDE captura padrões dos arquivos abertos; `analyzeManifest()` detecta stack sem IA; botão "Aprender" chama Friday para gerar entrada KB estruturada; banner de sugestão KB para manifests reconhecidos
+
+## Phase A — Skills + Context Builder (v3.35.0)
+
+- [x] **`agent_skills` table** — SQLite: title, description, category, triggers (JSON array), content, examples, usageCount, autoGenerated
+- [x] **`agent_tasks` table** — SQLite: title, description, status (TODO/IN_PROGRESS/BLOCKED/DONE), ownerAgent, priority, projectId, sessionId
+- [x] **Campos estendidos `knowledge_entries`** — source, projectId, relevanceScore, autoGenerated, usageCount (migrations incrementais)
+- [x] **`SkillsService`** — `packages/core/src/skills/skills.service.ts`; CRUD, `search(query)`, `matchTriggers(text)`, `incrementUsage(id)`, `buildContext(skills[])`
+- [x] **`ContextBuilder`** — `packages/core/src/context/context-builder.ts`; monta contexto KB + Skills matched por query; budget 12.000 chars
+- [x] **IPC handlers** — `skills:*` (8 canais) + `context:build` + `search:global`; preload.ts atualizado
+- [x] **`ipc.ts` client** — `ipc.skills.*`, `ipc.context.build()`, `ipc.search.global()` com tipos `AgentSkill`, `AgentSkillInput`
+- [x] **SkillsPage** (`/skills`) — lista com busca, categorias coloridas, chips de gatilhos, contador de uso, form modal create/edit, confirm delete
+- [x] **Squad: badge pré-tarefa** — debounce 600ms detecta skills por trigger no input; chips `⚡ NomeSkill` acima da textarea
+- [x] **Squad: banner pós-pipeline** — após pipeline concluído, oferece salvar solução como Skill automática com `autoGenerated: true`
+- [x] **Sidebar** — item "Skills" com ícone `BookOpenCheck`; rota `/skills` registrada no App.tsx
+
+## Squad — Pipeline autônomo + Reviewer + DevOps (v3.33.0 → v3.34.0)
+
+- [x] **2 novos agentes** — `Reviewer` (🔎 cyan, Claude) revisa código com READ_FILE, avalia bugs/OWASP, emite `[APROVADO]` ou `[BLOQUEADO: issues]`; `DevOps` (🚀 indigo, Claude) cria commit Conventional Commits, verifica remote, git push, PR com template Markdown
+- [x] **Modo Pipeline** — botão "Pipeline" (índigo) no header; `runPipeline(task, sid)` orquestra 6 fases sequenciais automaticamente; stepper visual de fases no header durante execução
+- [x] **Fases do pipeline**: 🎯 Planejar (Jarvis) → 👩‍💻 Implementar (Friday) → 🔎 Revisar (Reviewer) → [3b: corrigir se BLOQUEADO] → 🧪 Testar (Tester) → 🚀 PR (DevOps) → ✅ Pronto
+- [x] **`runAgentUntilDone` robusto** — empurra agentes que respondem com texto-only (sem ACTION) via prompt push `⚠️ EXECUTE AGORA`, máximo 3 pushes; tracker `lastSeenId` previne loop infinito; só encerra em `[PRONTO]`/`[APROVADO]` ou maxIter
+- [x] **Fix depth pipeline** — Jarvis e Reviewer chamados com `depth=1` (sem auto-delegação paralela)
+- [x] **Fix git remote** — DevOps verifica `git remote -v` antes do push; se sem remote: informa commit local criado + instrução `git remote add origin <url>`; `buildErrorHint` trata código 128 ("no configured push destination")
+- [x] **EXECUTOR_RULES E11/E12** — E11: recovery de SHELL vazio com formato correto; E12: nunca assumir src/app/components sem verificar root primeiro via READ_DIR
+- [x] **skipRemainingReadDirs** — primeiro READ_DIR com ENOENT cancela os demais do batch; evita cascata de 5+ erros
+- [x] **Botão "Limpar histórico Squad"** — Settings → seção Squad → IPC `squad:session:clearAll`
+
+## Squad — Bug fixes críticos de estabilidade (v3.26.0 → v3.32.0)
+
+- [x] **v3.26.0** — watchdog 90s por chunk no Squad + AI Hub; cancelamento real do claude CLI via `proc.kill()`
+- [x] **v3.27.0** — `autoExecRound` verifica `stopRequestedRef` antes de cada rodada; `cancelStream()` seta o flag; `handleSend` reseta flag ao enviar
+- [x] **v3.28.0** — `autonomousLoop` não resetava o flag de cancel; `activeStreamIdRef` para leitura síncrona; delegação verifica stop a cada passo
+- [x] **v3.29.0** — `ResponseStreamer.cancel()` agora envia `done` ao renderer (fix do loop infinito em Friday); provider resolution prioriza `isDefault` das Settings em vez de `preferredProvider` hardcoded do agente
+- [x] **v3.30.0** — botão "Limpar histórico Squad" em Configurações
+- [x] **v3.31.0** — watchdog 90s para API providers; watchdog no renderer (60s backup); chunk batching 80ms; cancel signal em `executeActionsAuto`; `buildErrorHint()` com dicas por tipo de erro (ENOENT, npm, robocopy, timeout, permissão); `EXECUTOR_RULES` E1-E8
+- [x] **v3.32.0** — resultados das ações adicionados ao `bubblesRef` como bubble oculto (`isActionResult:true`) para compor histórico correto; `next dev`/`npm start` detectados e executados com lógica especial (8s de output + servidor fica em background); E9/E10 — nunca [PRONTO] sem evidência real
 
 ## IDE Phase 1 — tecnologia VS Code (v3.25.0)
 
