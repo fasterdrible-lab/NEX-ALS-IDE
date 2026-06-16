@@ -1,5 +1,42 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.50.0] — 2026-06-16
+
+### Adicionado — SQUAD-03: Expansão do SQUAD com 12 Agentes Especializados (ECC)
+
+Baseado na análise do repositório [affaan-m/ECC](https://github.com/affaan-m/ECC) (Agent Harness Operating System), 12 novos agentes especializados foram adicionados ao SQUAD, cobrindo gaps de segurança, arquitetura, performance, diagnóstico SSH e qualidade de código.
+
+**`packages/core/src/squad/agents.ts`:**
+
+**Agentes de revisão e segurança:**
+- `natasha` 🛡️ — Segurança / Vulnerabilidades: OWASP Top 10, secrets hardcoded, configuração Electron (nodeIntegration, sandbox, contextIsolation), IPC sem validação Zod. Emite [CRÍTICO]/[ALTO]/[MÉDIO]/[BAIXO]/[INFO], termina com [APROVADO] ou [BLOQUEADO]
+- `reviewer` já existia; Natasha foca exclusivamente em segurança
+- `riri` 🧠 — TypeScript Estrito: floating promises, async forEach, any sem justificativa, non-null assertions sem guard, module-level mutable state
+- `hope` ⚛️ — React / Hooks: dependências de useEffect, cleanup de effects, dangerouslySetInnerHTML, prop drilling. Pair com Riri para audits .tsx completos
+- `wanda` 🔮 — Cobertura de Testes em PRs: detecta funções modificadas sem teste atualizado, edge cases ausentes, assertions sem valor comportamental real
+
+**Agentes de arquitetura e design:**
+- `hank` 🏛️ — Arquitetura de Software: read-only, produz ADRs (Architecture Decision Records), detecta Big Ball of Mud, God Object, acoplamento entre camadas Electron
+- `bruce` 🔬 — Análise de Tipos TypeScript: avalia encapsulamento, invariantes, estados impossíveis; detecta branded types ausentes, union types com estados impossíveis, as any sem justificativa
+- `ghost` 👻 — Falhas Silenciosas: caça empty catch blocks, fallbacks perigosos (.catch(() => [])), I/O SSH/SFTP sem timeout, propagação quebrada de erros. Emite [FANTASMA] por ocorrência, termina com [LIMPO] ou [FANTASMAS: N]
+
+**Agentes de performance e diagnóstico:**
+- `rhodey` ⚡ — Performance & Otimização: React re-renders, bundle size, startup Electron, vazamentos de memória, conexões SSH/SFTP não reutilizadas. Métricas alvo: FCP <1.8s, LCP <2.5s, Bundle <200KB
+- `sam` 🌐 — SSH / VPS / Diagnóstico de Rede: diagnóstico OSI-layer de SSH/SFTP/tunnel, read-only, checklist por camada (L1-L4, DNS, autenticação, port-forward)
+- `scott` 🔧 — Erros de Build / Compilação TS: faz APENAS o build passar com mínima mudança de código; proibido refatorar, renomear ou mudar arquitetura
+
+**Agentes de supervisão e qualidade:**
+- `thor` 🌩️ — Supervisor de Loops Autônomos: monitora modo autônomo do SQUAD, detecta stalls, escalona ao @jarvis quando mesmo erro repete 2x, previne loops infinitos
+- `carol` ⭐ — Avaliadora de Qualidade do SQUAD: scorecard em 5 eixos (Acurácia, Completude, Clareza, Acionabilidade, Concisão) com veredicto estruturado [APROVADO/CORRIGIR/REEXECUTAR]
+
+**SQUAD antes:** 10 agentes | **SQUAD depois:** 22 agentes
+
+### Infraestrutura
+- Remote git migrado de `HEXAGON-WORKSPACE-MANAGER` para `NEX-ALS-IDE` (`https://github.com/fasterdrible-lab/NEX-ALS-IDE.git`)
+- CLAUDE.md atualizado com novo repositório
+
+---
+
 ## [3.49.0] — 2026-06-14
 
 ### Adicionado — SQUAD-02: Fury com Busca Web em Tempo Real

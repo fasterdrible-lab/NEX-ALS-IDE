@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`3.49.0` — SQUAD-02: Busca Web em Tempo Real — ACTION SEARCH para todos os agentes via Brave Search API; Fury reformulado para nunca inventar dados; badge WEB laranja no chat
+`3.50.0` — SQUAD-03: Expansão do SQUAD com 12 agentes especializados (ECC) — Natasha, Hank, Ghost, Rhodey, Bruce, Sam, Scott, Thor, Carol, Riri, Hope, Wanda; remote migrado para NEX-ALS-IDE
 
 ## Regras de desenvolvimento
 
