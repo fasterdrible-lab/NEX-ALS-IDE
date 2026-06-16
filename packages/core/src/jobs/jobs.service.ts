@@ -132,24 +132,24 @@ export class ScheduledJobsService {
   private get db() { return getPrismaClient() }
 
   async list(): Promise<ScheduledJob[]> {
-    return this.db.$queryRawUnsafe<ScheduledJob[]>(
+    return this.db.$queryRawUnsafe(
       `SELECT * FROM scheduled_jobs ORDER BY createdAt DESC`,
-    )
+    ) as Promise<ScheduledJob[]>
   }
 
   async get(id: string): Promise<ScheduledJob | null> {
-    const rows = await this.db.$queryRawUnsafe<ScheduledJob[]>(
+    const rows = await this.db.$queryRawUnsafe(
       `SELECT * FROM scheduled_jobs WHERE id = ?`, id,
-    )
+    ) as ScheduledJob[]
     return rows[0] ?? null
   }
 
   async getDue(): Promise<ScheduledJob[]> {
     const now = new Date().toISOString()
-    return this.db.$queryRawUnsafe<ScheduledJob[]>(
+    return this.db.$queryRawUnsafe(
       `SELECT * FROM scheduled_jobs WHERE isActive = 1 AND nextRunAt <= ? ORDER BY nextRunAt ASC`,
       now,
-    )
+    ) as Promise<ScheduledJob[]>
   }
 
   async create(input: ScheduledJobInput): Promise<ScheduledJob> {

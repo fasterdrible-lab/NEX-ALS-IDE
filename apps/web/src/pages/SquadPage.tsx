@@ -386,6 +386,7 @@ export default function SquadPage() {
   const [kb, setKb] = useState<KnowledgeBase>(() => loadKB('__global__'))
   const [kbOpen, setKbOpen] = useState(false)
   const [kbSection, setKbSection] = useState<keyof KnowledgeBase | null>(null)
+  const [memories, setMemories] = useState<SquadMemory[]>([])
   const projectContext = useMemo(() => {
     const kbStr = buildKBString(kb)
     if (memories.length === 0) return kbStr
@@ -463,7 +464,6 @@ export default function SquadPage() {
   const [rightTab, setRightTab] = useState<'history' | 'activity' | 'context' | 'memories'>('history')
 
   // ── Memória persistente ──────────────────────────────────────────────────────
-  const [memories, setMemories] = useState<SquadMemory[]>([])
   const [extracting, setExtracting] = useState(false)
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
 

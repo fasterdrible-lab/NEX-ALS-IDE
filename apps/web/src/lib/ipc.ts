@@ -347,6 +347,8 @@ export const ipc = {
   },
   search: {
     web: (data: { query: string; count?: number }) => invoke<{ output: string }>('search:web', data),
+    global: (query: string) =>
+      invoke<{ knowledge: KnowledgeEntry[]; skills: AgentSkill[]; conversations: ConversationResult[] }>('search:global', query),
   },
   shell: {
     openExternal: (url: string) => invoke<{ success: boolean; error?: string }>('shell:openExternal', url),
@@ -409,10 +411,6 @@ export const ipc = {
   context: {
     build: (opts?: { query?: string; maxChars?: number }) =>
       invoke<{ text: string; knowledgeCount: number; skillCount: number }>('context:build', opts),
-  },
-  search: {
-    global: (query: string) =>
-      invoke<{ knowledge: KnowledgeEntry[]; skills: AgentSkill[]; conversations: ConversationResult[] }>('search:global', query),
   },
   infra: {
     analyze: (report: string) => invoke<string>('infra:analyze', report),

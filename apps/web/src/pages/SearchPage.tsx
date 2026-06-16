@@ -3,7 +3,7 @@ import { Search, MessageSquare, BookMarked, Zap, Clock, ChevronRight, Loader2 } 
 import { ipc, type ConversationResult } from '../lib/ipc'
 import type { KnowledgeEntry } from '../lib/ipc'
 
-type AgentSkill = { id: string; title: string; description: string; category: string; triggers: string }
+type AgentSkill = { id: string; title: string; description: string; category: string; triggers: string[] }
 
 interface SearchResults {
   knowledge: KnowledgeEntry[]
@@ -208,7 +208,7 @@ export default function SearchPage() {
                         </p>
                       )}
                     </div>
-                    <ChevronRight size={14} style={{ color: 'rgba(248,248,252,0.2)', shrink: 0 }} />
+                    <ChevronRight size={14} style={{ color: 'rgba(248,248,252,0.2)', flexShrink: 0 }} />
                   </div>
                 </div>
               ))}
@@ -245,7 +245,7 @@ export default function SearchPage() {
                   </p>
                   {s.triggers && (
                     <p className="text-[10px] mt-1" style={{ color: 'rgba(248,248,252,0.25)' }}>
-                      gatilhos: {s.triggers.slice(0, 80)}
+                      gatilhos: {s.triggers.slice(0, 3).join(', ')}
                     </p>
                   )}
                 </div>
