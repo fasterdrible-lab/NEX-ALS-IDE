@@ -10,7 +10,13 @@
       "Bash(git -C \"c:/Users/phpos/OneDrive/Claude Workspace Manager\" add CHANGELOG.md CLAUDE.md AGENTE.md docs/CURRENT_STATE.md package.json apps/desktop/package.json apps/web/package.json apps/web/src/components/Layout.tsx apps/web/src/pages/Help.tsx)",
       "Bash(git -C \"c:/Users/phpos/OneDrive/Claude Workspace Manager\" add apps/web/src/pages/IDEPage.tsx)",
       "Bash(git -C 'c:/Users/phpos/OneDrive/Claude Workspace Manager' commit -m 'fix: suprimir warning stdin do claude -p com < /dev/null *)",
-      "Bash(git -C 'c:/Users/phpos/OneDrive/Claude Workspace Manager' commit -m 'fix: claude -p roda em /tmp com --allowedTools '\\\\'''\\\\'' para evitar pedido de permissão *)"
+      "Bash(git -C 'c:/Users/phpos/OneDrive/Claude Workspace Manager' commit -m 'fix: claude -p roda em /tmp com --allowedTools '\\\\'''\\\\'' para evitar pedido de permissão *)",
+      "Bash(ls \"c:\\\\Users\\\\phpos\\\\.git\" 2>&1 | head -20)",
+      "Read(//c/Users/phpos/.git/**)",
+      "Bash(git -C \"c:\\\\Users\\\\phpos\" remote -v)",
+      "Bash(git -C \"c:\\\\Users\\\\phpos\\\\OneDrive\\\\NEX-ALS IDE\" remote -v)",
+      "Bash(gh repo *)",
+      "PowerShell(gh repo view fasterdrible-lab/NEX-ALS-IDE --json name,description,isEmpty,defaultBranchRef 2>&1)"
     ]
   }
 }
