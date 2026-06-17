@@ -43,12 +43,12 @@ function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
   }))
 }
 
-async function fetchClaudeUsage(accessToken: string, _orgId: string): Promise<Record<string, unknown> | null> {
+async function fetchClaudeUsage(accessToken: string): Promise<Record<string, unknown> | null> {
   const https = await import('node:https')
   return new Promise(resolve => {
     const req = https.default.get({
-      hostname: 'claude.ai',
-      path: '/api/bootstrap',
+      hostname: 'api.anthropic.com',
+      path: '/api/oauth/usage',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
@@ -1044,18 +1044,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         .join('\n---\n')
         .slice(0, 6000)
 
-      const res = await aiSvc.chatAgent({
-        provider: AGENTS.friday.preferredProvider,
-        messages: [{
-          role: 'user',
-          content: `Analise esta conversa de um squad de agentes de IA e extraia as MEMÓRIAS mais importantes para persistir entre sessões futuras.\n\nCONVERSA:\n${conversation}\n\nResponda SOMENTE com JSON array válido (sem markdown):\n[{"content":"...","category":"decisão|arquitetura|padrão|correção|outro"}]\n\nRegras:\n- Máximo 6 memórias\n- Cada memória: factual, concisa (1-2 frases), útil para um agente novo que não viu esta conversa\n- category deve ser exatamente: decisão, arquitetura, padrão, correção, ou outro\n- Ignore saudações e trivialidades`,
-        }],
-        systemPrompt: 'Extrator de memórias de squad. Responda SOMENTE com JSON array válido, sem blocos de código markdown.',
-        tools: [],
-        maxTokens: 900,
-      })
-
-      const text = res.type === 'text' ? res.content : ((res as unknown as { text?: string }).text ?? '')
+      const text = await callAIOneShot(
+        `Analise esta conversa de um squad de agentes de IA e extraia as MEMÓRIAS mais importantes para persistir entre sessões futuras.\n\nCONVERSA:\n${conversation}\n\nResponda SOMENTE com JSON array válido (sem markdown):\n[{"content":"...","category":"decisão|arquitetura|padrão|correção|outro"}]\n\nRegras:\n- Máximo 6 memórias\n- Cada memória: factual, concisa (1-2 frases), útil para um agente novo que não viu esta conversa\n- category deve ser exatamente: decisão, arquitetura, padrão, correção, ou outro\n- Ignore saudações e trivialidades`,
+        'Extrator de memórias de squad. Responda SOMENTE com JSON array válido, sem blocos de código markdown.',
+        900,
+      )
       const match = text.match(/\[[\s\S]+\]/)
       if (!match) throw new Error('IA não retornou JSON válido')
 
@@ -1668,20 +1661,24 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       }
       if (!cred) return { error: 'Credenciais não encontradas. Execute "claude" no terminal para fazer login.' }
 
-      const acct = (cred.claudeAiOauthAccount as Record<string, unknown>) ?? {}
-      const tok = cred.claudeAiOauthToken
-      const accessToken = typeof tok === 'string' ? tok
-        : ((tok as Record<string, unknown>)?.accessToken as string ?? '')
-      const email   = (acct.emailAddress  as string) ?? ''
-      const plan    = (acct.planType      as string) ?? ''
-      const orgId   = (acct.organizationId as string) ?? ''
+      const oauth = (cred.claudeAiOauth as Record<string, unknown>) ?? {}
+      const accessToken = (oauth.accessToken as string) ?? ''
+      if (!accessToken) return { error: 'Token de acesso não encontrado. Execute "claude" no terminal para fazer login novamente.' }
 
-      let usageData: Record<string, unknown> | null = null
-      if (accessToken) {
-        usageData = await fetchClaudeUsage(accessToken, orgId).catch(() => null)
-      }
+      // Conta (email, organização, plano) vem de .claude.json → oauthAccount, não de .credentials.json
+      let account: Record<string, unknown> = {}
+      try {
+        const cfg = JSON.parse(await fs.readFile(path.join(configDir, '.claude.json'), 'utf-8')) as Record<string, unknown>
+        account = (cfg.oauthAccount as Record<string, unknown>) ?? {}
+      } catch { /* sem .claude.json — segue só com dados de uso */ }
 
-      return { email, plan, orgId, usageData }
+      const email        = (account.emailAddress    as string) ?? ''
+      const organization = (account.organizationName as string) ?? ''
+      const plan          = (account.organizationType as string) ?? (oauth.subscriptionType as string) ?? ''
+
+      const usage = await fetchClaudeUsage(accessToken).catch(() => null)
+
+      return { email, organization, plan, usage }
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) }
     }
@@ -1815,23 +1812,64 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     wrapHandler(() => { requireAuth(); return jobExecutor.runNow(id) })
   )
 
+  // ── Helper: chama IA respeitando o provider padrão + suporte claude-code ────────
+  async function callAIOneShot(userMessage: string, systemPrompt: string, maxTokens = 2048): Promise<string> {
+    // Resolve provider efetivo: default configurado → preferredProvider do agente (mesma lógica squad:stream:start)
+    let effectiveProvider = AGENTS.friday.preferredProvider
+    try {
+      const def = await (db.$queryRawUnsafe(
+        `SELECT provider FROM ai_providers WHERE isDefault=1 AND enabled=1 LIMIT 1`
+      ) as Promise<Array<{ provider: string }>>)
+      if (def[0]) effectiveProvider = def[0].provider
+    } catch { /* usa preferredProvider */ }
+
+    if (effectiveProvider === 'claude-code') {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { spawn } = require('child_process') as typeof import('child_process')
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const osM = require('os') as typeof import('os')
+      const { spawnEnv } = await getActiveClaudeEnv()
+      return new Promise<string>((resolve, reject) => {
+        const proc = spawn('claude', ['-p', '--output-format', 'text'], {
+          shell: true, env: spawnEnv, cwd: osM.homedir(),
+        })
+        let output = ''; let errOutput = ''
+        proc.stdout?.on('data', (d: Buffer) => { output += d.toString() })
+        proc.stderr?.on('data', (d: Buffer) => { errOutput += d.toString() })
+        // Embeds system prompt at start of stdin message
+        proc.stdin?.write(`${systemPrompt}\n\n---\n\n${userMessage}`, 'utf-8')
+        proc.stdin?.end()
+        const watchdog = setTimeout(() => { proc.kill(); reject(new Error('Timeout: claude não respondeu em 60s')) }, 60000)
+        proc.on('close', (code: number | null) => {
+          clearTimeout(watchdog)
+          if (output.trim()) resolve(output.trim())
+          else reject(new Error(errOutput.trim() || `claude saiu com código ${code}`))
+        })
+        proc.on('error', reject)
+      })
+    }
+
+    const res = await aiSvc.chatAgent({
+      provider: effectiveProvider,
+      messages: [{ role: 'user', content: userMessage }],
+      systemPrompt,
+      tools: [],
+      maxTokens,
+    })
+    return res.type === 'text' ? res.content : (res.text ?? '')
+  }
+
   // ── Aprendizado Contínuo — análise de arquivo com IA ────────────────────────
   ipcMain.handle('learning:analyzeFile', (_, data: { name: string; content: string; language: string }) =>
     wrapHandler(async () => {
       requireAuth()
       const VALID_CATS = ['geral','arquitetura','padrões','bibliotecas','convenções','snippets','regras','stack']
       const snippet = data.content.slice(0, 3000)
-      const res = await aiSvc.chatAgent({
-        provider: AGENTS.friday.preferredProvider,
-        messages: [{
-          role: 'user',
-          content: `Analise este arquivo de código e extraia os padrões mais relevantes para uma base de conhecimento.\n\nArquivo: ${data.name} (${data.language})\n\`\`\`\n${snippet}\n\`\`\`\n\nResponda SOMENTE em JSON (sem markdown):\n{"title":"...","content":"...","category":"padrões","tags":"..."}\n\nCategorias válidas: ${VALID_CATS.join('|')}\ncontent: markdown conciso descrevendo exports, classes, funções principais (máx 500 chars)`,
-        }],
-        systemPrompt: 'Analista de código. Responda SOMENTE com JSON válido, sem blocos de código markdown.',
-        tools: [],
-        maxTokens: 512,
-      })
-      const text = res.type === 'text' ? res.content : (res.text ?? '')
+      const text = await callAIOneShot(
+        `Analise este arquivo de código e extraia os padrões mais relevantes para uma base de conhecimento.\n\nArquivo: ${data.name} (${data.language})\n\`\`\`\n${snippet}\n\`\`\`\n\nResponda SOMENTE em JSON (sem markdown):\n{"title":"...","content":"...","category":"padrões","tags":"..."}\n\nCategorias válidas: ${VALID_CATS.join('|')}\ncontent: markdown conciso descrevendo exports, classes, funções principais (máx 500 chars)`,
+        'Analista de código. Responda SOMENTE com JSON válido, sem blocos de código markdown.',
+        512,
+      )
       const match = text.match(/\{[\s\S]+\}/)
       if (!match) throw new Error('Analisador não retornou JSON')
       const raw = JSON.parse(match[0]) as Record<string, unknown>
@@ -1893,18 +1931,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       const context = parts.join('\n\n').slice(0, 7000)
       if (!context.trim()) throw new Error('Não foi possível ler o projeto. Verifique o caminho e permissões SSH.')
 
-      const res = await aiSvc.chatAgent({
-        provider: AGENTS.friday.preferredProvider,
-        messages: [{
-          role: 'user',
-          content: `Analise este projeto e retorne UM JSON com a estrutura EXATA abaixo. SOMENTE JSON válido, sem markdown.\n\nPROJETO (${base}):\n${context}\n\nESTRUTURA:\n{"summary":"resumo em 2-3 frases","stack":["tech1","tech2"],"architecture":{"layers":[{"name":"...","description":"...","files":["..."]}],"patterns":["padrão1"]},"modules":[{"name":"...","path":"...","role":"controller|service|model|utility|config","imports":["..."],"risks":["..."]}],"flows":[{"name":"...","steps":["passo1","passo2"]}],"risks":[{"severity":"critical|high|medium|low","type":"...","description":"...","file":"..."}]}`,
-        }],
-        systemPrompt: 'Arquiteto de software sênior. Responda SOMENTE com JSON válido e completo. Sem blocos de código markdown.',
-        tools: [],
-        maxTokens: 3000,
-      })
-
-      const text = res.type === 'text' ? res.content : (res.text ?? '')
+      const text = await callAIOneShot(
+        `Analise este projeto e retorne UM JSON com a estrutura EXATA abaixo. SOMENTE JSON válido, sem markdown.\n\nPROJETO (${base}):\n${context}\n\nESTRUTURA:\n{"summary":"resumo em 2-3 frases","stack":["tech1","tech2"],"architecture":{"layers":[{"name":"...","description":"...","files":["..."]}],"patterns":["padrão1"]},"modules":[{"name":"...","path":"...","role":"controller|service|model|utility|config","imports":["..."],"risks":["..."]}],"flows":[{"name":"...","steps":["passo1","passo2"]}],"risks":[{"severity":"critical|high|medium|low","type":"...","description":"...","file":"..."}]}`,
+        'Arquiteto de software sênior. Responda SOMENTE com JSON válido e completo. Sem blocos de código markdown.',
+        3000,
+      )
       const match = text.match(/\{[\s\S]+\}/)
       if (!match) throw new Error('IA não retornou análise estruturada')
       const raw = JSON.parse(match[0]) as Record<string, unknown>
@@ -1928,17 +1959,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     wrapHandler(async () => {
       requireAuth()
       const cfg = AGENTS.devops
-      const res = await aiSvc.chatAgent({
-        provider: cfg.preferredProvider,
-        messages: [{
-          role: 'user',
-          content: `Analise este relatório de infraestrutura. Identifique problemas críticos, causas prováveis e ações imediatas recomendadas:\n\n${report}`,
-        }],
-        systemPrompt: cfg.systemPrompt,
-        tools: [],
-        maxTokens: 2048,
-      })
-      return res.type === 'text' ? res.content : (res.text ?? '')
+      return await callAIOneShot(
+        `Analise este relatório de infraestrutura. Identifique problemas críticos, causas prováveis e ações imediatas recomendadas:\n\n${report}`,
+        cfg.systemPrompt,
+        2048,
+      )
     })
   )
 
@@ -1956,10 +1981,10 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
   )
   ipcMain.handle('local:lsp:stop', () =>
-    wrapHandler(() => { localLsp.stop(); return { ok: true } })
+    wrapHandler(async () => { localLsp.stop(); return { ok: true } })
   )
   ipcMain.handle('local:lsp:status', () =>
-    wrapHandler(() => ({ running: localLsp.isRunning(), port: localLsp.getPort() }))
+    wrapHandler(async () => ({ running: localLsp.isRunning(), port: localLsp.getPort() }))
   )
 
   // ── Busca Global unificada (FTS5 em knowledge + skills + squad_messages) ──────
@@ -1971,10 +1996,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       const [knowledge, skills, conversations] = await Promise.all([
         knowledgeSvc.search(query, 10),
         skillsSvc.search(query, 10),
-        db.$queryRawUnsafe<{
-          id: string; sessionId: string; agentName: string; role: string
-          snippet: string; createdAt: string
-        }[]>(
+        (db.$queryRawUnsafe(
           `SELECT sm.id, sm.sessionId, sm.agentName, sm.role, sm.createdAt,
                   snippet(squad_messages_fts, 0, '[[', ']]', '…', 24) AS snippet
            FROM squad_messages_fts
@@ -1984,7 +2006,10 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
            ORDER BY rank
            LIMIT 15`,
           query.trim(),
-        ).catch(() => []),
+        ) as Promise<{
+          id: string; sessionId: string; agentName: string; role: string
+          snippet: string; createdAt: string
+        }[]>).catch(() => []),
       ])
       return { knowledge, skills, conversations }
     })

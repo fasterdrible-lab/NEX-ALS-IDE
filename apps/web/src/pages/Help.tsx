@@ -913,7 +913,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
           <KV items={[
             ['AI Hub', 'Usa conta Pro em todas as conversas — sem API Key'],
             ['IDE chat', 'Mesmo comportamento, zero custo extra'],
-            ['Squad', 'Todos os 8 agentes usam a conta Pro automaticamente'],
+            ['Squad', 'Todos os 22 agentes usam a conta Pro automaticamente'],
             ['Streaming', 'Texto aparece em tempo real igual ao modo API'],
           ]}/>
           <Info>O Claude Code v2.1+ já vem autenticado se você usou antes no VS Code. A IDE detecta automaticamente.</Info>
@@ -935,25 +935,37 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
   {
     id: 'squad',
     icon: Users,
-    title: 'Squad — Equipe de 10 agentes + Pipeline autônomo',
+    title: 'Squad — Equipe de 22 agentes + Pipeline autônomo',
     color: 'bg-indigo-600/20 text-indigo-400',
     content: (
       <div className="space-y-4">
         <p>O Squad substitui o chat com um único agente por uma <strong className="text-slate-100">equipe completa de especialistas</strong>. Cada agente tem papel, personalidade e provedor de IA próprios. Acesse pelo botão <strong className="text-slate-100">Squad</strong> na sidebar.</p>
 
         <div className="space-y-2">
-          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Os 10 agentes</p>
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Os 22 agentes</p>
           <KV items={[
-            ['🎯 Jarvis  (Claude)',  'PM / Orquestrador — coordena o time e delega tarefas'],
-            ['👩‍💻 Friday  (GPT)',    'Desenvolvedora Sênior — escreve e refatora código'],
-            ['🔍 Fury    (Gemini)', 'Pesquisa de Mercado — analisa concorrência e dados'],
-            ['🎨 Shuri   (Claude)', 'UX / Design — cria specs de interface e fluxos'],
-            ['📣 Pepper  (GPT)',    'Marketing / Brand — copy, posicionamento e comunicação'],
-            ['📊 Vision  (Gemini)', 'Growth / Métricas — funil, conversão e estratégia'],
-            ['📋 Requis  (Claude)', 'Documentação — requisitos técnicos com critério de aceite'],
-            ['🧪 Tester  (GPT)',    'QA / Testes — escreve e executa testes unitários e integração'],
-            ['🔎 Reviewer (Claude)', 'Code Review — lê código implementado, avalia OWASP, emite [APROVADO] ou [BLOQUEADO]'],
-            ['🚀 DevOps  (Claude)', 'Entrega — cria commits Conventional Commits, git push, abre PR com template Markdown'],
+            ['🎯 Jarvis',   'PM / Orquestrador — coordena o time e delega tarefas'],
+            ['👩‍💻 Friday',   'Desenvolvedora Sênior — escreve e refatora código'],
+            ['🔍 Fury',     'Pesquisa de Mercado — busca dados reais na internet antes de responder'],
+            ['🎨 Shuri',    'UX / Design — cria specs de interface e fluxos'],
+            ['📣 Pepper',   'Marketing / Brand — copy, posicionamento e comunicação'],
+            ['📊 Vision',   'Growth / Métricas — funil, conversão e estratégia'],
+            ['📋 Requis',   'Documentação — requisitos técnicos com critério de aceite'],
+            ['🧪 Tester',   'QA / Testes — escreve e executa testes unitários e integração'],
+            ['🔎 Reviewer', 'Code Review — avalia OWASP, emite [APROVADO] ou [BLOQUEADO]'],
+            ['🚀 DevOps',   'Entrega — Conventional Commits, git push, abre PR com template Markdown'],
+            ['🛡️ Natasha',  'Segurança — OWASP Top 10, secrets hardcoded, configuração Electron'],
+            ['🏛️ Hank',     'Arquitetura — produz ADRs, detecta God Object, acoplamento entre camadas'],
+            ['👻 Ghost',    'Falhas Silenciosas — empty catches, fallbacks perigosos, I/O sem timeout'],
+            ['⚡ Rhodey',   'Performance — re-renders React, bundle size, vazamentos de memória'],
+            ['🔬 Bruce',    'Tipos TypeScript — branded types, estados impossíveis, invariantes'],
+            ['🌐 Sam',      'SSH / VPS / Rede — diagnóstico OSI-layer, sshd_config, port forwarding'],
+            ['🔧 Scott',    'Erros de Build — faz o TypeScript compilar com mínimas mudanças'],
+            ['🌩️ Thor',     'Supervisor de Loops — detecta stalls, previne loops autônomos infinitos'],
+            ['🧠 Riri',     'TypeScript Estrito — floating promises, async forEach, any sem justificativa'],
+            ['⚛️ Hope',     'React / Hooks — dependências de useEffect, cleanups, acessibilidade'],
+            ['⭐ Carol',    'Qualidade do SQUAD — scorecard 5 eixos: Acurácia/Completude/Clareza/Acionabilidade/Concisão'],
+            ['🔮 Wanda',    'Cobertura de Testes — gaps em PRs, funções modificadas sem teste'],
           ]}/>
         </div>
 
@@ -1029,7 +1041,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            ['Versão', '3.34.0'],
+            ['Versão', '3.50.0'],
             ['Runtime', 'Electron + Node.js 22'],
             ['Interface', 'React 18 + Tailwind CSS'],
             ['Banco de dados', 'SQLite local (Prisma ORM)'],
@@ -1038,7 +1050,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
             ['Terminal', 'xterm.js multi-abas'],
             ['Segurança', 'AES-256, contextIsolation, fingerprint SSH'],
             ['IA', 'Anthropic · OpenAI · Gemini · DeepSeek · OpenRouter · Ollama'],
-            ['Repositório', 'github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER'],
+            ['Repositório', 'github.com/fasterdrible-lab/NEX-ALS-IDE'],
           ].map(([k, v]) => (
             <div key={k} className="flex gap-2">
               <span className="text-slate-500 w-28 shrink-0">{k}</span>
@@ -1064,7 +1076,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.34.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de 10 agentes com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), Claude Code (conta Pro sem API Key), Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.50.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), Claude Code (conta Pro sem API Key), Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}
@@ -1159,7 +1171,7 @@ export default function Help() {
               icon: Users,
               tag:  'Equipe de Agentes',
               name: 'Squad',
-              desc: '8 agentes especializados com pipeline homolog → prod.',
+              desc: '22 agentes especializados com pipeline autônomo completo.',
               dot:  'bg-indigo-400', accent: 'text-indigo-400',
               card: 'bg-indigo-950/25 border-indigo-800/30',
             },

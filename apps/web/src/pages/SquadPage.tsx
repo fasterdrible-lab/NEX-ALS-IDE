@@ -233,6 +233,22 @@ function fileIconColor(name: string): string {
   return map[ext] ?? 'text-slate-400'
 }
 
+function formatResetIn(isoDate?: string): string {
+  if (!isoDate) return ''
+  const diffMs = new Date(isoDate).getTime() - Date.now()
+  if (diffMs <= 0) return 'agora'
+  const hours = diffMs / 3_600_000
+  if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}min`
+  if (hours < 24) return `${Math.round(hours)}h`
+  return `${Math.round(hours / 24)}d`
+}
+
+function usageBarColor(pct: number): string {
+  if (pct >= 90) return 'bg-red-500'
+  if (pct >= 70) return 'bg-amber-500'
+  return 'bg-emerald-500'
+}
+
 // ── Client-side helpers ──────────────────────────────────────────────────────
 function detectDelegations(agentName: AgentName, text: string): AgentName[] {
   const lower = text.toLowerCase()
@@ -402,7 +418,12 @@ export default function SquadPage() {
   const [autoScroll, setAutoScroll] = useState(true)
   const [showUsage, setShowUsage] = useState(false)
   const [usageInfo, setUsageInfo] = useState<{
-    email?: string; plan?: string; usageData?: Record<string, unknown> | null; error?: string
+    email?: string; organization?: string; plan?: string
+    usage?: {
+      five_hour?: { utilization: number; resets_at: string }
+      seven_day?: { utilization: number; resets_at: string }
+    } | null
+    error?: string
   } | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
 
@@ -2689,13 +2710,13 @@ export default function SquadPage() {
           onClick={() => setShowUsage(false)}
         >
           <div
-            className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-80 shadow-2xl"
+            className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-96 shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
                 <User2 size={14} className="text-blue-400" />
-                Conta Claude
+                Conta & Uso
               </h2>
               <button
                 onClick={() => setShowUsage(false)}
@@ -2713,20 +2734,77 @@ export default function SquadPage() {
             )}
 
             {!usageLoading && usageInfo && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {usageInfo.error ? (
                   <p className="text-xs text-red-400 leading-relaxed">{usageInfo.error}</p>
                 ) : (
                   <>
-                    <div className="bg-slate-800/60 rounded-xl px-4 py-3">
-                      <p className="text-sm text-slate-100 font-medium">{usageInfo.email || '—'}</p>
-                      <p className="text-xs text-slate-500 mt-0.5 capitalize">
-                        {(usageInfo.plan || 'plan').replace(/_/g, ' ')}
-                      </p>
+                    {/* ── Conta ── */}
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Conta</p>
+                      <div className="bg-slate-800/60 rounded-xl px-4 py-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500">Auth method</span>
+                          <span className="text-xs text-slate-200">Claude AI</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500">Email</span>
+                          <span className="text-xs text-slate-200 truncate max-w-[180px]">{usageInfo.email || '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500">Organização</span>
+                          <span className="text-xs text-slate-200 truncate max-w-[180px]">{usageInfo.organization || '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500">Plano</span>
+                          <span className="text-xs text-slate-200 capitalize">{(usageInfo.plan || '—').replace(/_/g, ' ')}</span>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-slate-600 leading-relaxed">
-                      Para ver uso detalhado da sessão (5h) e semanal, abra o painel da conta no site.
-                    </p>
+
+                    {/* ── Uso ── */}
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Uso</p>
+                      <div className="bg-slate-800/60 rounded-xl px-4 py-3 space-y-3">
+                        {usageInfo.usage ? (
+                          <>
+                            {usageInfo.usage.five_hour && (
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-slate-300">Sessão (5h)</span>
+                                  <span className="text-xs text-slate-400">{Math.round(usageInfo.usage.five_hour.utilization)}%</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${usageBarColor(usageInfo.usage.five_hour.utilization)}`}
+                                    style={{ width: `${Math.min(100, usageInfo.usage.five_hour.utilization)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                            {usageInfo.usage.seven_day && (
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-slate-300">Semanal (7 dias)</span>
+                                  <span className="text-xs text-slate-400">{Math.round(usageInfo.usage.seven_day.utilization)}%</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${usageBarColor(usageInfo.usage.seven_day.utilization)}`}
+                                    style={{ width: `${Math.min(100, usageInfo.usage.seven_day.utilization)}%` }}
+                                  />
+                                </div>
+                                <p className="text-[10px] text-slate-600 mt-1">
+                                  Reinicia em {formatResetIn(usageInfo.usage.seven_day.resets_at)}
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-[11px] text-slate-600 leading-relaxed">Dados de uso indisponíveis no momento.</p>
+                        )}
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
@@ -2742,11 +2820,11 @@ export default function SquadPage() {
                 Atualizar
               </button>
               <button
-                onClick={() => void ipc.shell.openExternal('https://claude.ai/settings')}
+                onClick={() => void ipc.shell.openExternal('https://claude.ai/settings/usage')}
                 className="flex-1 flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-900/30 border border-blue-700/40 text-blue-300 hover:bg-blue-900/50 transition-colors"
               >
                 <ExternalLink size={10} />
-                Abrir claude.ai
+                Gerenciar em claude.ai
               </button>
             </div>
           </div>

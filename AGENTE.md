@@ -1,7 +1,7 @@
 # AGENTE.md — NEX-ALS IDE
 
-**Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
-**Remote local:** `git remote set-url origin https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git`
+**Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+**Remote local:** `git remote set-url origin https://github.com/fasterdrible-lab/NEX-ALS-IDE.git`
 
 ## O que o projeto faz
 
@@ -221,24 +221,36 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`v3.49.0` — **NEX-ALS IDE completo + Squad com Pipeline autônomo + Memória Persistente + Busca Web + Planning Mode**. IDE com Monaco/xterm/SFTP/Git + Semantic Highlighting + Breadcrumbs + Outline View + LSP auto-start local. NEX-ALS AI HUB com 6 providers + Claude Code. Squad com **10 agentes** (+ Reviewer + DevOps), ACTION tags (SHELL/READ_FILE/READ_DIR/WRITE_FILE/**SEARCH**), **Modo Pipeline autônomo** (Jarvis→Friday→Reviewer→Tester→DevOps), Exec auto, modo autônomo, KB por projeto, KB Global, robocopy `/XD node_modules`, **Memória Persistente** (tabela `squad_memories`, extração por IA, injeção automática), **Busca Web** (Brave Search API, ACTION SEARCH, Fury reformulado). **Skills + ContextBuilder** (detecção por gatilho, banner pós-pipeline). **Planning Mode** (PlanningPage, fila de tarefas, automações, contexto por agente). **Workspace Intelligence** (WorkspacePage 5 abas). **Visual NEX-ALS Dark Luxury** (paleta `#080612`/dourado/roxo). Ver `docs/CURRENT_STATE.md`.
+`v3.50.0` — **NEX-ALS IDE completo + Squad com 22 agentes especializados + Pipeline autônomo + Memória Persistente + Busca Web + Planning Mode + Conta & Uso**. IDE com Monaco/xterm/SFTP/Git + Semantic Highlighting + Breadcrumbs + Outline View + LSP auto-start local. NEX-ALS AI HUB com 6 providers + Claude Code. Squad com **22 agentes** (ECC expandido: Natasha/Hank/Ghost/Rhodey/Bruce/Sam/Scott/Thor/Riri/Hope/Carol/Wanda), ACTION tags (SHELL/READ_FILE/READ_DIR/WRITE_FILE/**SEARCH**), **Modo Pipeline autônomo** (Jarvis→Friday→Reviewer→Tester→DevOps), Exec auto, modo autônomo, KB por projeto, KB Global, robocopy `/XD node_modules`, **Memória Persistente** (tabela `squad_memories`, extração por IA, injeção automática), **Busca Web** (Brave Search API, ACTION SEARCH, Fury reformulado). **Skills + ContextBuilder** (detecção por gatilho, banner pós-pipeline). **Planning Mode** (PlanningPage, fila de tarefas, automações, contexto por agente). **Workspace Intelligence** (WorkspacePage 5 abas). **Conta & Uso** (painel com barras Session 5h + Weekly 7d via `api.anthropic.com/api/oauth/usage`). **Visual NEX-ALS Dark Luxury** (paleta `#080612`/dourado/roxo). Ver `docs/CURRENT_STATE.md`.
 
 ## Squad — visão geral
 
-10 agentes especializados com streaming em tempo real, delegação automática, execução de ações e **Pipeline autônomo**:
+22 agentes especializados com streaming em tempo real, delegação automática, execução de ações e **Pipeline autônomo**:
 
 | Agente | Papel | Provider |
 |---|---|---|
-| Jarvis | PM / Orquestrador | Claude |
-| Friday | Engenheira de Software Sênior | GPT |
-| Fury | Pesquisa de Mercado | Gemini |
-| Shuri | UX / Design | Claude |
-| Pepper | Marketing / Brand | GPT |
-| Vision | Growth / Métricas | Gemini |
-| Requis | Documentação | Claude |
-| Tester | QA / Testes | GPT |
-| Reviewer | Code Review (OWASP) | Claude |
-| DevOps | CI/CD & Entrega | Claude |
+| Jarvis 🎯 | PM / Orquestrador | Claude |
+| Friday 👩‍💻 | Engenheira de Software Sênior | GPT |
+| Fury 🔍 | Pesquisa de Mercado | Gemini |
+| Shuri 🎨 | UX / Design | Claude |
+| Pepper 📣 | Marketing / Brand | GPT |
+| Vision 📊 | Growth / Métricas | Gemini |
+| Requis 📋 | Documentação | Claude |
+| Tester 🧪 | QA / Testes | GPT |
+| Reviewer 🔎 | Code Review (OWASP) | Claude |
+| DevOps 🚀 | CI/CD & Entrega | Claude |
+| Natasha 🛡️ | Segurança / OWASP | Claude |
+| Hank 🏛️ | Arquitetura de Software (ADRs) | Claude |
+| Ghost 👻 | Falhas Silenciosas | Claude |
+| Rhodey ⚡ | Performance & Otimização | Claude |
+| Bruce 🔬 | Tipos TypeScript | Claude |
+| Sam 🌐 | SSH / VPS / Rede | Claude |
+| Scott 🔧 | Erros de Build | Claude |
+| Thor 🌩️ | Supervisor de Loops | Claude |
+| Riri 🧠 | TypeScript Estrito | Claude |
+| Hope ⚛️ | React / Hooks | Claude |
+| Carol ⭐ | Qualidade do SQUAD | Claude |
+| Wanda 🔮 | Cobertura de Testes | Claude |
 
 ### Modo Pipeline autônomo
 
@@ -309,7 +321,7 @@ Ver `docs/TASKS.md` — seção "Em andamento".
 7. Atualizar CURRENT_STATE.md ao mudar estado do projeto
 8. Atualizar ARCHITECTURE.md ao mudar decisões técnicas
 9. Sincronizar versão nos 3 `package.json` (raiz, desktop, web) + `Layout.tsx` badge
-10. Remote git aponta para `https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git`
+10. Remote git aponta para `https://github.com/fasterdrible-lab/NEX-ALS-IDE.git`
 
 ## Tabela de arquivos de risco
 
@@ -413,7 +425,7 @@ git pull
 - `claude:accounts:setActive` — ativa conta (define CLAUDE_CONFIG_DIR)
 - `claude:accounts:check` — verifica credenciais (.credentials.json)
 - `claude:accounts:delete` — remove conta
-- `claude:usage` — lê email + plano da conta ativa
+- `claude:usage` — lê email, organização e plano de `~/.claude/.credentials.json` + `~/.claude.json`; busca utilização via `api.anthropic.com/api/oauth/usage` (five_hour / seven_day); alimenta painel Conta & Uso no Squad
 
 ### knowledge:*
 - `knowledge:list` — lista todas as entradas da KB Global

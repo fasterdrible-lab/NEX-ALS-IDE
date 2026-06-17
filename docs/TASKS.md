@@ -4,6 +4,12 @@
 
 - [ ] **Phase D — Infraestrutura + Aprendizado** — operador de telemetria VPS, feedback loop, workspace intelligence
 
+## Concluídas recentemente (v3.49.0 → v3.50.0)
+
+- [x] **SQUAD-03: Expansão para 22 Agentes (v3.50.0)** — 12 novos agentes adicionados em `packages/core/src/squad/agents.ts`: Natasha (Segurança/OWASP), Hank (Arquitetura/ADRs), Ghost (Falhas Silenciosas), Rhodey (Performance), Bruce (Tipos TypeScript), Sam (SSH/VPS/Rede), Scott (Erros de Build), Thor (Supervisor de Loops), Riri (TypeScript Estrito), Hope (React/Hooks), Carol (Qualidade SQUAD), Wanda (Cobertura de Testes); `AGENT_NAMES` expandido de 10 para 22; instaladores gerados via `pnpm package:win`; remote renomeado para `NEX-ALS-IDE`; 5 erros TS pré-existentes corrigidos — 2026-06-16
+- [x] **Fix 401 Operador — `callAIOneShot` helper (v3.50.0)** — `infra:analyze`, `workspace:analyze`, `learning:analyzeFile` e `squad:memory:extract` agora resolvem o provider padrão das Settings; para `claude-code` usam subprocess com `getActiveClaudeEnv()`; elimina erro 401 ao usar conta Claude Code sem API key separada; UI corrigida (Help.tsx: v3.34.0→v3.50.0, "10 agentes"→"22 agentes", repo URL; Layout.tsx: v3.49.0→v3.50.0); instalador regenerado — 2026-06-16
+- [x] **Conta & Uso — painel com API real de utilização (v3.50.0)** — handler `claude:usage` corrigido: endpoint real `api.anthropic.com/api/oauth/usage`; credentials de `~/.claude/.credentials.json → claudeAiOauth.accessToken`; conta de `~/.claude.json → oauthAccount`; modal "Conta & Uso" no Squad reconstruído com barras de progresso Session (5h) e Weekly (7d) com cores adaptativas verde/âmbar/vermelho; link `claude.ai/settings/usage`; 3 erros TypeScript adicionais corrigidos (LSP handlers + `$queryRawUnsafe`); instalador regenerado — 2026-06-16
+
 ## Concluídas recentemente (v3.44.0 → v3.48.0)
 
 - [x] **SQUAD-02: Busca Web em Tempo Real (v3.49.0)** — ACTION SEARCH para todos os agentes via Brave Search API; Fury reformulado para nunca inventar dados; `settings:brave:*` IPC; badge WEB laranja; Activity log com ícone 🌐; configurável em Configurações — 2026-06-14

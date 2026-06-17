@@ -356,8 +356,11 @@ export const ipc = {
   claude: {
     check: () => invoke<{ installed: boolean; version: string }>('claude:check'),
     usage: () => invoke<{
-      email?: string; plan?: string; orgId?: string
-      usageData?: Record<string, unknown> | null
+      email?: string; organization?: string; plan?: string
+      usage?: {
+        five_hour?: { utilization: number; resets_at: string }
+        seven_day?: { utilization: number; resets_at: string }
+      } | null
       error?: string
     }>('claude:usage'),
     accounts: {

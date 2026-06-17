@@ -1,12 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
-**Data:** 2026-06-14
-**Versão:** 3.49.0
-**Repositório:** https://github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER.git
+**Data:** 2026-06-16
+**Versão:** 3.50.0
+**Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
 
 ## Estado atual
 
-**NEX-ALS IDE 3.49.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (10 agentes especializados com chat, ACTION tags SSH/local, KB por projeto, rootAgentRef, **Pipeline autônomo Jarvis→Friday→Reviewer→Tester→DevOps**, Execução Local, painéis redimensionáveis, histórico com exclusão, painel Conta Claude, **robocopy `/XD node_modules` obrigatório**, **Memória Persistente** entre sessões via SQLite com extração por IA, **Busca Web** via Brave Search API com ACTION SEARCH), **KB Global do Desenvolvedor** (SQLite `knowledge_entries`, KnowledgeService, CRUD completo, injeção automática em Squad + AI HUB), **Skills + Context Builder** (tabela `agent_skills`, SkillsPage, detecção automática por gatilhos, banner pós-pipeline, budget 12k chars), **Planning Mode** (PlanningPage com fila de tarefas + automações + contexto por agente configurável em localStorage, integração com SquadPage via `location.state`), **Workspace Intelligence** (análise automática via SSH lê manifests + fonte, WorkspacePage com 5 abas: Resumo/Arquitetura/Módulos/Fluxos/Riscos), **LSP auto-start local** (LocalLspBridge spawna `typescript-language-server --stdio` sem VPS, bridge Content-Length↔WebSocket em porta dinâmica), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. **Visual NEX-ALS Dark Luxury** (paleta `#080612`/`#D9A441`/`#B78DFF`, logo, Inter font, glassmorphism). **IDE Phase 1 VS Code** (Semantic Highlighting via TypeScript worker, Breadcrumbs bar, Outline View). `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes.
+**NEX-ALS IDE 3.50.0** — IDE completo com **NEX-ALS AI HUB** (6 provedores + Claude Code conta Pro, streaming SSE, conversas persistidas, Context Selector, Project Memory, ToolExecutor), **Squad** (**22 agentes especializados** com chat, ACTION tags SSH/local, KB por projeto, rootAgentRef, **Pipeline autônomo Jarvis→Friday→Reviewer→Tester→DevOps**, Execução Local, painéis redimensionáveis, histórico com exclusão, **painel Conta & Uso** (barras Session 5h + Weekly 7d via `api.anthropic.com/api/oauth/usage`), **robocopy `/XD node_modules` obrigatório**, **Memória Persistente** entre sessões via SQLite com extração por IA, **Busca Web** via Brave Search API com ACTION SEARCH), **KB Global do Desenvolvedor** (SQLite `knowledge_entries`, KnowledgeService, CRUD completo, injeção automática em Squad + AI HUB), **Skills + Context Builder** (tabela `agent_skills`, SkillsPage, detecção automática por gatilhos, banner pós-pipeline, budget 12k chars), **Planning Mode** (PlanningPage com fila de tarefas + automações + contexto por agente configurável em localStorage, integração com SquadPage via `location.state`), **Workspace Intelligence** (análise automática via SSH lê manifests + fonte, WorkspacePage com 5 abas: Resumo/Arquitetura/Módulos/Fluxos/Riscos), **LSP auto-start local** (LocalLspBridge spawna `typescript-language-server --stdio` sem VPS, bridge Content-Length↔WebSocket em porta dinâmica), Incident Mode, Deploy Assistant, **Agente Autônomo Local** (executa comandos, cria arquivos, instala dependências no PC sem VPS, loop até 500 ações com botão Parar), **Notificações de Sistema** (alertas disco/CPU/RAM + erro IA), Snapshot/Rollback, multi-monitor, fingerprint SSH e toda a infraestrutura IDE. **Visual NEX-ALS Dark Luxury** (paleta `#080612`/`#D9A441`/`#B78DFF`, logo, Inter font, glassmorphism). **IDE Phase 1 VS Code** (Semantic Highlighting via TypeScript worker, Breadcrumbs bar, Outline View). `pnpm dev` inicia sem erros. Build TypeScript zero erros em todos os pacotes. Instalador `NEX-ALS IDE Setup 3.50.0.exe` gerado via `pnpm package:win`.
 
 ### Dois modos de operação
 
@@ -19,6 +19,28 @@
 - [x] **SquadPage — `location.state` handler** — `useEffect` no mount lê `state.agent` e `state.autoMessage`; pré-seleciona o agente e pré-preenche o input; `window.history.replaceState({}, '')` limpa o state após leitura
 - [x] **Layout.tsx — botão PLANEJAR** — botão âmbar (`rgba(245,158,11,...)`) acima de WORKSPACE; ícone `CalendarClock`; navigate para `/planning`
 - [x] **Contexto por agente** — cada agente (Jarvis, Friday, Fury…) tem campo de contexto individual; injetado no system prompt antes de `squad:stream:start`
+
+## SQUAD-03 — Expansão para 22 Agentes (v3.50.0)
+
+- [x] **12 novos agentes adicionados** — baseados nos padrões do ECC Agent Harness OS; cada agente tem `label`, `role`, `preferredProvider`, `color`, `emoji`, `systemPrompt` com instruções especializadas, formato de saída obrigatório e regras anti-divagação
+- [x] **Natasha** 🛡️ — Segurança: auditoria OWASP Top 10, secrets hardcoded, autenticação fraca, configuração Electron; emite [APROVADO]/[BLOQUEADO]
+- [x] **Hank** 🏛️ — Arquitetura de Software: trade-offs, padrões, ADRs (Architecture Decision Records), anti-padrões; somente leitura, nunca escreve código
+- [x] **Ghost** 👻 — Falhas Silenciosas: empty catches, fallbacks perigosos, propagação quebrada, I/O sem timeout; formato [FANTASMA] por ocorrência
+- [x] **Rhodey** ⚡ — Performance: re-renders React, bundle size, startup Electron, SSH não reutilizado, vazamentos de memória; formato [GARGALO] por ocorrência
+- [x] **Bruce** 🔬 — Tipos TypeScript: encapsulamento, invariantes, branded types, estados impossíveis; análise em 4 dimensões; somente leitura
+- [x] **Sam** 🌐 — SSH/VPS/Rede: diagnóstico por camadas OSI, sshd_config, iptables, port forwarding; somente leitura, nunca altera configurações
+- [x] **Scott** 🔧 — Erros de Build: corrige apenas o que impede a compilação; roda `tsc --noEmit` antes e depois; só declara [PRONTO] com exit code 0
+- [x] **Thor** 🌩️ — Supervisor de Loops: checkpoints, detecção de stall, redução de escopo, gatilhos de escalação para @jarvis; não executa tarefas
+- [x] **Riri** 🧠 — TypeScript Estrito: floating promises, any sem justificativa, async forEach, empty catches, credenciais hardcoded; emite [APROVADO]/[BLOQUEADO]
+- [x] **Hope** ⚛️ — React/Hooks: dependências de useEffect, cleanups ausentes, mutação direta de estado, acessibilidade; emite [APROVADO]/[BLOQUEADO]
+- [x] **Carol** ⭐ — Qualidade do SQUAD: scorecard 5 eixos (Acurácia/Completude/Clareza/Acionabilidade/Concisão) com score 1–5; verifica afirmações com READ_FILE; veredicto Entregar/Corrigir/Reexecutar
+- [x] **Wanda** 🔮 — Cobertura de Testes: gaps CRÍTICO/IMPORTANTE/DESEJÁVEL em PRs; mapeia funções modificadas sem teste; não cria testes — delega a @tester
+- [x] **`AGENT_NAMES` expandido** — array de 10 para 22 entradas em `packages/core/src/squad/agents.ts`
+- [x] **Constantes compartilhadas** — `ACTION_INSTRUCTIONS`, `JARVIS_ACTION_INSTRUCTIONS`, `EXECUTOR_RULES`, `ANTI_DIVAGACAO`, `FURY_ACTION_INSTRUCTIONS` reutilizadas nos novos agentes
+- [x] **Instalador gerado** — `NEX-ALS IDE Setup 3.50.0.exe` + `NEX-ALS IDE 3.50.0.exe` (portable) via `pnpm package:win`; 5 erros TypeScript pré-existentes corrigidos antes do build
+- [x] **Remote atualizado** — `https://github.com/fasterdrible-lab/NEX-ALS-IDE.git` (renomeado de HEXAGON-WORKSPACE-MANAGER)
+- [x] **Conta & Uso — API real de utilização** — handler `claude:usage` corrigido para ler `claudeAiOauth.accessToken` de `.credentials.json` e chamar `api.anthropic.com/api/oauth/usage`; modal Squad reconstruído com barras de progresso Session (5h) e Semanal (7d), cores adaptativas, "Reinicia em Xd"; 3 erros TS adicionais corrigidos (LSP + `$queryRawUnsafe`); instalador regenerado
+- [x] **Fix 401 Operador — `callAIOneShot`** — helper adicionado em `handlers.ts`; resolve provider padrão de `ai_providers WHERE isDefault=1`; para `claude-code` spawna subprocess com `getActiveClaudeEnv()`, watchdog 60s; `infra:analyze`, `workspace:analyze`, `learning:analyzeFile` e `squad:memory:extract` atualizados; UI corrigida (Help.tsx v3.50.0, 22 agentes, repo NEX-ALS-IDE; Layout.tsx footer); instalador regenerado
 
 ## SQUAD-02 — Busca Web em Tempo Real (v3.49.0)
 
@@ -34,7 +56,7 @@
 - [x] **Tabela `squad_memories`** — auto-criada via `CREATE TABLE IF NOT EXISTS` no `handlers.ts` (sem db:push); colunas: id, projectKey, content, category, sessionId, agentName, createdAt; índice em `projectKey`
 - [x] **Schema Prisma** — modelo `SquadMemory` adicionado em `schema.prisma`; mapeado para `squad_memories`; todas as queries usam `$queryRawUnsafe` / `$executeRawUnsafe` (Prisma client não regenerado em runtime)
 - [x] **4 handlers IPC** — `squad:memory:list` (por projectKey), `squad:memory:save`, `squad:memory:delete`, `squad:memory:extract` (extrai até 6 memórias via Friday, persiste no banco)
-- [x] **`squad:memory:extract`** — carrega até 40 mensagens da sessão; chama Friday `chatAgent` com instrução de retornar JSON `[{content, category}]`; parseia e salva cada item; categorias: decisão/arquitetura/padrão/correção/outro
+- [x] **`squad:memory:extract`** — carrega até 40 mensagens da sessão; usa `callAIOneShot` (respeita provider padrão das Settings, suporta `claude-code`) com instrução de retornar JSON `[{content, category}]`; parseia e salva cada item; categorias: decisão/arquitetura/padrão/correção/outro
 - [x] **Injeção no `projectContext`** — `useMemo` em SquadPage mescla as últimas 20 memórias do projeto com a KB local antes de enviar ao squad stream
 - [x] **Aba "Memórias"** — 4ª aba no painel direito (ícone `Brain`, badge roxo com contagem); cards com badge de categoria colorido, conteúdo, data formatada, botão excluir no hover; botão "Extrair da sessão" (chama `squad:memory:extract`)
 - [x] **Escopo por projeto** — `projectKey = localPath || '__global__'`; memórias isoladas por projeto, mesma lógica da KB

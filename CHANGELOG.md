@@ -35,6 +35,50 @@ Baseado na análise do repositório [affaan-m/ECC](https://github.com/affaan-m/E
 - Remote git migrado de `HEXAGON-WORKSPACE-MANAGER` para `NEX-ALS-IDE` (`https://github.com/fasterdrible-lab/NEX-ALS-IDE.git`)
 - CLAUDE.md atualizado com novo repositório
 
+### Corrigido — Erro 401 no Operador e em análises de IA (`callAIOneShot`)
+
+**`apps/desktop/src/ipc/handlers.ts`:**
+- Adicionado helper `callAIOneShot(userMessage, systemPrompt, maxTokens)`: resolve o provider padrão da tabela `ai_providers WHERE isDefault=1` (igual ao `squad:stream:start`); para `claude-code` spawna subprocess `claude -p --output-format text` com `getActiveClaudeEnv()`; watchdog 60s; para outros providers chama `aiSvc.chatAgent`
+- `infra:analyze` atualizado: de `aiSvc.chatAgent({ provider: AGENTS.devops.preferredProvider })` → `callAIOneShot(...)` — elimina erro 401 no Operador ao usar conta Claude Code
+- `workspace:analyze` atualizado: de `aiSvc.chatAgent({ provider: AGENTS.friday.preferredProvider })` → `callAIOneShot(...)` — análise de workspace sem API key
+- `learning:analyzeFile` atualizado: de `aiSvc.chatAgent({ provider: AGENTS.friday.preferredProvider })` → `callAIOneShot(...)` — aprendizado contínuo sem API key
+- `squad:memory:extract` atualizado: de `aiSvc.chatAgent({ provider: AGENTS.friday.preferredProvider })` → `callAIOneShot(...)` — extração de memórias sem API key
+
+**`apps/web/src/pages/Help.tsx`:**
+- Versão na seção "Sobre": `3.34.0` → `3.50.0`; repositório: `HEXAGON-WORKSPACE-MANAGER` → `NEX-ALS-IDE`
+- Cabeçalho: `v3.34.0` + "10 agentes" → `v3.50.0` + "22 agentes especializados"
+- Lista de agentes expandida de 10 para 22 (adicionados Natasha, Hank, Ghost, Rhodey, Bruce, Sam, Scott, Thor, Riri, Hope, Carol, Wanda)
+- Cards SQUAD: "8 agentes" → "22 agentes especializados com pipeline autônomo completo"
+
+**`apps/web/src/components/Layout.tsx`:**
+- Badge de versão no footer da sidebar: `v3.49.0` → `v3.50.0`
+
+**Resultado:** botão "Analisar com DevOps" no Operador, análise de Workspace, Aprendizado Contínuo e extração de Memórias do Squad funcionam corretamente com conta Claude Code — sem necessidade de API key separada.
+
+### Adicionado — Conta & Uso com API real de utilização
+
+**`apps/desktop/src/ipc/handlers.ts`:**
+- `fetchClaudeUsage(accessToken)` corrigida: endpoint real `GET https://api.anthropic.com/api/oauth/usage` (Bearer token); campos `five_hour.utilization`, `five_hour.resets_at`, `seven_day.utilization`, `seven_day.resets_at`
+- Handler `claude:usage` reescrito: lê `~/.claude/.credentials.json → claudeAiOauth.accessToken` (campo real — antes lia `claudeAiOauthToken` que não existe); lê `~/.claude.json → oauthAccount` para email, `organizationName`, `organizationType`
+- 3 erros TypeScript pré-existentes corrigidos: `local:lsp:stop` e `local:lsp:status` precisavam de lambda `async` para satisfazer `wrapHandler`; `$queryRawUnsafe` no `search:global` corrigido com cast pattern ao invés de generic inválido
+
+**`apps/web/src/lib/ipc.ts`:**
+- Tipo de retorno de `ipc.claude.usage()` atualizado: `{ email?, organization?, plan?, usage?: { five_hour?, seven_day? } | null, error? }`
+
+**`apps/web/src/pages/SquadPage.tsx`:**
+- Helpers de módulo: `formatResetIn(isoDate)` (converte ms → "Xmin/Xh/Xd") + `usageBarColor(pct)` (≥90% vermelho, ≥70% âmbar, demais verde)
+- Modal "Conta & Uso" (w-96) reconstruído:
+  - Seção **CONTA**: Auth method "Claude AI", Email, Organização, Plano (`.replace(/_/g, ' ')`)
+  - Seção **USO**: barra de progresso **Sessão (5h)** com %, barra de progresso **Semanal (7 dias)** com % + "Reinicia em Xd"
+  - Link para `claude.ai/settings/usage`; botão "Gerenciar em claude.ai"
+- Estado `usageInfo` tipado com nova interface
+
+**Comportamento resultante:**
+- Botão "Uso" no Squad → modal exibe email, organização, plano e barras de consumo reais ✅
+- Cores adaptativas: verde <70% · âmbar 70-89% · vermelho ≥90% ✅
+- "Reinicia em Xd" calculado dinamicamente a partir de `resets_at` da API ✅
+- Instalador `NEX-ALS IDE Setup 3.50.0.exe` + portable regenerados com todas as mudanças ✅
+
 ---
 
 ## [3.49.0] — 2026-06-14

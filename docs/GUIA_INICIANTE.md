@@ -305,24 +305,38 @@ O card mostrará "Não encontrado" com instruções de instalação. Após insta
 
 ## O Squad — sua equipe de agentes de IA
 
-O **Squad** é a funcionalidade mais poderosa do NEX-ALS IDE. Em vez de conversar com um único agente de IA, você tem uma **equipe completa de 8 especialistas**, cada um com um papel diferente — como um time de desenvolvimento real.
+O **Squad** é a funcionalidade mais poderosa do NEX-ALS IDE. Em vez de conversar com um único agente de IA, você tem uma **equipe completa de 22 especialistas**, cada um com um papel diferente — como um time de desenvolvimento real.
 
 Acesse pelo botão **Squad** na barra lateral esquerda.
 
 ---
 
-### Os 8 agentes
+### Os 22 agentes
 
-| Agente | Papel | IA usada | Para que serve |
-|--------|-------|----------|----------------|
-| **Jarvis** 🎯 | PM / Orquestrador | Claude | Coordena o time, define prioridades, delega tarefas |
-| **Friday** 👩‍💻 | Desenvolvedora | GPT | Escreve e refatora código |
-| **Fury** 🔍 | Pesquisa de Mercado | Gemini | Analisa concorrência, dados e tendências |
-| **Shuri** 🎨 | UX / Design | Claude | Cria especificações de interface e fluxos de usuário |
-| **Pepper** 📣 | Marketing / Brand | GPT | Cria textos, copy e estratégias de comunicação |
-| **Vision** 📊 | Growth / Métricas | Gemini | Analisa funil, métricas e estratégias de crescimento |
-| **Requis** 📋 | Documentação | Claude | Documenta requisitos técnicos com critérios de aceite |
-| **Tester** 🧪 | QA / Testes | GPT | Cria planos de teste e identifica bugs |
+| Agente | Papel | Para que serve |
+|--------|-------|----------------|
+| **Jarvis** 🎯 | PM / Orquestrador | Coordena o time, define prioridades, delega tarefas |
+| **Friday** 👩‍💻 | Engenheira de Software | Escreve e refatora código, executa builds e instalações |
+| **Fury** 🔍 | Pesquisa de Mercado | Busca dados reais na internet antes de qualquer afirmação |
+| **Shuri** 🎨 | UX / Design | Cria specs de interface e fluxos de usuário |
+| **Pepper** 📣 | Marketing / Brand | Cria textos, copy e estratégias de comunicação |
+| **Vision** 📊 | Growth / Métricas | Analisa funil, métricas e estratégias de crescimento |
+| **Requis** 📋 | Documentação | Documenta requisitos funcionais e não-funcionais com critérios de aceite |
+| **Tester** 🧪 | QA / Testes | Cria planos de teste, identifica bugs e valida critérios de aceite |
+| **Reviewer** 🔎 | Code Review | Revisa código, detecta bugs e vulnerabilidades OWASP; emite [APROVADO]/[BLOQUEADO] |
+| **DevOps** 🚀 | CI/CD & Entrega | Cria commits Conventional Commits, abre PRs, garante entrega segura |
+| **Natasha** 🛡️ | Segurança | Detecta vulnerabilidades OWASP, secrets hardcoded e autenticação fraca |
+| **Hank** 🏛️ | Arquitetura de Software | Avalia trade-offs, define padrões arquiteturais e produz ADRs |
+| **Ghost** 👻 | Falhas Silenciosas | Detecta catch vazios, fallbacks perigosos e I/O sem timeout |
+| **Rhodey** ⚡ | Performance & Otimização | Perfila gargalos, re-renders, bundle size e vazamentos de memória |
+| **Bruce** 🔬 | Tipos TypeScript | Analisa design de tipos, branded types e estados impossíveis |
+| **Sam** 🌐 | SSH / VPS / Rede | Diagnostica SSH, SFTP, tunelamento e conectividade VPS |
+| **Scott** 🔧 | Erros de Build | Faz o build TypeScript passar com o mínimo de mudanças |
+| **Thor** 🌩️ | Supervisor de Loops | Monitora loops autônomos, detecta stalls e previne travamentos |
+| **Riri** 🧠 | TypeScript Estrito | Audita floating promises, `any` sem justificativa e empty catches |
+| **Hope** ⚛️ | React / Hooks | Audita componentes React: hooks, re-renders e acessibilidade |
+| **Carol** ⭐ | Qualidade do SQUAD | Avalia respostas dos agentes com scorecard de 5 eixos |
+| **Wanda** 🔮 | Cobertura de Testes | Detecta gaps de cobertura em PRs e mapeia casos de teste ausentes |
 
 ---
 
@@ -347,13 +361,15 @@ Se o Jarvis mencionar `@friday` na resposta dele, o Friday entra automaticamente
 
 Quando um agente (principalmente Friday e Tester) precisa executar algo no servidor, ele gera um **bloco de ação** — uma caixa especial com um botão **Executar**.
 
-Existem 3 tipos de blocos:
+Existem 5 tipos de blocos:
 
 | Tipo | Cor | O que faz |
 |------|-----|-----------|
 | **SHELL** | Amarelo | Executa um comando no terminal da VPS |
 | **WRITE** | Azul | Cria ou sobrescreve um arquivo na VPS |
 | **READ** | Cinza | Lê o conteúdo de um arquivo da VPS |
+| **READ_DIR** | Cinza | Lista os arquivos de uma pasta na VPS |
+| **SEARCH** | Laranja | Busca informações na internet via Brave Search API |
 
 **Exemplo real:** Friday gera um bloco SHELL para instalar dependências:
 ```
@@ -442,7 +458,7 @@ Agente gera um bloco de ação
 | Fingerprint | "Impressão digital" do servidor para verificar autenticidade |
 | Snapshot | Cópia de segurança de um arquivo antes de modificar |
 | Streaming | Resposta da IA aparecendo palavra por palavra, em tempo real |
-| Squad | Equipe de 8 agentes de IA especialistas integrada ao IDE |
+| Squad | Equipe de 22 agentes de IA especialistas integrada ao IDE |
 | Delegação | Quando um agente encaminha uma tarefa automaticamente para outro |
 | Bloco de ação | Caixa gerada pela IA com um comando pronto para executar na VPS |
 | Homolog | Servidor de teste — igual à produção, mas sem usuários reais |
@@ -450,5 +466,5 @@ Agente gera um bloco de ação
 
 ---
 
-*NEX-ALS IDE v3.11.0 — NEX-ALS*
-*github.com/fasterdrible-lab/HEXAGON-WORKSPACE-MANAGER*
+*NEX-ALS IDE v3.50.0 — NEX-ALS*
+*github.com/fasterdrible-lab/NEX-ALS-IDE*
