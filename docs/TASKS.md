@@ -3,7 +3,10 @@
 ## Em andamento
 
 - [ ] **Phase D — Infraestrutura + Aprendizado** — operador de telemetria VPS, feedback loop, workspace intelligence
-- [ ] **SQUAD-04 — Autonomia: push com contexto de tarefa** — quando `autonomousLoop` empurra um agente não-root que respondeu sem ACTION tags, a mensagem de push deve incluir o objetivo original da tarefa (guardado por ref ao iniciar a delegação) para que o agente saiba o que deve executar; sem isso o agente recebe apenas "EXECUTE AGORA" sem contexto e falha novamente. Solução: adicionar `taskContextRef` em `SquadPage.tsx` que é populado ao iniciar cada delegação e injetado no push.
+
+## Concluídas recentemente (v3.50.0 → v3.51.0)
+
+- [x] **SQUAD-04: Autonomia — push com contexto de tarefa (v3.51.0)** — `agentTaskContextRef` (`Map<AgentName, string>`) adicionado em `SquadPage.tsx`; populado em `handleSend`, delegações estruturadas `[DELEGAÇÃO]`, delegações por `@mention` e em cada fase do `runPipeline`; `autonomousLoop` e `runAgentUntilDone` incluem "Sua tarefa: ..." no push de recuperação; map limpo a cada nova mensagem do usuário — 2026-06-21
 
 ## Concluídas recentemente (v3.49.0 → v3.50.0)
 

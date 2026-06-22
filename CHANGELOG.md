@@ -1,5 +1,23 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.51.0] — 2026-06-21
+
+### Corrigido — SQUAD-04: Autonomia — push com contexto de tarefa
+
+**Causa raiz identificada:** quando um agente delegado (ex: Friday) respondia com texto em vez de ACTION tags, o `autonomousLoop` e o `runAgentUntilDone` enviavam um push genérico `"EXECUTE AGORA"` sem incluir qual tarefa o agente deveria executar. O agente recebia o push sem saber o que fazer, repetia o comportamento textual e esgotava as iterações sem concluir nada.
+
+**Fix em `apps/web/src/pages/SquadPage.tsx`:**
+
+- **`agentTaskContextRef`** — novo `useRef<Map<AgentName, string>>` que persiste o objetivo de cada agente durante a sessão autônoma; limpo a cada nova mensagem do usuário via `agentTaskContextRef.current.clear()`
+- **Preenchimento do map** — populado em 4 pontos:
+  - `handleSend` → agente raiz recebe a mensagem original do usuário
+  - Delegações estruturadas `[DELEGAÇÃO]` → cada `item.objective` gravado antes do `streamAgent`
+  - Delegações por `@mention` → `extractTask()` gravado antes do `streamAgent`
+  - `runPipeline` → contexto curto por fase (`"Implementar: ..."`, `"Revisar código para: ..."`, `"Escrever e executar testes para: ..."`, `"Criar commit e PR para: ..."`) gravado antes de cada `runAgentUntilDone`
+- **`autonomousLoop` — push atualizado** — inclui `"Sua tarefa (lembre-se): ${taskCtx.slice(0, 400)}"` quando o agente não-root responde sem ACTION tags
+- **`runAgentUntilDone` — pushMsg atualizado** — inclui `"Sua tarefa: ${taskCtx.slice(0, 350)}"` na linha imediatamente após `"⚠️ EXECUTE AGORA"`
+- **TypeScript zero erros** — `pnpm --filter @cwm/web exec tsc --noEmit` passa sem erros após o fix
+
 ## [3.50.0] — 2026-06-16
 
 ### Adicionado — SQUAD-03: Expansão do SQUAD com 12 Agentes Especializados (ECC)
