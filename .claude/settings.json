@@ -16,7 +16,19 @@
       "Bash(git -C \"c:\\\\Users\\\\phpos\" remote -v)",
       "Bash(git -C \"c:\\\\Users\\\\phpos\\\\OneDrive\\\\NEX-ALS IDE\" remote -v)",
       "Bash(gh repo *)",
-      "PowerShell(gh repo view fasterdrible-lab/NEX-ALS-IDE --json name,description,isEmpty,defaultBranchRef 2>&1)"
+      "PowerShell(gh repo view fasterdrible-lab/NEX-ALS-IDE --json name,description,isEmpty,defaultBranchRef 2>&1)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(npm root *)",
+      "Bash(ls -la \"C:\\\\Users\\\\phpos\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@anthropic-ai\\\\claude-code\" 2>&1 | head -50)",
+      "Read(//c/Users/phpos/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/**)",
+      "Bash(cat \"C:\\\\Users\\\\phpos\\\\.claude\\\\.credentials.json\" 2>/dev/null | head -c 300; echo)",
+      "Read(//c/Users/phpos/.claude/**)",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\(p.version\\)\")",
+      "PowerShell(winget search ollama 2>&1)",
+      "PowerShell(try { $response = Invoke-WebRequest -Uri \"http://localhost:1234/v1/models\" -TimeoutSec 5 -UseBasicParsing; $response.Content } catch { \"ERRO: $\\($_.Exception.Message\\)\" })"
     ]
   }
 }

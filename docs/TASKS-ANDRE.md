@@ -2,52 +2,7 @@
 
 ## Em andamento
 
-- [ ] **Phase D — Infraestrutura + Aprendizado** — operador de telemetria VPS, feedback loop, workspace intelligence
-- [ ] **SQUAD-04 — Autonomia: push com contexto de tarefa** — quando `autonomousLoop` empurra um agente não-root que respondeu sem ACTION tags, a mensagem de push deve incluir o objetivo original da tarefa (guardado por ref ao iniciar a delegação) para que o agente saiba o que deve executar; sem isso o agente recebe apenas "EXECUTE AGORA" sem contexto e falha novamente. Solução: adicionar `taskContextRef` em `SquadPage.tsx` que é populado ao iniciar cada delegação e injetado no push.
-
-## Concluídas recentemente (v3.49.0 → v3.50.0)
-
-- [x] **SQUAD-03: Expansão para 22 Agentes (v3.50.0)** — 12 novos agentes adicionados em `packages/core/src/squad/agents.ts`: Natasha (Segurança/OWASP), Hank (Arquitetura/ADRs), Ghost (Falhas Silenciosas), Rhodey (Performance), Bruce (Tipos TypeScript), Sam (SSH/VPS/Rede), Scott (Erros de Build), Thor (Supervisor de Loops), Riri (TypeScript Estrito), Hope (React/Hooks), Carol (Qualidade SQUAD), Wanda (Cobertura de Testes); `AGENT_NAMES` expandido de 10 para 22; instaladores gerados via `pnpm package:win`; remote renomeado para `NEX-ALS-IDE`; 5 erros TS pré-existentes corrigidos — 2026-06-16
-- [x] **Fix 401 Operador — `callAIOneShot` helper (v3.50.0)** — `infra:analyze`, `workspace:analyze`, `learning:analyzeFile` e `squad:memory:extract` agora resolvem o provider padrão das Settings; para `claude-code` usam subprocess com `getActiveClaudeEnv()`; elimina erro 401 ao usar conta Claude Code sem API key separada; UI corrigida (Help.tsx: v3.34.0→v3.50.0, "10 agentes"→"22 agentes", repo URL; Layout.tsx: v3.49.0→v3.50.0); instalador regenerado — 2026-06-16
-- [x] **Conta & Uso — painel com API real de utilização (v3.50.0)** — handler `claude:usage` corrigido: endpoint real `api.anthropic.com/api/oauth/usage`; credentials de `~/.claude/.credentials.json → claudeAiOauth.accessToken`; conta de `~/.claude.json → oauthAccount`; modal "Conta & Uso" no Squad reconstruído com barras de progresso Session (5h) e Weekly (7d) com cores adaptativas verde/âmbar/vermelho; link `claude.ai/settings/usage`; 3 erros TypeScript adicionais corrigidos (LSP handlers + `$queryRawUnsafe`); instalador regenerado — 2026-06-16
-
-## Concluídas recentemente (v3.44.0 → v3.48.0)
-
-- [x] **SQUAD-02: Busca Web em Tempo Real (v3.49.0)** — ACTION SEARCH para todos os agentes via Brave Search API; Fury reformulado para nunca inventar dados; `settings:brave:*` IPC; badge WEB laranja; Activity log com ícone 🌐; configurável em Configurações — 2026-06-14
-- [x] **SQUAD-01: Memória Persistente (v3.48.0)** — tabela `squad_memories` (SQLite, auto-criada); extração via Friday (`squad:memory:extract`); injeção automática no `projectContext`; aba Memórias no painel direito com cards por categoria, badge de contagem, botão Extrair — 2026-06-14
-- [x] **Ponto 10: Aprendizado Contínuo (v3.44.0)** — IDE captura padrões dos arquivos abertos; `analyzeManifest()` detecta stack sem IA; botão "Aprender" chama Friday para gerar entrada KB estruturada; banner de sugestão KB para manifests reconhecidos — 2026-06-14
-- [x] **Ponto 11: Workspace Intelligence (v3.45.0)** — `workspace:analyze` via SSH lê manifests + fonte, monta contexto 7k chars, chama Friday para retornar `WorkspaceReport` JSON; `WorkspacePage` com 5 abas (Resumo, Arquitetura, Módulos, Fluxos, Riscos); botão WORKSPACE na sidebar e status bar do IDE — 2026-06-14
-- [x] **Phase 2: LSP auto-start local (v3.46.0)** — `LocalLspBridge` spawna `typescript-language-server --stdio`, faz bridge Content-Length ↔ WebSocket em porta dinâmica; `toggleLSP` no IDEPage detecta modo local e usa `ipc.lsp.start` com `portOverride` — 2026-06-14
-- [x] **Phase C: Planning Mode (v3.47.0)** — `PlanningPage` com fila de tarefas (ciclo de status, execução via SquadPage), automações, contexto por agente em localStorage; botão PLANEJAR na sidebar; SquadPage lê `location.state` para pré-preencher agente + mensagem — 2026-06-14
-
-## Concluídas recentemente (v3.26.0 → v3.34.0)
-
-- [x] **Squad: watchdog + cancelamento real** — watchdog 90s por chunk (API providers + claude CLI); `cancelStream()` agora mata o processo `claude` via `proc.kill()`; botão ✕ para de verdade — v3.26.0 · 2026-06-12
-- [x] **Squad: botão ✕ para `autoExecRound`** — `cancelStream()` seta `stopRequestedRef`; `autoExecRound` verifica stop antes de cada rodada e após execute; `handleSend` reseta flag — v3.27.0 · 2026-06-12
-- [x] **Squad: fix 3 bugs modo autônomo** — `autonomousLoop` não resetava cancel flag; `activeStreamIdRef` para leitura síncrona no cancel; delegação verifica stop antes de cada passo — v3.28.0 · 2026-06-12
-- [x] **Squad: `ResponseStreamer.cancel()` envia `done`** — fix do loop infinito (Friday travada): `cancel()` agora chama `entry.sendDone()` após abortar o fetch — v3.29.0 · 2026-06-13
-- [x] **Squad: provider resolution por `isDefault`** — provider preferido do agente era hardcoded (Friday=openai, Fury=gemini); agora prioriza o provider marcado como padrão nas Settings — v3.29.0 · 2026-06-13
-- [x] **Squad: botão "Limpar histórico Squad"** — Settings → seção Squad → IPC `squad:session:clearAll` (DELETE FROM squad_sessions + squad_messages) — v3.30.0 · 2026-06-13
-- [x] **Squad: estabilidade avançada (5 fixes)** — watchdog API providers; watchdog renderer 90s; chunk batching 80ms; cancel signal por ação; `buildErrorHint()` com dicas por tipo de erro — v3.31.0 · 2026-06-13
-- [x] **Squad: EXECUTOR_RULES E1-E8** — 8 regras de recovery em `agents.ts`: E1 ENOENT-dir, E2 ENOENT-file, E3 npm-peers, E4 robocopy, E5 mkdir, E6 timeout, E7 permissão, E8 recuperação de SHELL vazio — v3.31.0 · 2026-06-13
-- [x] **Squad: resultados das ações no histórico** — bubble oculto `isActionResult:true` adicionado ao `bubblesRef` antes de `streamAgent` com o resultado; `loadSession` mapeia `role:'result'` → bubble invisível; agentes têm histórico completo entre iterações — v3.32.0 · 2026-06-13
-- [x] **Squad: `next dev` em background** — SHELL detecta comandos de servidor (`next dev`, `vite dev`, `npm run dev`…); captura 8s de output; mata o processo; retorna output + "Servidor iniciado em background" — o servidor continua rodando — v3.32.0 · 2026-06-13
-- [x] **Squad: EXECUTOR_RULES E9/E10** — E9: nunca [PRONTO] sem output REAL de sucesso; E10: comportamento esperado de servidor em background — v3.32.0 · 2026-06-13
-- [x] **Squad: 2 novos agentes** — `Reviewer` (🔎 cyan, Claude) com READ_FILE obrigatório, emite [APROVADO]/[BLOQUEADO]; `DevOps` (🚀 indigo, Claude) com Conventional Commits, verifica remote antes do push — v3.33.0 · 2026-06-13
-- [x] **Squad: Modo Pipeline autônomo** — `runPipeline(task, sid)`: 6 fases sequenciais (Jarvis planejar → Friday implementar → Reviewer revisar → Friday corrigir se bloqueado → Tester testar → DevOps PR); stepper visual no header; botão "Pipeline" (índigo) — v3.33.0 · 2026-06-13
-- [x] **Squad: EXECUTOR_RULES E11/E12** — E11: recovery de SHELL vazio com formato explícito; E12: nunca assumir src/app/components sem verificar root — v3.33.1 · 2026-06-13
-- [x] **Squad: skipRemainingReadDirs** — primeiro READ_DIR com ENOENT seta flag e cancela demais do batch; buildErrorHint para READ_DIR ENOENT aponta pasta pai — v3.33.2 · 2026-06-13
-- [x] **Squad: `runAgentUntilDone` robusto** — push prompt `⚠️ EXECUTE AGORA` quando agente responde com texto-only (sem ACTION); máx 3 pushes consecutivos; `lastSeenId` previne loop infinito; Jarvis/Reviewer chamados com `depth=1` no pipeline — v3.34.0 · 2026-06-13
-- [x] **Squad: fix git remote no DevOps** — verifica `git remote -v` antes do push; se sem remote informa commit local criado + instrução para adicionar remote; `buildErrorHint` trata código 128 — v3.34.0 · 2026-06-13
-- [x] **Versão 3.34.0** — bumps nos 3 package.json + Layout.tsx; CHANGELOG, CURRENT_STATE, TASKS, AGENTE atualizados; instaladores `NEX-ALS IDE Setup 3.34.0.exe` + portable gerados — v3.34.0 · 2026-06-14
-
-## Concluídas recentemente (v3.22.0 → v3.25.0)
-
-- [x] **monacoSetup.ts reescrito** — TypeScript language service via type cast (`MonacoTsDefaults`/`MonacoTsLang`); compiler options ESNext+JSX ReactJSX+allowJs; inlay hints com `setInlayHintsOptions`; semantic highlighting via `'semanticHighlighting.enabled': true` — v3.25.0 · 2026-06-12
-- [x] **IDEPage: Breadcrumbs bar** — barra fina acima do Monaco mostrando últimos 4 segmentos do caminho + símbolo atual (roxo `text-brand-500`) via `currentSymbol` state + `outlineRef` (evita closure stale no handler de cursor) — v3.25.0 · 2026-06-12
-- [x] **IDEPage: Outline View** — aba "Outline" (`List` icon) no painel esquerdo; TypeScript/JS via `getTypeScriptWorker()` + `getNavigationBarItems()`; regex fallback para outras linguagens; `OutlineTree` component com ícones por kind, entrada ativa realçada, clique navega; auto-refresh debounce 450ms — v3.25.0 · 2026-06-12
-- [x] **Squad: robocopy `/XD node_modules`** — fix freeze crítico (10+ min copiando 30k arquivos); `handlers.ts` system prompt + `agents.ts` regra 9 atualizados; `npm install --prefix` após robocopy; timeout 600s adicionado ao regex de robocopy — v3.25.0 · 2026-06-12
-- [x] **Versão 3.25.0** — bumps nos 3 package.json + Layout.tsx + CHANGELOG + CURRENT_STATE + TASKS — v3.25.0 · 2026-06-12
+*(nenhuma)*
 
 ## Concluídas recentemente (v3.21.0 → v3.22.0)
 
@@ -59,8 +14,7 @@
 
 - [x] **Squad: `parseActions` segundo passo implementado** — `parseActions` agora tem dois passes: Pass 1 com regex `\[\/ACTION\]?` (aceita fechamento sem `]` final); Pass 2 com lookahead `(?=\[ACTION:|$)` captura blocos completamente truncados antes de `[/ACTION`; `Set<number>` evita duplicatas; `makeBlock`/`extractParams` extraídos para funções auxiliares; `stripActions` atualizado para limpar ambas as formas — v3.21.0 · 2026-06-12
 - [x] **Squad: regra 9 — OneDrive bloqueia scaffolds** — `EXECUTOR_RULES` regra 9 instrui a usar `C:\Users\%USERNAME%\AppData\Local\Temp\squad-scaffold` como staging quando `cwd` estiver em OneDrive; scaffold executa no Temp; cópia com `xcopy /E /Y /H /I` para destino final; apaga staging após copiar — v3.21.0 · 2026-06-12
-- [x] **SquadPage: painel de monitoramento de atividade (4 painéis)** — interfaces `ActivityEntry` e `SessionStats`; estado + refs (`activityLog`, `sessionStats`, `modifiedFiles`) para evitar closures stale; `pushActivity`/`updateActivity`/`clearActivity`; `executeAction` e `executeActionsAuto` instrumentados; painel direito com 3 tabs: Histórico | Atividade | Contexto; tab Atividade com stats bar (R/W/⚡/✗), arquivos modificados, log expandível com status e duração — v3.21.0 · 2026-06-12
-- [x] **Versão 3.21.0** — bumps nos 3 package.json + Layout — v3.21.0 · 2026-06-12
+- [x] **Versão 3.21.0** — bumps nos 3 package.json + Layout; TASKS-ANDRE, CURRENT_STATE-ANDRE atualizados — v3.21.0 · 2026-06-12
 
 ## Concluídas recentemente (v3.19.0 → v3.20.0)
 

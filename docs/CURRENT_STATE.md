@@ -277,14 +277,15 @@
 1. **Squad — contexto do projeto via campo manual** — campo "Contexto do Projeto" resolvido (v3.14.0): cole README/arquitetura no painel direito e todos os agentes passam a receber esse contexto; não há leitura automática dos arquivos do projeto (isso é feito via ações READ_FILE)
 2. **Squad lentidão na primeira mensagem** — CLI `claude` tem overhead de inicialização/OAuth (~3–5s); respostas seguintes são mais rápidas
 3. **Autenticação interna opt-in** — sem usuários cadastrados = single-user (backward compat); com usuários = login obrigatório, roles `admin`/`viewer`; sessão in-memory (requer login a cada restart)
-2. **SSH key privada** — usuário configura no sistema; app não armazena
-3. **LSP** — requer `typescript-language-server` + WebSocket wrapper na VPS; configuração manual
-4. **DAP** — requer `node --inspect` na VPS + túnel 9229; sem breakpoints no Monaco
-5. **Chat multimodal** — Anthropic e Gemini suportam; outros providers recebem base64 no texto
-6. **Fingerprint SSH** — SHA-256 da chave bruta; não usa CA/known_hooks do sistema
-7. **LSP** — requer `typescript-language-server` + WebSocket wrapper na VPS; configuração manual
-8. **DAP** — requer `node --inspect` na VPS + túnel 9229; sem breakpoints no Monaco
+4. **SSH key privada** — usuário configura no sistema; app não armazena
+5. **LSP** — requer `typescript-language-server` + WebSocket wrapper na VPS; configuração manual
+6. **DAP** — requer `node --inspect` na VPS + túnel 9229; sem breakpoints no Monaco
+7. **Chat multimodal** — Anthropic e Gemini suportam; outros providers recebem base64 no texto
+8. **Fingerprint SSH** — SHA-256 da chave bruta; não usa CA/known_hooks do sistema
+9. **Squad — autonomia incompleta em agentes delegados** — quando um agente não-root (ex: Friday) responde com texto em vez de ACTION tags, o `autonomousLoop` envia um push genérico "EXECUTE AGORA" sem incluir o contexto da tarefa original; o agente recebe o push sem saber o que deve executar e tende a responder com texto novamente, esgotando as iterações sem concluir a tarefa. Causa raiz: `streamAgent` a `depth=1` não reenvia o objetivo original no push. Workaround: usar o modo **Pipeline** (que passa o contexto explicitamente em cada fase) em vez do modo Autônomo para tarefas complexas. Fix planejado em SQUAD-04.
+10. **Squad — push sem contexto de tarefa** — a mensagem de push gerada pelo `autonomousLoop` (linhas ~1259–1266 de `SquadPage.tsx`) é genérica e não inclui qual arquivo criar, qual função implementar ou qual etapa do plano está em andamento; agentes que precisam de contexto específico (Friday, Tester) perdem o fio da execução após o push.
 
 ## Próximos passos
 
+- SQUAD-04: Corrigir autonomia — incluir contexto da tarefa nos pushes do `autonomousLoop`
 - Suporte a WebSocket LSP para mais linguagens (Python, Rust, Go)
