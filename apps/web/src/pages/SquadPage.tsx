@@ -460,6 +460,7 @@ export default function SquadPage() {
   const rendererWatchdogRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const activeAgentRef = useRef<AgentName>('jarvis')
   const rootAgentRef = useRef<AgentName>('jarvis')
+  const agentTaskContextRef = useRef<Map<AgentName, string>>(new Map())
 
   // Skills detection
   const [matchedSkills, setMatchedSkills] = useState<AgentSkill[]>([])
@@ -917,6 +918,7 @@ export default function SquadPage() {
                       content: `⚙ Delegando para @${item.agent}: ${item.objective.length > 80 ? item.objective.slice(0, 80) + '…' : item.objective}`,
                     }])
                     // Sub-agente recebe APENAS o objetivo — histórico zerado
+                    agentTaskContextRef.current.set(item.agent, item.objective)
                     await streamAgent(item.agent, item.objective, sid, agent, 1, undefined, [])
                   }
                   if (!stopRequestedRef.current) {
@@ -937,6 +939,7 @@ export default function SquadPage() {
                   for (const target of delegations) {
                     if (stopRequestedRef.current) break
                     const task = extractTask(finalContent, target)
+                    agentTaskContextRef.current.set(target, task)
                     setAndRefBubbles(prev => [...prev, {
                       id: crypto.randomUUID(),
                       type: 'system',
@@ -972,6 +975,7 @@ export default function SquadPage() {
     const text = input.trim()
     if (!text || isStreaming) return
     stopRequestedRef.current = false // reset para cada nova mensagem enviada
+    agentTaskContextRef.current.clear()
 
     // Parse @agent mention at start
     let targetAgent = activeAgent
@@ -1017,6 +1021,7 @@ export default function SquadPage() {
     }).catch(console.error)
 
     rootAgentRef.current = targetAgent
+    agentTaskContextRef.current.set(targetAgent, message)
     await streamAgent(targetAgent, message, sid, undefined, 0, userBubbleId)
 
     if (agentPipelineModeRef.current) {
@@ -1257,9 +1262,13 @@ export default function SquadPage() {
             content: `⚙️ Iteração ${autoIterRef.current} — aguardando ${AGENT_META[agentToPush]?.label ?? agentToPush} executar…`,
           }])
           const projPath = (executionMode === 'local' && localPath) ? localPath : 'C:\\caminho\\do\\projeto'
+          const taskCtxAuto = agentTaskContextRef.current.get(agentToPush)
+          const taskReminderAuto = taskCtxAuto
+            ? `\n\nSua tarefa (lembre-se):\n${taskCtxAuto.slice(0, 400)}`
+            : ''
           await streamAgent(
             agentToPush,
-            `EXECUTE AGORA. Emita apenas um ACTION tag (sem texto antes ou depois).\n\nFormato obrigatório:\n[ACTION:SHELL cwd="${projPath}"]\nseu-comando-aqui\n[/ACTION]\n\nOu para criar arquivo:\n[ACTION:WRITE_FILE path="${projPath}\\\\arquivo.ts"]\nconteúdo\n[/ACTION]\n\nCaminho do projeto: ${projPath}\nNão escreva explicação. Não planeje. Apenas o ACTION.`,
+            `EXECUTE AGORA. Emita apenas um ACTION tag (sem texto antes ou depois).${taskReminderAuto}\n\nFormato obrigatório:\n[ACTION:SHELL cwd="${projPath}"]\nseu-comando-aqui\n[/ACTION]\n\nOu para criar arquivo:\n[ACTION:WRITE_FILE path="${projPath}\\\\arquivo.ts"]\nconteúdo\n[/ACTION]\n\nCaminho do projeto: ${projPath}\nNão escreva explicação. Não planeje. Apenas o ACTION.`,
             sid,
             lastBubble.delegatedBy,
             1,
@@ -1361,8 +1370,10 @@ export default function SquadPage() {
         if (noActionStreak >= 3) break  // desiste após 3 pushes sem ação
 
         const projPath = (executionMode === 'local' && localPath) ? localPath : 'C:\\projeto'
+        const taskCtxPush = agentTaskContextRef.current.get(agent)
         const pushMsg = [
           '⚠️ EXECUTE AGORA — nenhuma ACTION foi emitida nesta resposta.',
+          taskCtxPush ? `Sua tarefa: ${taskCtxPush.slice(0, 350)}` : '',
           'Emita EXATAMENTE um ACTION tag. Formato correto:',
           `[ACTION:WRITE_FILE path="${projPath}\\arquivo.ext"]`,
           'conteúdo do arquivo aqui',
@@ -1372,7 +1383,7 @@ export default function SquadPage() {
           'comando aqui',
           '[/ACTION]',
           'Nenhum texto antes ou depois. Apenas o ACTION tag. Se já concluiu tudo, escreva [PRONTO].',
-        ].join('\n')
+        ].filter(Boolean).join('\n')
         const pushId = crypto.randomUUID()
         setAndRefBubbles(prev => [...prev, { id: pushId, type: 'user', content: pushMsg, isActionResult: true }])
         ipc.squad.session.addMsg({ sessionId: sid, agentName: 'user', role: 'result', content: pushMsg.slice(0, 4000), delegatedBy: null }).catch(console.error)
@@ -1423,6 +1434,7 @@ export default function SquadPage() {
       // ── 2. Implementação ───────────────────────────────────────────────────
       setAgentPipelinePhase('implementing')
       setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '👩‍💻 Pipeline — Fase 2: Implementação (Friday)' }])
+      agentTaskContextRef.current.set('friday', `Implementar: ${task.slice(0, 300)}`)
       await streamAgent('friday',
         `PIPELINE — IMPLEMENTAR:\n\nPlano do Jarvis:\n${jarvisContent}\n\nTarefa: ${task}\n\nImplemente AGORA. Um ACTION por resposta. Quando terminar TUDO, inclua [PRONTO].`,
         sid, 'jarvis', 1)
@@ -1432,6 +1444,7 @@ export default function SquadPage() {
       // ── 3. Code Review ────────────────────────────────────────────────────
       setAgentPipelinePhase('reviewing')
       setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '🔎 Pipeline — Fase 3: Revisão de Código (Reviewer)' }])
+      agentTaskContextRef.current.set('reviewer', `Revisar código implementado para: ${task.slice(0, 300)}`)
       await streamAgent('reviewer',
         `PIPELINE — REVISÃO:\n\nRevise o código implementado nesta sessão.\n1. Use READ_FILE para ler cada arquivo criado/modificado\n2. Avalie: bugs, segurança (OWASP), qualidade, edge cases\n3. Liste issues por severidade (Crítico/Alto/Médio/Baixo)\n4. Termine com [APROVADO] ou [BLOQUEADO: lista de issues críticas]`,
         sid, undefined, 1)
@@ -1444,6 +1457,7 @@ export default function SquadPage() {
       if (/\[BLOQUEADO/i.test(reviewContent)) {
         setAgentPipelinePhase('fixing')
         setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '🔧 Pipeline — Fase 3b: Correções obrigatórias (Friday)' }])
+        agentTaskContextRef.current.set('friday', `Corrigir issues do Reviewer para: ${task.slice(0, 300)}`)
         await streamAgent('friday',
           `PIPELINE — CORREÇÕES DO REVIEWER:\n\n${reviewContent}\n\nCorrijia TODOS os problemas críticos e altos. Um ACTION por resposta. Quando terminar, [PRONTO].`,
           sid, 'reviewer', 1)
@@ -1454,6 +1468,7 @@ export default function SquadPage() {
       // ── 4. Testes ─────────────────────────────────────────────────────────
       setAgentPipelinePhase('testing')
       setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '🧪 Pipeline — Fase 4: Testes (Tester)' }])
+      agentTaskContextRef.current.set('tester', `Escrever e executar testes para: ${task.slice(0, 300)}`)
       await streamAgent('tester',
         `PIPELINE — TESTES:\n\n1. Leia os arquivos implementados com READ_FILE\n2. Escreva testes unitários e/ou de integração adequados\n3. Execute os testes com o comando correto\n4. Todos aprovados? Inclua [PRONTO]. Falhou? Corrija e rode novamente.`,
         sid, undefined, 1)
@@ -1463,6 +1478,7 @@ export default function SquadPage() {
       // ── 5. DevOps / PR ────────────────────────────────────────────────────
       setAgentPipelinePhase('devops')
       setAndRefBubbles(prev => [...prev, { id: crypto.randomUUID(), type: 'system', content: '🚀 Pipeline — Fase 5: Pull Request (DevOps)' }])
+      agentTaskContextRef.current.set('devops', `Criar commit e PR para: ${task.slice(0, 300)}`)
       await streamAgent('devops',
         `PIPELINE — PULL REQUEST:\n\nTarefa: ${task}\n\nCrie o commit e PR:\n1. git add -A\n2. git commit -m "feat: <descrição curta>" (Conventional Commits)\n3. git remote -v  ← verificar se remote existe ANTES de push\n4. Se remote existe → git push; se NÃO existe → escreva "Commit criado. Nenhum remote configurado — adicione com: git remote add origin <url>" e inclua [PRONTO]\n5. Se fez push → descreva o PR:\n## O que foi feito\n## Como testar\n## Testes realizados\n\nInclua [PRONTO] ao final.`,
         sid, undefined, 1)
