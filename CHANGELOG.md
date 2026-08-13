@@ -1,5 +1,20 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.57.1] — 2026-08-13
+
+### Corrigido — Manual de Uso desatualizado
+
+`apps/web/src/pages/Help.tsx` ainda mostrava `v3.50.0` e não mencionava nenhuma feature adicionada desde então (Skills, Workspace Intelligence, Planning Mode, Automações, Busca global, e toda a integração Hermes das FASEs 1-6).
+
+- Versão corrigida para `3.57.0` (cabeçalho + card "Sobre")
+- Parágrafo de introdução passa a mencionar Hermes Agent, Skills, Workspace Intelligence e Planning Mode
+- Cards de acesso rápido ganham **Hermes** (6 cards em vez de 5)
+- Novo cartão "Produtividade & Automação" no mapa do app: Conhecimento, Skills, Tarefas, Busca, Automações, Planejar — nenhum desses tinha entrada visível no manual
+- Nova seção de accordion **"Hermes Agent — desenvolvimento autônomo"**: como instalar/iniciar na VPS, ativar o modo Agent no AI Hub, Manual vs. Autônomo, execução paralela, Decision Request, Definition of Done, sincronizar contexto, automações via cron e recovery de sessão interrompida
+- Linha "IA · Squad · Deploy · Incident" do mapa do app ganha o card **Hermes Agent** (5 cards em vez de 4)
+
+`pnpm typecheck && pnpm build` limpos.
+
 ## [3.57.0] — 2026-08-13
 
 ### Adicionado — HERMES-06: Automação (FASE 6)

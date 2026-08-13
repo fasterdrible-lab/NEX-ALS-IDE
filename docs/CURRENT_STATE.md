@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-08-13
-**Versão:** 3.57.0
+**Versão:** 3.57.1
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Manual de Uso atualizado (v3.57.1)
+
+`Help.tsx` estava travado em `v3.50.0`, sem menção a nada adicionado desde então. Corrigido: versão, parágrafo de introdução, cards de acesso rápido (+ Hermes), novo cartão "Produtividade & Automação" (Conhecimento/Skills/Tarefas/Busca/Automações/Planejar) e nova seção de accordion dedicada ao Hermes Agent.
 
 ## Hermes Automação — FASE 6 (v3.57.0)
 

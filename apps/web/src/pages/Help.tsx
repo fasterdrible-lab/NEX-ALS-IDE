@@ -6,7 +6,7 @@ import {
   BarChart3, History, Box, Cpu, FileText, Bot, Zap,
   Sparkles, Siren, Globe, ShieldCheck, ExternalLink,
   Play, RotateCcw, Database, Layers, LayoutDashboard, Bell,
-  Users, GitBranch,
+  Users, GitBranch, Timer,
 } from 'lucide-react'
 
 interface Section {
@@ -1027,6 +1027,42 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     ),
   },
 
+  // ── HERMES ────────────────────────────────────────────────────────────
+  {
+    id: 'hermes',
+    icon: Bot,
+    title: 'Hermes Agent — desenvolvimento autônomo',
+    color: 'bg-purple-600/20 text-purple-400',
+    content: (
+      <div className="space-y-4">
+        <p>O <strong className="text-slate-100">Hermes Agent</strong> (Nous Research) é um runtime agentic externo que roda dentro da própria VPS via SSH — diferente do Squad (que roda dentro do NEX), ele já é autônomo por conta própria: planejamento, ferramentas e retries internos. O NEX apenas o instala, gerencia e conversa com ele.</p>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Como começar</p>
+          <Step n={1}><span>No <strong className="text-slate-100">Lançador</strong>, clique no botão <strong className="text-slate-100">Hermes</strong> ao lado da VPS desejada.</span></Step>
+          <Step n={2}><span>Clique <strong className="text-slate-100">Instalar</strong> (uma vez por VPS) e depois <strong className="text-slate-100">Iniciar</strong> — o Hermes roda em background (<Code>hermes gateway</Code>).</span></Step>
+          <Step n={3}><span>Abra o <strong className="text-slate-100">AI HUB</strong>, alterne o toggle do cabeçalho para <strong className="text-slate-100">Agent</strong> e escolha o projeto (precisa ter VPS configurada).</span></Step>
+          <Step n={4}><span>Descreva o objetivo em linguagem natural e clique <strong className="text-slate-100">Iniciar desenvolvimento</strong> — o Hermes gera um plano de tarefas.</span></Step>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">O que o modo Agent faz</p>
+          <KV items={[
+            ['Manual / Autônomo',   'Manual avança tarefa a tarefa por clique; Autônomo roda o loop sozinho até concluir, bloquear ou precisar de decisão'],
+            ['Execução paralela',  'Tarefas marcadas pelo próprio Hermes como independentes rodam simultaneamente, cada uma isolada num git worktree'],
+            ['Decision Request',   'Quando o Hermes precisa de uma decisão de negócio, o loop pausa e mostra opções + resposta livre'],
+            ['Definition of Done', 'Checklist de 7 itens (2 verificados automaticamente via SSH) — informativo, não trava o loop'],
+            ['Sincronizar contexto', 'Escreve a KB Global + memória do projeto em .hermes.md — o Hermes lê esse arquivo sozinho, sem configuração'],
+            ['Automações (cron)',  'Em Automações, escolha o agente "Hermes" + um projeto para rodar um objetivo automaticamente, sem abrir o AI Hub'],
+          ]}/>
+        </div>
+
+        <Info>Se o app fechar (ou travar) no meio de uma sessão Hermes em andamento, na próxima abertura o NEX detecta a sessão órfã sozinho e mostra o botão <strong className="text-purple-200">Retomar sessão</strong> — ele continua de onde parou.</Info>
+        <Tip>O Hermes autentica seus próprios provedores de IA dentro da VPS (<Code>hermes setup</Code>) — o NEX nunca guarda essas credenciais, mesmo isolamento já usado para o Claude Code.</Tip>
+      </div>
+    ),
+  },
+
   // ── SOBRE ─────────────────────────────────────────────────────────────
   {
     id: 'about',
@@ -1041,7 +1077,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
         <div className="grid grid-cols-2 gap-2">
           {[
-            ['Versão', '3.50.0'],
+            ['Versão', '3.57.0'],
             ['Runtime', 'Electron + Node.js 22'],
             ['Interface', 'React 18 + Tailwind CSS'],
             ['Banco de dados', 'SQLite local (Prisma ORM)'],
@@ -1076,15 +1112,16 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.50.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), Claude Code (conta Pro sem API Key), Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do NEX-ALS IDE <strong className="text-slate-300">v3.57.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS, com automações agendadas), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}
-      <div className="mb-6 grid grid-cols-5 gap-3">
+      <div className="mb-6 grid grid-cols-6 gap-3">
         {[
           { icon: Code2,     label: 'IDE Integrado',  desc: 'Lançador → IDE',       color: 'text-brand-400' },
           { icon: Sparkles,  label: 'AI HUB',         desc: 'Sidebar → AI HUB',     color: 'text-purple-400' },
           { icon: Users,     label: 'Squad',           desc: 'Sidebar → Squad',      color: 'text-indigo-400' },
+          { icon: Bot,       label: 'Hermes',         desc: 'Lançador → Hermes',    color: 'text-purple-300' },
           { icon: Siren,     label: 'Incident Mode',  desc: 'Lançador → 🚨',         color: 'text-red-400' },
           { icon: Rocket,    label: 'Deploy',         desc: 'Lançador → 🚀',         color: 'text-emerald-400' },
         ].map(({ icon: Icon, label, desc, color }) => (
@@ -1156,8 +1193,34 @@ export default function Help() {
           </div>
         </div>
 
-        {/* Linha 2: IA · Squad · Deploy · Incident */}
-        <div className="grid grid-cols-4 gap-3">
+        {/* Linha 1.5: Produtividade & Automação */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p className="flex items-center gap-2 text-[10px] font-semibold text-teal-400 uppercase tracking-wider mb-3">
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0"/>
+            Produtividade & Automação
+          </p>
+          <div className="grid grid-cols-6 gap-1">
+            {([
+              [Database,  'Conhecimento', 'KB Global do dev'],
+              [Box,       'Skills',       'Habilidades reusáveis'],
+              [Layers,    'Tarefas',      'Kanban do Squad/Hermes'],
+              [Globe,     'Busca',        'Conversas + KB + Skills'],
+              [Timer,     'Automações',   'Agendamentos (cron)'],
+              [CheckCircle, 'Planejar',   'Fila de tarefas + contexto'],
+            ] as [React.ElementType, string, string][]).map(([Icon, name, desc]) => (
+              <div key={name} className="flex items-start gap-2 p-2 rounded-lg hover:bg-slate-800/60 transition-colors cursor-default group">
+                <Icon size={13} className="text-teal-400 shrink-0 mt-0.5"/>
+                <div className="min-w-0">
+                  <p className="text-slate-200 text-xs font-medium leading-tight">{name}</p>
+                  <p className="text-slate-600 text-[10px] leading-tight mt-0.5">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Linha 2: IA · Squad · Hermes · Deploy · Incident */}
+        <div className="grid grid-cols-5 gap-3">
           {([
             {
               icon: Sparkles,
@@ -1174,6 +1237,14 @@ export default function Help() {
               desc: '22 agentes especializados com pipeline autônomo completo.',
               dot:  'bg-indigo-400', accent: 'text-indigo-400',
               card: 'bg-indigo-950/25 border-indigo-800/30',
+            },
+            {
+              icon: Bot,
+              tag:  'Autônomo (VPS)',
+              name: 'Hermes Agent',
+              desc: 'Desenvolvimento autônomo direto na VPS, com cron e recovery de sessão.',
+              dot:  'bg-fuchsia-400', accent: 'text-fuchsia-400',
+              card: 'bg-fuchsia-950/25 border-fuchsia-800/30',
             },
             {
               icon: Rocket,
