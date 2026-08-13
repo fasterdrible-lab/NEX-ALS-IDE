@@ -1,5 +1,21 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.57.4] — 2026-08-13
+
+### Corrigido — watchdog de 90s curto demais para tarefas reais do Squad + dois timeouts sobrepostos
+
+Usuário reautenticou a conta Claude Code (resolveu o caso anterior de sessão expirada), mas um deploy real via DevOps ainda bateu timeout — e a mensagem ainda era a genérica antiga (`⏱ Timeout: claude CLI não respondeu em 90s... Tente novamente`), sem o hint de stderr adicionado em 3.57.3.
+
+**Causa 1 — dois watchdogs de 90s competindo:** além do watchdog do main process (`handlers.ts`), o `SquadPage.tsx` tem um watchdog **no renderer** que também cancelava o stream em 90s de inatividade. Como os dois timers rodam em processos diferentes sem garantia de ordem, o watchdog do renderer podia disparar primeiro e mostrar sua mensagem genérica — mascarando a mensagem melhorada do backend (com stderr) da 3.57.3.
+
+**Causa 2 — 90s é curto para o caso real:** `claude -p` é spawnado do zero a cada chamada do Squad, com todo o contexto (KB Global + memórias + tarefas + histórico da sessão) injetado no prompt — bem mais pesado que o `"oi"` de teste manual. 90s de inatividade antes do primeiro token é otimista para isso.
+
+**Fix — `apps/desktop/src/ipc/handlers.ts`:** os 3 watchdogs (`ai:stream:start` claude-code, `squad:stream:start` claude-code, `squad:stream:start` rota API Key) sobem de `90_000` para `180_000` ms.
+
+**Fix — `apps/web/src/pages/SquadPage.tsx`:** watchdog do renderer sobe de `90_000` para `200_000` ms — de propósito **acima** do watchdog do backend (180s), para que o erro mais informativo do main process sempre chegue primeiro; o watchdog do renderer vira só uma rede de segurança final caso o processo trave sem nem sequer emitir o evento de erro.
+
+`pnpm typecheck` limpo. Instalador `NEX-ALS IDE Setup 3.57.4.exe` regenerado.
+
 ## [3.57.3] — 2026-08-13
 
 ### Melhorado — mensagem de timeout do claude CLI mostra stderr capturado

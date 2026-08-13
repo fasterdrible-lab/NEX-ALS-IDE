@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-08-13
-**Versão:** 3.57.3
+**Versão:** 3.57.4
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Fix — watchdogs de 90s sobrepostos e curtos demais (v3.57.4)
+
+Mesmo após reautenticar a conta Claude Code, um deploy real via DevOps ainda batia timeout — e com a mensagem genérica antiga, não a melhorada em 3.57.3. Causa dupla: (1) `SquadPage.tsx` tinha um watchdog **no renderer** também de 90s, que podia disparar antes do watchdog do main process e mascarar a mensagem com stderr; (2) 90s é curto para `claude -p` spawnado do zero com todo o contexto do Squad injetado. Fix: watchdogs do backend (`handlers.ts`) sobem para 180s; watchdog do renderer sobe para 200s (de propósito acima do backend, para nunca mascarar o erro mais informativo).
 
 ## Diagnóstico melhorado — timeout do claude CLI (v3.57.3)
 

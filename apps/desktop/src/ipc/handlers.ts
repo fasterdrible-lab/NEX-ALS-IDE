@@ -968,11 +968,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         proc.on('error', (err: Error) => sendErr(`claude CLI não encontrado: ${err.message}`))
         watchdog = setInterval(() => {
           if (doneSent) { clearInterval(watchdog); return }
-          if (Date.now() - lastChunkAt > 90_000) {
+          if (Date.now() - lastChunkAt > 180_000) {
             clearInterval(watchdog)
             proc.kill()
             const hint = stderrBuf.trim() ? ` Saída do processo: ${stderrBuf.trim().slice(0, 300)}` : ' Sem saída de erro do processo — verifique limite de uso/rede da conta Claude Code (Configurações → Conta & Uso), ou rode "claude -p \\"oi\\"" direto no terminal para confirmar se a CLI responde fora do NEX.'
-            sendErr(`⏱ Timeout: claude CLI não respondeu em 90s. O processo foi encerrado.${hint}`)
+            sendErr(`⏱ Timeout: claude CLI não respondeu em 180s. O processo foi encerrado.${hint}`)
           }
         }, 15_000)
 
@@ -1469,20 +1469,22 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           }
         })
         proc.on('error', (err: Error) => sendErr(`claude CLI não encontrado: ${err.message}`))
-        // Watchdog: mata o processo se nenhum chunk chegar em 90s (evita tela congelada)
+        // Watchdog: mata o processo se nenhum chunk chegar em 180s (evita tela congelada;
+        // 90s se mostrou curto demais na prática — claude é spawnado do zero a cada chamada,
+        // com todo o contexto/KB/histórico injetado, e pode legitimamente demorar mais que isso)
         watchdog = setInterval(() => {
           if (doneSent) { clearInterval(watchdog); return }
-          if (Date.now() - lastChunkAt > 90_000) {
+          if (Date.now() - lastChunkAt > 180_000) {
             clearInterval(watchdog)
             proc.kill()
             const hint = stderrBuf.trim() ? ` Saída do processo: ${stderrBuf.trim().slice(0, 300)}` : ' Sem saída de erro do processo — verifique limite de uso/rede da conta Claude Code (Configurações → Conta & Uso), ou rode "claude -p \\"oi\\"" direto no terminal para confirmar se a CLI responde fora do NEX.'
-            sendErr(`⏱ Timeout: claude CLI não respondeu em 90s. O processo foi encerrado.${hint}`)
+            sendErr(`⏱ Timeout: claude CLI não respondeu em 180s. O processo foi encerrado.${hint}`)
           }
         }, 15_000)
         return { streamId }
       }
 
-      // Rota padrão (API Key) — com watchdog de 90s (mesmo padrão do claude-code)
+      // Rota padrão (API Key) — com watchdog de 180s (mesmo padrão do claude-code)
       let apiLastChunkAt = Date.now()
       let apiDoneSent = false
       // eslint-disable-next-line prefer-const
@@ -1505,12 +1507,12 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
       apiWatchdog = setInterval(() => {
         if (apiDoneSent) { clearInterval(apiWatchdog); return }
-        if (Date.now() - apiLastChunkAt > 90_000) {
+        if (Date.now() - apiLastChunkAt > 180_000) {
           clearInterval(apiWatchdog)
           squadSvc.cancelStream(session.streamId)
           try { targetWin?.webContents.send('squad:stream:chunk', {
             streamId: session.streamId, type: 'error',
-            error: '⏱ Timeout: provider não respondeu em 90s. Verifique sua API key e tente novamente.',
+            error: '⏱ Timeout: provider não respondeu em 180s. Verifique sua API key e tente novamente.',
           }) } catch { /* janela fechada */ }
         }
       }, 15_000)

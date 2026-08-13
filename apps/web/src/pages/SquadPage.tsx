@@ -775,19 +775,23 @@ export default function SquadPage() {
     return () => { unsub(); if (flushTimer) clearTimeout(flushTimer) }
   }, [setAndRefBubbles])
 
-  // Renderer-side watchdog: se isStreaming > 90s sem chunks → auto-cancel (padrão Cursor)
+  // Renderer-side watchdog: se isStreaming > 200s sem chunks → auto-cancel (padrão Cursor).
+  // Fica alguns segundos ACIMA do watchdog de 180s do main process (handlers.ts) de propósito:
+  // se os dois fossem iguais, este dispararia primeiro (mesmo timer, mas em processo diferente,
+  // sem garantia de ordem) e mostraria essa mensagem genérica em vez do erro real do handlers.ts
+  // (que já inclui o stderr do processo claude capturado).
   useEffect(() => {
     if (isStreaming) {
       lastChunkAtRef.current = Date.now()
       if (!rendererWatchdogRef.current) {
         rendererWatchdogRef.current = setInterval(() => {
-          if (!stopRequestedRef.current && Date.now() - lastChunkAtRef.current > 90_000) {
+          if (!stopRequestedRef.current && Date.now() - lastChunkAtRef.current > 200_000) {
             stopRequestedRef.current = true
             const sid = activeStreamIdRef.current ?? activeStreamId
             if (sid) ipc.squad.stream.cancel(sid).catch(console.error)
             setAndRefBubbles(prev => [...prev, {
               id: crypto.randomUUID(), type: 'system',
-              content: '⏱ Stream sem resposta há 90s — cancelado automaticamente. Tente novamente.',
+              content: '⏱ Stream sem resposta há 200s — cancelado automaticamente. Tente novamente.',
             }])
           }
         }, 15_000)
