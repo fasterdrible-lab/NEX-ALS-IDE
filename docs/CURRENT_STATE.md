@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-08-13
-**Versão:** 3.57.2
+**Versão:** 3.57.3
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Diagnóstico melhorado — timeout do claude CLI (v3.57.3)
+
+Investigado timeout de 90s no Tester (Squad): confirmado por teste manual que `claude -p "oi"` também trava fora do NEX — **não é bug do código**, é externo (limite de uso da conta/rede/CLI). A mensagem de erro do timeout agora inclui o stderr capturado do processo (ou uma dica de onde checar) em vez de só "tente novamente".
 
 ## Fix — Squad ignorava Claude Code como Padrão (v3.57.2)
 

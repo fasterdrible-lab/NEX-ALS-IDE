@@ -971,7 +971,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           if (Date.now() - lastChunkAt > 90_000) {
             clearInterval(watchdog)
             proc.kill()
-            sendErr('⏱ Timeout: claude CLI não respondeu em 90s. O processo foi encerrado. Tente novamente.')
+            const hint = stderrBuf.trim() ? ` Saída do processo: ${stderrBuf.trim().slice(0, 300)}` : ' Sem saída de erro do processo — verifique limite de uso/rede da conta Claude Code (Configurações → Conta & Uso), ou rode "claude -p \\"oi\\"" direto no terminal para confirmar se a CLI responde fora do NEX.'
+            sendErr(`⏱ Timeout: claude CLI não respondeu em 90s. O processo foi encerrado.${hint}`)
           }
         }, 15_000)
 
@@ -1474,7 +1475,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           if (Date.now() - lastChunkAt > 90_000) {
             clearInterval(watchdog)
             proc.kill()
-            sendErr('⏱ Timeout: claude CLI não respondeu em 90s. O processo foi encerrado. Tente novamente.')
+            const hint = stderrBuf.trim() ? ` Saída do processo: ${stderrBuf.trim().slice(0, 300)}` : ' Sem saída de erro do processo — verifique limite de uso/rede da conta Claude Code (Configurações → Conta & Uso), ou rode "claude -p \\"oi\\"" direto no terminal para confirmar se a CLI responde fora do NEX.'
+            sendErr(`⏱ Timeout: claude CLI não respondeu em 90s. O processo foi encerrado.${hint}`)
           }
         }, 15_000)
         return { streamId }

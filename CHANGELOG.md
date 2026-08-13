@@ -1,5 +1,15 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.57.3] — 2026-08-13
+
+### Melhorado — mensagem de timeout do claude CLI mostra stderr capturado
+
+**Investigação:** usuário reportou timeout `⏱ Timeout: claude CLI não respondeu em 90s` no Tester (Squad). Confirmado via teste manual que `claude -p "oi"` também trava/demora rodado direto no terminal, fora do NEX — ou seja, **não é um bug do código do NEX**, e sim algo externo (limite de uso da conta Claude Code, rede, ou a própria CLI). Nenhuma mudança de comportamento foi feita no processo em si.
+
+**O que mudou:** `apps/desktop/src/ipc/handlers.ts` — nos dois pontos que spawnam `claude -p` com watchdog de inatividade de 90s (`ai:stream:start` e `squad:stream:start`), o `stderrBuf` já era capturado mas descartado silenciosamente quando o timeout matava o processo. Agora a mensagem de erro inclui até 300 chars do stderr capturado (se houver), ou uma dica de diagnóstico (checar Configurações → Conta & Uso, ou testar `claude -p "oi"` direto no terminal) quando não há stderr — para o próximo timeout já vir com pista da causa em vez de só "tente novamente".
+
+`pnpm typecheck` limpo.
+
 ## [3.57.2] — 2026-08-13
 
 ### Corrigido — Squad ignorava Claude Code marcado como Padrão
