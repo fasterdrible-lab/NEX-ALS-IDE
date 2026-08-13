@@ -1366,9 +1366,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         if (data.providerOverride) {
           effectiveProvider = data.providerOverride
         } else {
-          // Sempre usa o provider padrão configurado pelo usuário nas Settings
+          // Sempre usa o provider padrão configurado pelo usuário nas Settings.
+          // Sem filtro de apiKey!='' aqui: o provider 'claude-code' é salvo com apiKey=''
+          // de propósito (conta, não API key — ver SettingsPage.tsx setAsDefault()), então
+          // esse filtro excluía Claude Code mesmo quando marcado como padrão, caindo no
+          // fallback abaixo e usando silenciosamente qualquer outro provider com key salva.
           const def = await db.$queryRawUnsafe(
-            `SELECT provider FROM ai_providers WHERE isDefault=1 AND enabled=1 AND apiKey!='' LIMIT 1`
+            `SELECT provider FROM ai_providers WHERE isDefault=1 AND enabled=1 LIMIT 1`
           ) as Array<{ provider: string }>
           if (def[0]) {
             effectiveProvider = def[0].provider

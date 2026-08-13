@@ -1,5 +1,17 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.57.2] — 2026-08-13
+
+### Corrigido — Squad ignorava Claude Code marcado como Padrão
+
+**Sintoma reportado:** com Claude Code (conta, sem API Key) marcado como "Padrão" em Configurações → Provedores de IA, o Squad respondia com erro de outro provider (ex.: `deepseek 402: Insufficient Balance`) em vez de usar Claude Code.
+
+**Causa raiz:** `apps/desktop/src/ipc/handlers.ts` — o handler `squad:stream:start` resolve o provider padrão com `SELECT provider FROM ai_providers WHERE isDefault=1 AND enabled=1 AND apiKey!='' LIMIT 1`. O provider `claude-code` é salvo com `apiKey: ''` de propósito (é uma conta, não uma API key — `SettingsPage.tsx` → `setAsDefault()`), então o filtro `apiKey!=''` excluía Claude Code da consulta mesmo estando marcado como padrão. A query caía no fallback (`SELECT provider FROM ai_providers WHERE enabled=1 AND apiKey!='' LIMIT 1`), que silenciosamente escolhia qualquer outro provider com key configurada — no caso relatado, DeepSeek, sem saldo.
+
+**Fix:** removido o filtro `apiKey!=''` da consulta principal, alinhando com o mesmo padrão já correto usado em `ai:stream:start` (AI Hub) e no helper `callAIOneShot` (Operador/Workspace/Aprendizado/Memórias do Squad) — nenhum dos dois tinha esse filtro. O fallback (usado só quando nenhum provider está marcado como padrão) manteve o filtro, já que nesse caso faz sentido exigir uma key configurada.
+
+`pnpm typecheck` limpo. Instalador `NEX-ALS IDE Setup 3.57.2.exe` regenerado.
+
 ## [3.57.1] — 2026-08-13
 
 ### Corrigido — Manual de Uso desatualizado

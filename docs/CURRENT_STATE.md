@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-08-13
-**Versão:** 3.57.1
+**Versão:** 3.57.2
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Fix — Squad ignorava Claude Code como Padrão (v3.57.2)
+
+`squad:stream:start` resolvia o provider padrão exigindo `apiKey!=''` — mas o provider `claude-code` é salvo de propósito com `apiKey: ''` (é conta, não API key). Isso excluía Claude Code mesmo marcado como Padrão em Configurações, caindo silenciosamente no fallback (qualquer provider com key configurada, ex. DeepSeek sem saldo). Filtro removido, alinhado com `ai:stream:start` e `callAIOneShot`, que já não tinham esse filtro.
 
 ## Manual de Uso atualizado (v3.57.1)
 
