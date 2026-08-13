@@ -12,6 +12,7 @@ export interface AgentTask {
   priority: TaskPriority
   projectId: string | null
   sessionId: string | null
+  parallelizable: boolean
   createdAt: string
   updatedAt: string
 }
@@ -24,6 +25,7 @@ export interface AgentTaskInput {
   priority?: TaskPriority
   projectId?: string
   sessionId?: string
+  parallelizable?: boolean
 }
 
 const PRIORITY_LABEL: Record<TaskPriority, string> = { high: 'ALTA', medium: 'MÉDIA', low: 'BAIXA' }
@@ -36,34 +38,41 @@ const ORDER_BY = `ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1
 export class TasksService {
   private get db() { return getPrismaClient() }
 
-  async list(filters?: { status?: TaskStatus; ownerAgent?: string }): Promise<AgentTask[]> {
+  private mapRow(row: AgentTask & { parallelizable: unknown }): AgentTask {
+    return { ...row, parallelizable: Boolean(row.parallelizable) }
+  }
+
+  async list(filters?: { status?: TaskStatus; ownerAgent?: string; projectId?: string }): Promise<AgentTask[]> {
     const where: string[] = []
     const params: unknown[] = []
     if (filters?.status) { where.push('status = ?'); params.push(filters.status) }
     if (filters?.ownerAgent) { where.push('ownerAgent = ?'); params.push(filters.ownerAgent) }
+    if (filters?.projectId) { where.push('projectId = ?'); params.push(filters.projectId) }
     const sql = `SELECT * FROM agent_tasks${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ${ORDER_BY}`
-    return this.db.$queryRawUnsafe(sql, ...params) as Promise<AgentTask[]>
+    const rows = await this.db.$queryRawUnsafe(sql, ...params) as AgentTask[]
+    return rows.map(r => this.mapRow(r))
   }
 
   async listActive(): Promise<AgentTask[]> {
-    return this.db.$queryRawUnsafe(
+    const rows = await this.db.$queryRawUnsafe(
       `SELECT * FROM agent_tasks WHERE status != 'DONE' ${ORDER_BY} LIMIT 20`,
-    ) as Promise<AgentTask[]>
+    ) as AgentTask[]
+    return rows.map(r => this.mapRow(r))
   }
 
   async get(id: string): Promise<AgentTask | null> {
     const rows = await this.db.$queryRawUnsafe(
       'SELECT * FROM agent_tasks WHERE id = ? LIMIT 1', id,
     ) as AgentTask[]
-    return rows[0] ?? null
+    return rows[0] ? this.mapRow(rows[0]) : null
   }
 
   async create(input: AgentTaskInput): Promise<AgentTask> {
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
     await this.db.$executeRawUnsafe(
-      `INSERT INTO agent_tasks (id, title, description, status, ownerAgent, priority, projectId, sessionId, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO agent_tasks (id, title, description, status, ownerAgent, priority, projectId, sessionId, parallelizable, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       input.title,
       input.description ?? '',
@@ -72,6 +81,7 @@ export class TasksService {
       input.priority ?? 'medium',
       input.projectId ?? null,
       input.sessionId ?? null,
+      input.parallelizable ? 1 : 0,
       now, now,
     )
     return (await this.get(id))!
@@ -87,6 +97,7 @@ export class TasksService {
     if (input.priority !== undefined)    { sets.push('priority = ?');    params.push(input.priority) }
     if (input.projectId !== undefined)   { sets.push('projectId = ?');   params.push(input.projectId) }
     if (input.sessionId !== undefined)   { sets.push('sessionId = ?');   params.push(input.sessionId) }
+    if (input.parallelizable !== undefined) { sets.push('parallelizable = ?'); params.push(input.parallelizable ? 1 : 0) }
     if (sets.length === 0) return (await this.get(id))!
     sets.push('updatedAt = ?')
     params.push(new Date().toISOString(), id)

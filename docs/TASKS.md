@@ -4,6 +4,30 @@
 
 - [ ] **Phase D — Infraestrutura + Aprendizado** — operador de telemetria VPS, feedback loop, workspace intelligence
 
+## Concluídas recentemente (v3.56.0 → v3.57.0)
+
+- [x] **Hermes Automação — FASE 6 (v3.57.0)** — cron: `scheduled_jobs` ganha `projectId`, `agentName: 'hermes'` roteia uma automação para um projeto Hermes em vez de um agente do Squad; execução não-assistida: `HermesService.runObjectiveUnattended()` bufferiza o `ExecStream` inteiro sem depender de uma `BrowserWindow` (watchdog 300s + teto duro 20min); recovery de sessão interrompida: `HermesService.recoverInterruptedSessions()` roda no boot, marca `HermesProjectAgent` órfãos (`status:'running'` sobrevivente a um restart do Electron) como erro recuperável e devolve tarefas `IN_PROGRESS` para `TODO`; banner "Retomar sessão" em `HermesAgentPanel.tsx` usa o `--resume` automático (sessionStarted preservado); seletor de projeto em `AutomationsPage.tsx` quando o agente Hermes é escolhido — `pnpm typecheck && pnpm build` limpos — 2026-08-13. Com esta fase, as 6 fases da integração Hermes planejadas em `docs/HERMES_INTEGRATION.md` estão entregues.
+
+## Concluídas recentemente (v3.55.0 → v3.56.0)
+
+- [x] **Hermes Memory + Skills — FASE 5 (v3.56.0)** — `HermesClient.listSkillFiles` (só leitura de `SKILL.md`); `HermesService.getSkills` (parse de frontmatter YAML sem dependência nova), `getSessionsSummary` (`hermes sessions stats/list`), `syncProjectContext` (adapter ETAPA 18 — escreve KB Global + memória do projeto em `.hermes.md`, que o Hermes já injeta automaticamente); IPC `hermes:skills:list`, `hermes:sessions:summary`, `hermes:agent:syncContext`; abas Console/Skills/Sessões em `HermesPage.tsx`; botão "Sincronizar contexto" em `HermesAgentPanel.tsx` — `pnpm typecheck && pnpm build` limpos — 2026-08-12
+
+## Concluídas recentemente (v3.54.0 → v3.55.0)
+
+- [x] **Hermes Execução Paralela — FASE 4 (v3.55.0)** — pesquisa confirmou que "subagentes" não é uma API externa do Hermes; NEX gerencia git worktrees ele mesmo (`GitService.worktreeAdd/worktreeRemove/merge`, merge nunca força) em vez de depender da flag `-w` pouco documentada; `HermesService.startParallelTask/finishParallelTask`; coluna `parallelizable` em `agent_tasks` (Hermes decide durante o plano); IPC `hermes:parallel:start/finish` reaproveitando canais existentes; refactor `wireHermesStream()`; `runLoop()` roda lotes de até 3 tarefas paralelas; painel "Agentes ativos" + badge "paralelo" — `pnpm typecheck && pnpm build` limpos — 2026-08-12
+
+## Concluídas recentemente (v3.53.0 → v3.54.0)
+
+- [x] **Hermes Autonomous Loop — FASE 3 (v3.54.0)** — loop de tarefas client-side reaproveitando `hermes:agent:send`; protocolo de tags `[TAREFA_CONCLUIDA]`/`[TAREFA_BLOQUEADA]`/`[DECISAO_NECESSARIA]`; geração de plano em JSON com fallback tolerante; reuso de `agent_tasks`/`TasksService` (filtro `projectId` novo) em vez de tabela nova; autonomia binária Manual/Autônomo (`HermesProjectAgent.autonomyLevel`) por decisão explícita do usuário; DoD checklist (7 itens, 2 auto-verificados via SSH) — não é gate automático; Decision Request UI; IPC `hermes:agent:setObjective/setAutonomy`, `hermes:dod:get/toggle/runChecks`; `HermesAgentPanel.tsx` expandido — `pnpm typecheck && pnpm build` limpos — 2026-08-12
+
+## Concluídas recentemente (v3.52.0 → v3.53.0)
+
+- [x] **Hermes Agent Mode — FASE 2 (v3.53.0)** — `ExecStream`/`TerminalService.execStream()` (SSH one-shot com dados incrementais); `HermesClient.streamObjective()` (objetivo via SFTP + `"$(cat …)"`, `hermes -Q chat -q [--resume latest --in <workspace>]`); `HermesService.getAgentStatus/streamObjective/markAgentActivity`; model Prisma `HermesProjectAgent`; IPC `hermes:agent:status/send/cancel` com streaming via `hermes:agent:chunk`; `HermesAgentPanel.tsx` + toggle Chat/Agent em `AIHubPage.tsx`; modo headless do CLI `hermes` confirmado via pesquisa na documentação real (`-z`, `chat -q`, `--resume --in`) — `pnpm typecheck && pnpm build` limpos — 2026-08-10
+
+## Concluídas recentemente (v3.51.0 → v3.52.0)
+
+- [x] **Hermes Manager — FASE 1 (v3.52.0)** — novo módulo `packages/core/src/hermes/` (`HermesService`, `HermesClient`, installer) reaproveitando `TerminalService.exec`; model Prisma `HermesInstance`; 8 handlers IPC `hermes:*` (`status`/`install`/`update`/`start`/`stop`/`restart`/`exec`/`logs`) com `requireAuth`/`requireAdmin`; `HermesPage.tsx` (rota `/hermes/:vpsId/:vpsName`) com status card, botões de ciclo de vida, painel de saída e execução de subcomandos; botão de entrada em `Launcher.tsx`; gerencia `hermes gateway` em background via PID file; corrigido erro de tipo pré-existente em `callAIOneShot`; `pnpm typecheck && pnpm build` limpos — 2026-08-10
+
 ## Concluídas recentemente (v3.50.0 → v3.51.0)
 
 - [x] **SQUAD-04: Autonomia — push com contexto de tarefa (v3.51.0)** — `agentTaskContextRef` (`Map<AgentName, string>`) adicionado em `SquadPage.tsx`; populado em `handleSend`, delegações estruturadas `[DELEGAÇÃO]`, delegações por `@mention` e em cada fase do `runPipeline`; `autonomousLoop` e `runAgentUntilDone` incluem "Sua tarefa: ..." no push de recuperação; map limpo a cada nova mensagem do usuário — 2026-06-21

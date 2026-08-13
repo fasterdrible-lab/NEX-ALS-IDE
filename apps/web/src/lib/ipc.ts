@@ -30,6 +30,61 @@ export interface FileEntry {
   permissions: string
 }
 
+export type HermesStatus = 'unknown' | 'not_installed' | 'installed' | 'running' | 'stopped' | 'error'
+
+export interface HermesInstanceInfo {
+  vpsServerId: string
+  status: HermesStatus
+  version: string
+  installPath: string
+  pid: number | null
+  lastSeen: string | null
+  lastError: string
+}
+
+export interface HermesInstallResult {
+  success: boolean
+  output: string
+  version: string
+  installPath: string
+}
+
+export interface HermesCommandResult {
+  success: boolean
+  output: string
+}
+
+export type HermesAgentStatus = 'idle' | 'running' | 'error'
+export type HermesAutonomyLevel = 'manual' | 'autonomous'
+
+export interface HermesProjectAgentInfo {
+  projectId: string
+  vpsId: string
+  vpsName: string
+  workspace: string
+  status: HermesAgentStatus
+  sessionStarted: boolean
+  lastActivity: string | null
+  lastError: string
+  hermesStatus: HermesStatus
+  objective: string
+  autonomyLevel: HermesAutonomyLevel
+}
+
+export interface DodItem {
+  id: string
+  label: string
+  auto: boolean
+  done: boolean
+}
+
+export interface HermesSkillInfo {
+  name: string
+  description: string
+  version: string
+  path: string
+}
+
 declare global {
   interface Window {
     electron: {
@@ -130,6 +185,64 @@ export const ipc = {
       invoke<string>('git:pull', { vpsId, cwd }),
     log: (vpsId: string, cwd: string, n?: number) =>
       invoke<GitCommit[]>('git:log', { vpsId, cwd, n }),
+  },
+  hermes: {
+    status: (vpsId: string) =>
+      invoke<HermesInstanceInfo>('hermes:status', vpsId),
+    install: (vpsId: string) =>
+      invoke<HermesInstallResult>('hermes:install', vpsId),
+    update: (vpsId: string) =>
+      invoke<HermesCommandResult>('hermes:update', vpsId),
+    start: (vpsId: string) =>
+      invoke<HermesCommandResult>('hermes:start', vpsId),
+    stop: (vpsId: string) =>
+      invoke<HermesCommandResult>('hermes:stop', vpsId),
+    restart: (vpsId: string) =>
+      invoke<HermesCommandResult>('hermes:restart', vpsId),
+    exec: (vpsId: string, args: string) =>
+      invoke<HermesCommandResult>('hermes:exec', { vpsId, args }),
+    logs: (vpsId: string, lines?: number) =>
+      invoke<HermesCommandResult>('hermes:logs', { vpsId, lines }),
+    agent: {
+      status: (projectId: string) =>
+        invoke<HermesProjectAgentInfo>('hermes:agent:status', { projectId }),
+      send: (projectId: string, objective: string) =>
+        invoke<{ streamId: string }>('hermes:agent:send', { projectId, objective }),
+      cancel: (streamId: string) =>
+        invoke<{ success: boolean }>('hermes:agent:cancel', streamId),
+      onChunk: (cb: (chunk: { type: string; delta?: string; error?: string; streamId: string }) => void) => {
+        if (!window.electron) return () => {}
+        return window.electron.on('hermes:agent:chunk', cb as (...args: unknown[]) => void)
+      },
+      setObjective: (projectId: string, objective: string) =>
+        invoke<void>('hermes:agent:setObjective', { projectId, objective }),
+      setAutonomy: (projectId: string, level: HermesAutonomyLevel) =>
+        invoke<void>('hermes:agent:setAutonomy', { projectId, level }),
+      syncContext: (projectId: string) =>
+        invoke<{ written: boolean; path: string }>('hermes:agent:syncContext', { projectId }),
+    },
+    dod: {
+      get: (projectId: string) =>
+        invoke<DodItem[]>('hermes:dod:get', { projectId }),
+      toggle: (projectId: string, itemId: string, done: boolean) =>
+        invoke<DodItem[]>('hermes:dod:toggle', { projectId, itemId, done }),
+      runChecks: (projectId: string) =>
+        invoke<DodItem[]>('hermes:dod:runChecks', { projectId }),
+    },
+    parallel: {
+      start: (projectId: string, taskId: string, objective: string) =>
+        invoke<{ streamId: string; worktreePath: string; branch: string }>('hermes:parallel:start', { projectId, taskId, objective }),
+      finish: (projectId: string, worktreePath: string, branch: string, merge: boolean) =>
+        invoke<{ merged: boolean; output: string }>('hermes:parallel:finish', { projectId, worktreePath, branch, merge }),
+    },
+    skills: {
+      list: (vpsId: string) =>
+        invoke<HermesSkillInfo[]>('hermes:skills:list', { vpsId }),
+    },
+    sessions: {
+      summary: (vpsId: string) =>
+        invoke<HermesCommandResult>('hermes:sessions:summary', { vpsId }),
+    },
   },
   terminal: {
     open: (vpsId: string) =>
@@ -395,7 +508,7 @@ export const ipc = {
     search:  (query: string) => invoke<KnowledgeEntry[]>('knowledge:search', query),
   },
   tasks: {
-    list:   (filters?: { status?: TaskStatus; ownerAgent?: string }) => invoke<AgentTask[]>('tasks:list', filters),
+    list:   (filters?: { status?: TaskStatus; ownerAgent?: string; projectId?: string }) => invoke<AgentTask[]>('tasks:list', filters),
     get:    (id: string) => invoke<AgentTask | null>('tasks:get', id),
     create: (data: AgentTaskInput) => invoke<AgentTask>('tasks:create', data),
     update: (id: string, data: Partial<AgentTaskInput>) => invoke<AgentTask>('tasks:update', { id, ...data }),
@@ -452,6 +565,7 @@ export interface ScheduledJob {
   lastResult: string | null
   nextRunAt: string
   vpsId: string | null
+  projectId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -461,6 +575,8 @@ export interface ScheduledJobInput {
   title?: string
   agentName?: string
   vpsId?: string
+  /** Obrigatório quando agentName === 'hermes' — define qual projeto/workspace recebe o objetivo. */
+  projectId?: string
 }
 
 export interface ConversationResult {
@@ -492,11 +608,13 @@ export interface AgentTask {
   id: string; title: string; description: string; status: TaskStatus
   ownerAgent: string; priority: TaskPriority
   projectId: string | null; sessionId: string | null
+  parallelizable: boolean
   createdAt: string; updatedAt: string
 }
 export interface AgentTaskInput {
   title: string; description?: string; status?: TaskStatus
   ownerAgent?: string; priority?: TaskPriority; projectId?: string; sessionId?: string
+  parallelizable?: boolean
 }
 
 export interface SquadMemory {

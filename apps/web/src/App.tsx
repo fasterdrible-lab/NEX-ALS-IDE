@@ -53,6 +53,7 @@ import AutomationsPage from './pages/AutomationsPage'
 import OperatorPage from './pages/OperatorPage'
 import WorkspacePage from './pages/WorkspacePage'
 import PlanningPage from './pages/PlanningPage'
+import HermesPage from './pages/HermesPage'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 
 function AppRoutes() {
@@ -98,6 +99,7 @@ function AppRoutes() {
       <Route path="/squad" element={<SquadPage />} />
       <Route path="/incident/:vpsId/:vpsName" element={<IncidentModePage />} />
       <Route path="/deploy/:vpsId/:vpsName" element={<DeployAssistantPage />} />
+      <Route path="/hermes/:vpsId/:vpsName" element={<HermesPage />} />
       <Route path="/terminal/:vpsId/:vpsName" element={<TerminalPage />} />
       <Route path="/explorer/:vpsId/:vpsName" element={<FileExplorerPage />} />
       <Route path="/ide/:vpsId/:vpsName" element={<IDEPage />} />

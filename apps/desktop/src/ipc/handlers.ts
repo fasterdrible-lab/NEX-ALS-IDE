@@ -12,6 +12,7 @@ import {
   DiagnosticsService,
   TerminalService,
   TerminalSession,
+  type ExecStream,
   SftpService,
   SftpSession,
   GitService,
@@ -33,6 +34,7 @@ import {
   type TaskStatus,
   ScheduledJobsService,
   type ScheduledJobInput,
+  HermesService,
 } from '@cwm/core'
 import { JobExecutor } from '../jobs/job-executor.js'
 import { LocalLspBridge } from '../lsp/local-lsp.js'
@@ -103,11 +105,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const skillsSvc = new SkillsService()
   const tasksSvc = new TasksService()
   const jobsSvc = new ScheduledJobsService()
-  const jobExecutor = new JobExecutor()
   const ctxBuilder = new ContextBuilder()
   const memorySvc = new ProjectMemoryService()
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
+  const hermesSvc = new HermesService(terminal, sftpService, git, knowledgeSvc, memorySvc)
+  const hermesStreams = new Map<string, ExecStream>()
+  const jobExecutor = new JobExecutor(hermesSvc)
   // Claude Code subprocess streams (account-based, sem API key)
   const claudeProcs = new Map<string, { kill: () => void }>()
 
@@ -132,6 +136,56 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   void db.$executeRawUnsafe(
     `CREATE INDEX IF NOT EXISTS idx_squad_memories_project ON squad_memories(projectKey)`
   ).catch(() => {})
+
+  // Auto-criar tabela hermes_instances (compatibilidade sem pnpm db:push em instalações existentes)
+  void db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS hermes_instances (
+      id TEXT PRIMARY KEY,
+      vpsServerId TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'unknown',
+      version TEXT NOT NULL DEFAULT '',
+      installPath TEXT NOT NULL DEFAULT '',
+      pid INTEGER,
+      lastSeen TEXT,
+      lastError TEXT NOT NULL DEFAULT '',
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `).catch(() => {})
+
+  // Auto-criar tabela hermes_project_agents (compatibilidade sem pnpm db:push em instalações existentes)
+  void db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS hermes_project_agents (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL UNIQUE,
+      hermesInstanceId TEXT NOT NULL,
+      workspace TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'idle',
+      sessionStarted INTEGER NOT NULL DEFAULT 0,
+      lastActivity TEXT,
+      lastError TEXT NOT NULL DEFAULT '',
+      objective TEXT NOT NULL DEFAULT '',
+      autonomyLevel TEXT NOT NULL DEFAULT 'manual',
+      dodChecklist TEXT NOT NULL DEFAULT '[]',
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      updatedAt TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `).catch(() => {})
+  // Migração incremental para instalações que já tinham hermes_project_agents antes da FASE 3 (v3.53.0)
+  void db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN objective TEXT NOT NULL DEFAULT ''`).catch(() => {})
+  void db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN autonomyLevel TEXT NOT NULL DEFAULT 'manual'`).catch(() => {})
+  void db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN dodChecklist TEXT NOT NULL DEFAULT '[]'`).catch(() => {})
+  // Migração incremental para instalações que já tinham agent_tasks antes da FASE 4 (v3.55.0)
+  void db.$executeRawUnsafe(`ALTER TABLE agent_tasks ADD COLUMN parallelizable INTEGER NOT NULL DEFAULT 0`).catch(() => {})
+  // Migração incremental para instalações que já tinham scheduled_jobs antes da FASE 6 (v3.57.0)
+  void db.$executeRawUnsafe(`ALTER TABLE scheduled_jobs ADD COLUMN projectId TEXT`).catch(() => {})
+
+  // Hermes FASE 6 — recovery de sessão interrompida: qualquer HermesProjectAgent 'running' no boot
+  // é órfão (o processo Electron acabou de (re)iniciar, nenhum ExecStream anterior sobrevive a isso)
+  void hermesSvc.recoverInterruptedSessions()
+    .then(n => { if (n > 0) console.log(`[Hermes] ${n} sessão(ões) interrompida(s) detectada(s) e marcada(s) para retomada.`) })
+    .catch(() => {})
+
   let notificationsEnabled = true
   // Lê preferência salva no banco assincronamente
   void (db.$queryRawUnsafe(
@@ -360,6 +414,163 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   )
   ipcMain.handle('git:log', (_, { vpsId, cwd, n }: { vpsId: string; cwd: string; n?: number }) =>
     wrapHandler(() => git.log(vpsId, cwd, n))
+  )
+
+  // Hermes — gerenciador do runtime agentic externo (FASE 1: ciclo de vida na VPS)
+  ipcMain.handle('hermes:status', (_, vpsId: string) =>
+    wrapHandler(() => { requireAuth(); return hermesSvc.getStatus(vpsId) })
+  )
+  ipcMain.handle('hermes:install', (_, vpsId: string) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.install(vpsId) })
+  )
+  ipcMain.handle('hermes:update', (_, vpsId: string) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.update(vpsId) })
+  )
+  ipcMain.handle('hermes:start', (_, vpsId: string) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.start(vpsId) })
+  )
+  ipcMain.handle('hermes:stop', (_, vpsId: string) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.stop(vpsId) })
+  )
+  ipcMain.handle('hermes:restart', (_, vpsId: string) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.restart(vpsId) })
+  )
+  ipcMain.handle('hermes:exec', (_, { vpsId, args }: { vpsId: string; args: string }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.execCommand(vpsId, args) })
+  )
+  ipcMain.handle('hermes:logs', (_, { vpsId, lines }: { vpsId: string; lines?: number }) =>
+    wrapHandler(() => { requireAuth(); return hermesSvc.getLogs(vpsId, lines) })
+  )
+
+  // Hermes — FASE 2: Agent Mode (envio de objetivo por projeto, streaming via SSH)
+  ipcMain.handle('hermes:agent:status', (_, { projectId }: { projectId: string }) =>
+    wrapHandler(() => { requireAuth(); return hermesSvc.getAgentStatus(projectId) })
+  )
+
+  /**
+   * Fiação comum de streaming Hermes (usada por hermes:agent:send e hermes:parallel:start):
+   * registra em hermesStreams, repassa data/close/error como hermes:agent:chunk, aplica watchdog
+   * de inatividade (300s — execuções agenticas podem ser bem mais lentas que uma resposta simples).
+   */
+  function wireHermesStream(
+    targetWin: BrowserWindow | null,
+    streamId: string,
+    stream: ExecStream,
+    onSettled: (ok: boolean, lastError?: string) => void,
+  ): void {
+    hermesStreams.set(streamId, stream)
+    let doneSent = false
+    let hasData = false
+    let lastChunkAt = Date.now()
+    // eslint-disable-next-line prefer-const
+    let watchdog: ReturnType<typeof setInterval>
+
+    const finish = (ok: boolean, lastError?: string) => {
+      if (doneSent) return
+      doneSent = true
+      clearInterval(watchdog)
+      hermesStreams.delete(streamId)
+      onSettled(ok, lastError)
+    }
+
+    stream.on('data', (chunk: string) => {
+      hasData = true
+      lastChunkAt = Date.now()
+      try { targetWin?.webContents.send('hermes:agent:chunk', { streamId, type: 'text_delta', delta: chunk }) } catch { /* janela fechada */ }
+    })
+    stream.on('close', (code: number | null) => {
+      const ok = code === 0 || hasData
+      finish(ok, ok ? undefined : `hermes encerrou com código ${code}`)
+      try { targetWin?.webContents.send('hermes:agent:chunk', { streamId, type: 'done' }) } catch { /* janela fechada */ }
+    })
+    stream.on('error', (err: Error) => {
+      finish(false, err.message)
+      try { targetWin?.webContents.send('hermes:agent:chunk', { streamId, type: 'error', error: err.message }) } catch { /* janela fechada */ }
+    })
+    watchdog = setInterval(() => {
+      if (doneSent) { clearInterval(watchdog); return }
+      if (Date.now() - lastChunkAt > 300_000) {
+        clearInterval(watchdog)
+        stream.kill()
+        finish(false, 'Timeout: Hermes não respondeu em 300s.')
+        try {
+          targetWin?.webContents.send('hermes:agent:chunk', {
+            streamId, type: 'error', error: '⏱ Timeout: Hermes não respondeu em 300s. Execução encerrada.',
+          })
+        } catch { /* janela fechada */ }
+      }
+    }, 15_000)
+  }
+
+  ipcMain.handle('hermes:agent:send', (event, { projectId, objective }: { projectId: string; objective: string }) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      const targetWin = BrowserWindow.fromWebContents(event.sender)
+      const streamId = crypto.randomUUID()
+      const { stream } = await hermesSvc.streamObjective(projectId, objective)
+      wireHermesStream(targetWin, streamId, stream, (ok, lastError) => {
+        void hermesSvc.markAgentActivity(projectId, {
+          status: ok ? 'idle' : 'error',
+          sessionStarted: ok ? true : undefined,
+          lastError,
+        })
+      })
+      return { streamId }
+    })
+  )
+
+  ipcMain.handle('hermes:agent:cancel', (_, streamId: string) => {
+    const stream = hermesStreams.get(streamId)
+    if (stream) { stream.kill(); hermesStreams.delete(streamId) }
+    return { success: true }
+  })
+
+  // Hermes — FASE 3: Autonomous Loop (objetivo/autonomia persistidos + DoD checklist)
+  ipcMain.handle('hermes:agent:setObjective', (_, { projectId, objective }: { projectId: string; objective: string }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.setObjective(projectId, objective) })
+  )
+  ipcMain.handle('hermes:agent:setAutonomy', (_, { projectId, level }: { projectId: string; level: 'manual' | 'autonomous' }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.setAutonomyLevel(projectId, level) })
+  )
+  ipcMain.handle('hermes:dod:get', (_, { projectId }: { projectId: string }) =>
+    wrapHandler(() => { requireAuth(); return hermesSvc.getDodChecklist(projectId) })
+  )
+  ipcMain.handle('hermes:dod:toggle', (_, { projectId, itemId, done }: { projectId: string; itemId: string; done: boolean }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.toggleDodItem(projectId, itemId, done) })
+  )
+  ipcMain.handle('hermes:dod:runChecks', (_, { projectId }: { projectId: string }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.runDodAutoChecks(projectId) })
+  )
+
+  // Hermes — FASE 4: execução paralela via git worktree isolado (não é "spawn de subagente" —
+  // isso não existe como API externa do Hermes; é o NEX rodando tarefas independentes em paralelo)
+  ipcMain.handle('hermes:parallel:start', (event, { projectId, taskId, objective }: { projectId: string; taskId: string; objective: string }) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      const targetWin = BrowserWindow.fromWebContents(event.sender)
+      const streamId = crypto.randomUUID()
+      const { stream, worktreePath, branch } = await hermesSvc.startParallelTask(projectId, taskId, objective)
+      wireHermesStream(targetWin, streamId, stream, () => {
+        // status da tarefa é decidido pelo renderer via parsing das tags — nada a persistir aqui
+      })
+      return { streamId, worktreePath, branch }
+    })
+  )
+  ipcMain.handle('hermes:parallel:finish', (_, { projectId, worktreePath, branch, merge }: {
+    projectId: string; worktreePath: string; branch: string; merge: boolean
+  }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.finishParallelTask(projectId, worktreePath, branch, merge) })
+  )
+
+  // Hermes — FASE 5: visibilidade de skills/sessões (só leitura) + adapter de contexto NEX→Hermes
+  ipcMain.handle('hermes:skills:list', (_, { vpsId }: { vpsId: string }) =>
+    wrapHandler(() => { requireAuth(); return hermesSvc.getSkills(vpsId) })
+  )
+  ipcMain.handle('hermes:sessions:summary', (_, { vpsId }: { vpsId: string }) =>
+    wrapHandler(() => { requireAuth(); return hermesSvc.getSessionsSummary(vpsId) })
+  )
+  ipcMain.handle('hermes:agent:syncContext', (_, { projectId }: { projectId: string }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.syncProjectContext(projectId) })
   )
 
   // ── IDE-18: DAP — abre DevTools externo para depuração remota ─────────
@@ -1766,7 +1977,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   )
 
   // ── Tasks (Ponto 6 — Planejamento Persistente) ────────────────────────────────
-  ipcMain.handle('tasks:list', (_, filters?: { status?: TaskStatus; ownerAgent?: string }) =>
+  ipcMain.handle('tasks:list', (_, filters?: { status?: TaskStatus; ownerAgent?: string; projectId?: string }) =>
     wrapHandler(() => { requireAuth(); return tasksSvc.list(filters) })
   )
   ipcMain.handle('tasks:get', (_, id: string) =>
@@ -1815,7 +2026,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   // ── Helper: chama IA respeitando o provider padrão + suporte claude-code ────────
   async function callAIOneShot(userMessage: string, systemPrompt: string, maxTokens = 2048): Promise<string> {
     // Resolve provider efetivo: default configurado → preferredProvider do agente (mesma lógica squad:stream:start)
-    let effectiveProvider = AGENTS.friday.preferredProvider
+    let effectiveProvider: string = AGENTS.friday.preferredProvider
     try {
       const def = await (db.$queryRawUnsafe(
         `SELECT provider FROM ai_providers WHERE isDefault=1 AND enabled=1 LIMIT 1`

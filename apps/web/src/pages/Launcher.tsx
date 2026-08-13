@@ -4,7 +4,7 @@ import {
   Rocket, Terminal, FolderOpen, Server,
   Loader2, CheckCircle, XCircle, User,
   BotMessageSquare, AlertTriangle, HelpCircle, HardDrive, Code2, FolderOpen as FolderOpenIcon,
-  ExternalLink, Siren, Rocket as RocketIcon,
+  ExternalLink, Siren, Rocket as RocketIcon, Bot,
 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import type { Project, VpsServer, ClaudeCheckResult } from '@cwm/config'
@@ -167,6 +167,13 @@ export default function Launcher() {
                       title="Deploy Assistant — plano de deploy com aprovação"
                     >
                       <RocketIcon size={13} />
+                    </button>
+                    <button
+                      onClick={() => navigate(`/hermes/${v.id}/${encodeURIComponent(v.name)}`)}
+                      className="btn-secondary text-xs py-1.5 px-3 text-purple-400 hover:text-purple-300 border-purple-800/40"
+                      title="Hermes — runtime agentic externo (instalar/iniciar/parar)"
+                    >
+                      <Bot size={13} /> Hermes
                     </button>
                     <button
                       onClick={() => navigate(`/explorer/${v.id}/${encodeURIComponent(v.name)}`)}

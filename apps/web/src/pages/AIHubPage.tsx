@@ -7,6 +7,7 @@ import {
   Server, Layers, Terminal, Box as DockerBox, Activity,
 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
+import HermesAgentPanel from '../components/HermesAgentPanel'
 
 interface Conversation {
   id: string; title: string; provider: string; model: string
@@ -37,6 +38,7 @@ type RightTab = 'context' | 'memory'
 
 export default function AIHubPage() {
   const navigate = useNavigate()
+  const [mode, setMode] = useState<'chat' | 'agent'>('chat')
   const [convList, setConvList] = useState<Conversation[]>([])
   const [activeConv, setActiveConv] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -235,14 +237,37 @@ export default function AIHubPage() {
   const unpinned = convList.filter(c => !c.isPinned)
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden">
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden">
+      {/* Header persistente — Voltar + Mode toggle (Chat/Agent) */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900 shrink-0">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200">
+          <ArrowLeft size={11}/> Voltar
+        </button>
+        <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5">
+          <button
+            onClick={() => setMode('chat')}
+            className={`px-3 py-1 text-[11px] rounded-md transition-colors ${mode === 'chat' ? 'bg-purple-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            Chat
+          </button>
+          <button
+            onClick={() => setMode('agent')}
+            className={`px-3 py-1 text-[11px] rounded-md transition-colors ${mode === 'agent' ? 'bg-purple-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            Agent
+          </button>
+        </div>
+        <span className="text-[11px] font-semibold text-slate-300 tracking-wide w-14 text-right">AI HUB</span>
+      </div>
+
+      {mode === 'agent' ? (
+        <HermesAgentPanel />
+      ) : (
+      <div className="flex flex-1 overflow-hidden">
       {/* Sidebar esquerda */}
       <div className="w-60 border-r border-slate-800 flex flex-col shrink-0 bg-slate-900">
         <div className="flex items-center justify-between px-3 py-3 border-b border-slate-800">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200">
-            <ArrowLeft size={11}/> Voltar
-          </button>
-          <span className="text-[11px] font-semibold text-slate-300 tracking-wide">AI HUB</span>
+          <span className="text-[11px] font-semibold text-slate-300 tracking-wide">CONVERSAS</span>
           <button onClick={newConv} className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-100" title="Nova conversa">
             <Plus size={14}/>
           </button>
@@ -535,6 +560,8 @@ export default function AIHubPage() {
           </>
         )}
       </div>
+      </div>
+      )}
     </div>
   )
 }

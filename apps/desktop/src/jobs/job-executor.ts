@@ -1,7 +1,7 @@
 import { Notification } from 'electron'
 import {
   AiService, ContextBuilder, ScheduledJobsService,
-  AGENTS, type AgentName, type ScheduledJob,
+  AGENTS, type AgentName, type ScheduledJob, type HermesService,
 } from '@cwm/core'
 
 export class JobExecutor {
@@ -10,6 +10,8 @@ export class JobExecutor {
   private readonly ctxBuilder = new ContextBuilder()
   private timer: ReturnType<typeof setInterval> | null = null
   private readonly running = new Set<string>()
+
+  constructor(private readonly hermesSvc: HermesService) {}
 
   start(): void {
     void this.checkDueJobs()
@@ -53,6 +55,8 @@ export class JobExecutor {
   }
 
   private async executeJob(job: ScheduledJob): Promise<string> {
+    if (job.agentName === 'hermes') return this.executeHermesJob(job)
+
     const agentName = (job.agentName as AgentName) in AGENTS ? job.agentName as AgentName : 'jarvis'
     const agentCfg = AGENTS[agentName]
 
@@ -79,5 +83,25 @@ export class JobExecutor {
     } catch { /* Notification não disponível */ }
 
     return text
+  }
+
+  /** FASE 6 — cron aponta pra um projeto com Hermes em vez de um agente do Squad; roda sem UI aberta. */
+  private async executeHermesJob(job: ScheduledJob): Promise<string> {
+    if (!job.projectId) {
+      const msg = 'Erro: automação Hermes sem projeto associado.'
+      try { new Notification({ title: `⚙ ${job.title} (falhou)`, body: msg }).show() } catch { /* Notification não disponível */ }
+      return msg
+    }
+
+    const { success, output } = await this.hermesSvc.runObjectiveUnattended(job.projectId, job.instruction)
+
+    try {
+      new Notification({
+        title: `⚙ ${job.title}${success ? '' : ' (falhou)'}`,
+        body: output.slice(0, 150) || (success ? '(sem saída)' : '(erro)'),
+      }).show()
+    } catch { /* Notification não disponível */ }
+
+    return output
   }
 }

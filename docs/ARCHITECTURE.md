@@ -702,3 +702,440 @@ squad:messages:list  ← sessionId  → SquadMessage[]
 squad:messages:save  ← { sessionId, role, agentName, content }  → SquadMessage
 squad:sessions:delete← sessionId  → void
 ```
+
+## Hermes Manager (v3.52.0+) — FASE 1
+
+Gerenciador de ciclo de vida do runtime agentic externo **Hermes Agent** (Nous Research) numa VPS. É a base do futuro modo "Autonomous Development" (ver `docs/HERMES_INTEGRATION.md`). Nesta fase o NEX **não** cria um novo agent loop — Squad continua sendo o único orquestrador de agentes do sistema. Hermes é tratado como um serviço externo cujo ciclo de vida (instalar/atualizar/iniciar/parar/status/logs) o NEX gerencia via SSH, reaproveitando `TerminalService.exec` sem novo transporte.
+
+```
+NEX-ALS IDE
+  Chat Mode  → AI Hub atual (inalterado)
+  Agent Mode → HermesService (packages/core/src/hermes/)
+                  → HermesClient → TerminalService.exec (SSH, reuso)
+                      → VPS: binário `hermes` (instalado via installer oficial)
+```
+
+### Módulos
+
+```
+packages/core/src/hermes/
+  hermes.types.ts     ← HermesStatus, HermesInstanceInfo, HermesInstallResult, HermesCommandResult
+  hermes-client.ts     ← comandos SSH brutos (detect/version/install/update/startGateway/
+                          stopGateway/isRunning/execCommand/readLogs); todo comando reexporta
+                          PATH porque ssh2.exec não roda shell de login
+  hermes-installer.ts  ← roda o installer oficial e confirma o binário no PATH
+  hermes.service.ts    ← orquestrador público; persiste HermesInstance via Prisma
+```
+
+### Gerenciamento de processo — `hermes gateway` em background
+
+O Hermes Agent real não expõe HTTP API por padrão (confirmado no README do projeto) e não há garantia de systemd em toda VPS. "Iniciar/Parar/Reiniciar" gerenciam o processo `hermes gateway` via PID file:
+
+```
+start:  mkdir -p ~/.hermes-nex
+        nohup hermes gateway > ~/.hermes-nex/gateway.log 2>&1 & echo $! > ~/.hermes-nex/gateway.pid
+
+stop:   kill <pid>  (fallback: pkill -f "hermes gateway")
+status: kill -0 <pid>  (exit code determina running/stopped)
+logs:   tail -n <N> ~/.hermes-nex/gateway.log
+```
+
+### Banco de dados
+
+```sql
+-- hermes_instances (1:1 com vps_servers)
+id, vpsServerId(FK UNIQUE), status, version, installPath, pid,
+lastSeen, lastError, createdAt, updatedAt
+```
+
+Criada via Prisma (`schema.prisma`) + auto-criação `CREATE TABLE IF NOT EXISTS` em `handlers.ts` (mesmo padrão de `squad_memories`) para instalações existentes que não rodam `pnpm db:push`.
+
+### IPC `hermes:*`
+
+```
+hermes:status   (vpsId)                → requireAuth  → HermesInstanceInfo
+hermes:install  (vpsId)                → requireAdmin → HermesInstallResult
+hermes:update   (vpsId)                → requireAdmin → HermesCommandResult
+hermes:start    (vpsId)                → requireAdmin → HermesCommandResult
+hermes:stop     (vpsId)                → requireAdmin → HermesCommandResult
+hermes:restart  (vpsId)                → requireAdmin → HermesCommandResult
+hermes:exec     ({vpsId, args})        → requireAdmin → HermesCommandResult
+hermes:logs     ({vpsId, lines?})      → requireAuth  → HermesCommandResult
+```
+
+Sem streaming SSE nesta fase — `install`/`update` retornam o log completo ao final (mesmo modelo de `git:*`/`diagnostics:run`). `install`/`update`/`start`/`stop`/`restart`/`exec` exigem `requireAdmin` (mesmo nível de `vps:create`), sem o modal "CONFIRMO" de ações destrutivas — nenhuma dessas ações é irreversível.
+
+### UI
+
+`HermesPage.tsx` — rota fullscreen `/hermes/:vpsId/:vpsName`, acessível pelo botão "Hermes" na linha de ações por VPS em `Launcher.tsx`. Card de status + botões de ciclo de vida + painel de saída (`pre` monoespaçado) + campo para executar subcomandos `hermes <args>` arbitrários. Sem chat, sem activity feed, sem Project Commander — isso é FASE 2.
+
+### Limitações conhecidas
+
+1. ~~Sem modo headless confirmado do CLI `hermes`~~ — **resolvido na FASE 2** via pesquisa na documentação real: `hermes -z`/`hermes chat -q`. Ver seção "Hermes Agent Mode (FASE 2)" abaixo.
+2. `hermes gateway` é a aproximação usada para "serviço" com o CLI real disponível hoje; pode ser revisado quando existir um "Hermes Bridge" dedicado.
+3. Instalação de ponta a ponta não foi validada contra uma VPS real nesta fase — verificado via `pnpm typecheck && pnpm build` + revisão manual dos comandos shell.
+
+## Hermes Agent Mode (v3.53.0+) — FASE 2
+
+Envio de objetivo a um projeto com resposta em streaming via SSH. O NEX ainda não interpreta o objetivo nem o quebra em etapas — isso é escopo da FASE 3 ("Autonomous Loop"). Aqui a mensagem é simplesmente entregue ao Hermes, que já é agentic por conta própria (uma única classe `AIAgent` Python cuida de planejamento/tools/retries internamente, confirmado na arquitetura documentada do projeto).
+
+### Modo headless real (pesquisado em `docs/reference/cli-commands` e `docs/user-guide/cli`)
+
+```
+hermes -z "prompt"        → one-shot puro: só a resposta final, nada mais no stdout/stderr
+hermes chat -q "prompt"   → one-shot com saída de tools no transcript (usado aqui — melhor p/ activity feed)
+-Q / --quiet               → suprime banners/spinners (modo programático)
+--resume latest --in <dir> → retoma a última sessão daquele diretório de trabalho
+```
+
+Adaptador **ACP** (stdio/JSON-RPC, daria eventos estruturados) existe na arquitetura do Hermes, mas sua página de documentação (`/docs/developer-guide/acp`) retornou 404 na pesquisa — não é base confiável ainda; o activity feed desta fase é texto corrido.
+
+### Fluxo
+
+```
+HermesAgentPanel (AI Hub, modo Agent)
+  → ipc.hermes.agent.send(projectId, objective)
+  → hermes:agent:send (handlers.ts)
+      → HermesService.streamObjective(projectId, objective)
+          → resolve Project → VPS; exige HermesInstance.status === 'running'
+          → decide resume = HermesProjectAgent.sessionStarted
+          → HermesClient.streamObjective(vpsId, { workspace, objective, resume })
+              → SftpSession.writeFile(~/.hermes-nex/objective_<id>.txt, objective)
+              → TerminalService.execStream(vpsId,
+                  `PATH…; cd "<workspace>" && hermes -Q chat -q [--resume latest --in "<workspace>"] "$(cat …)"; rm -f …`)
+      → ExecStream 'data' → ipcMain envia hermes:agent:chunk { streamId, type:'text_delta', delta }
+      → ExecStream 'close'/'error' → HermesService.markAgentActivity(...) + hermes:agent:chunk { type:'done'|'error' }
+      → watchdog: sem dado novo por 300s → mata o stream (agentic pode ser lento; maior que o watchdog de 90s do claude-code)
+```
+
+`"$(cat arquivo)"` evita escapar aspas/quebras de linha do texto do usuário no comando SSH (mesma técnica do "Chat Claude" do IDE-21).
+
+### `TerminalService.execStream()` — nova primitiva
+
+`TerminalService` tinha `exec()` (buffer completo) e `openShell()` (PTY interativo). `execStream()` é o meio-termo: exec SSH one-shot com dados incrementais via a classe `ExecStream extends EventEmitter` (eventos `data`/`close`/`error`; `kill()` fecha o channel e a conexão). Erros de conexão que chegam **depois** do `resolve()` da promise são repassados via `execStream.emit('error', …)` — do contrário seriam descartados silenciosamente pelo `reject()` (que não faz nada numa promise já resolvida).
+
+### Banco de dados
+
+```sql
+-- hermes_project_agents (1:1 com projects)
+id, projectId(FK UNIQUE), hermesInstanceId(FK), workspace,
+status ('idle'|'running'|'error'), sessionStarted, lastActivity, lastError,
+createdAt, updatedAt
+```
+
+Sem colunas `model`/`autonomyLevel` ainda — só serão adicionadas quando a FASE 3/5 realmente as usarem.
+
+### IPC `hermes:agent:*`
+
+```
+hermes:agent:status  ({projectId})            → requireAuth  → HermesProjectAgentInfo
+hermes:agent:send    ({projectId, objective}) → requireAdmin → { streamId } (+ eventos hermes:agent:chunk)
+hermes:agent:cancel  (streamId)               → requireAdmin → { success }
+```
+
+### UI
+
+`HermesAgentPanel.tsx` (`apps/web/src/components/`) — autocontido: seletor de projeto (`ipc.projects.list()`), badges de status (instância Hermes + sessão do agente), textarea de objetivo, painel de saída ao vivo, cancelar durante streaming. `AIHubPage.tsx` ganhou um header persistente com toggle **Chat/Agent**: em modo Agent, todo o corpo da página (sidebar de conversas + chat + painel de contexto) é substituído por `HermesAgentPanel`; o fluxo de chat existente não foi alterado.
+
+### O que NÃO foi feito nesta fase (propositalmente)
+
+- Persistência de transcript no NEX — o Hermes já guarda a conversa em `~/.hermes/state.db` (SQLite + FTS5) na própria VPS; o NEX só persiste `status`/`sessionStarted`/`lastActivity` para decidir quando usar `--resume`.
+- Parsing estruturado de eventos (tool_started/tool_completed) — depende do ACP, ainda não confirmado.
+- "Project Commander" como camada de orquestração — é a FASE 3.
+
+## Hermes Autonomous Loop (v3.54.0+) — FASE 3
+
+Quebra de um objetivo em tarefas rastreáveis, com execução em loop (manual ou autônomo), Definition of Done e Decision Requests. **Todo o motor do loop roda no renderer** (`HermesAgentPanel.tsx`), reaproveitando `hermes:agent:send`/`hermes:agent:chunk` da FASE 2 chamada após chamada — o mesmo padrão que `autonomousLoop()`/`runAgentUntilDone()` do Squad (`apps/web/src/pages/SquadPage.tsx:1223-1344`) já usam para os agentes internos. O backend desta fase só ganha persistência (objetivo/autonomia/DoD) — nenhum motor de orquestração novo.
+
+### Protocolo de tags
+
+Cada tarefa é enviada ao Hermes com instrução de finalização obrigatória (mesma convenção que o Squad já usa para `[PRONTO]`/`[APROVADO]`/`[BLOQUEADO]`):
+
+```
+[TAREFA_CONCLUIDA]                                        → sucesso
+[TAREFA_BLOQUEADA: <motivo>]                              → bloqueio técnico real
+[DECISAO_NECESSARIA pergunta="..." opcoes="A|B|C"]        → decisão de negócio que o Hermes não pode inferir
+```
+
+`parseTaskTag()` (`HermesAgentPanel.tsx`) reconhece as 3 tags via regex (mesmo estilo de `extractParams` em `packages/core/src/squad/actions.ts:11-17`). Texto sem nenhuma tag → 1 mensagem de lembrete antes de marcar a tarefa `BLOCKED` com "sem tag de conclusão".
+
+### Geração do plano
+
+Prompt dedicado pede um bloco ` ```json ` com `[{"title":"...","description":"..."}]`. `parseTaskPlan()` extrai o bloco (ou o primeiro `[...]` no texto) e faz `JSON.parse`; se nada parsear, cai para uma única tarefa "Objetivo completo" com o texto bruto — o fluxo nunca quebra por plano malformado, só degrada para o comportamento simples da FASE 2.
+
+### Fluxo do loop
+
+```
+startAutonomousObjective(objetivo)
+  → HermesService.setObjective (persiste)
+  → sendAndWait(buildPlanPrompt(objetivo))     — reusa hermes:agent:send, aguarda 'done'
+  → parseTaskPlan(resposta) → ipc.tasks.create() por tarefa (agent_tasks, ownerAgent:'hermes')
+  → se autonomyLevel === 'autonomous' → runLoop()
+
+runLoop()
+  enquanto houver tarefa TODO e loopStopRef não estiver setado:
+    marca IN_PROGRESS → executeTask(tarefa) → recarrega lista
+    resultado !== 'done' → para o loop (BLOCKED / decision / error)
+  teto de segurança: tasks.length * 3 (mín. 10) iterações
+
+executeTask(tarefa)
+  envia buildTaskPrompt(tarefa) via sendAndWait
+  tag 'done'     → marca DONE
+  tag 'blocked'  → marca BLOCKED com o motivo
+  tag 'decision' → seta pendingDecision, loop pausa
+  tag 'none'     → 1 lembrete (REMINDER_PROMPT); se persistir → BLOCKED "sem tag de conclusão"
+```
+
+`sendAndWait(prompt)` é o helper que unifica plano e execução de tarefas: chama `ipc.hermes.agent.send`, escuta `ipc.hermes.agent.onChunk` localmente (com seu próprio filtro por `streamId`, independente do listener da mensagem livre — ver nota abaixo), acumula o texto e resolve no evento `done`/`error`.
+
+**Isolamento entre os dois listeners de `hermes:agent:chunk`:** a mensagem livre (FASE 2) e o loop autônomo (FASE 3) usam o mesmo canal de eventos IPC. O listener da mensagem livre só processa chunks quando `sending === true` (guarda adicionada nesta fase); o listener do `sendAndWait` é local à chamada e se auto-desinscreve no `done`/`error`. Como as duas chamadas nunca ficam concorrentes de verdade (a UI desabilita a mensagem livre enquanto `planning`/`looping` está ativo), não há cross-talk entre os dois fluxos.
+
+### Definition of Done — checklist, não gate automático
+
+```
+DEFAULT_DOD_ITEMS (7): build, requisitos, banco, testes, .env.example, commits, README
+Auto-verificados via SSH direto (TerminalService.exec, não passa pelo CLI hermes):
+  .env.example → test -f "<workspace>/.env.example"
+  commits      → git -C "<workspace>" log -1 --oneline
+Os outros 5 ficam manuais — o usuário marca via checkbox.
+```
+
+Decisão de escopo: tentar auto-detectar/rodar build ou testes de uma stack arbitrária de forma confiável é um projeto à parte (falso-negativo trava o usuário, falso-positivo mente pra ele) — por isso o DoD desta fase é informativo, não bloqueia o loop.
+
+### Decision Request
+
+Quando `executeTask`/`resolveDecision` encontram a tag `[DECISAO_NECESSARIA ...]`, o loop pausa e a UI mostra a pergunta + botões por opção + campo de resposta livre. A resposta do usuário vira uma nova mensagem (`buildTaskPrompt(tarefa) + "Decisão do usuário: <resposta>"`) via `sendAndWait`; se ainda `autonomyLevel === 'autonomous'` e nenhuma nova decisão foi levantada, `runLoop()` é re-disparado para continuar automaticamente.
+
+### Autonomia — binário (decisão consciente, não os 3 tiers do brief original)
+
+`HermesProjectAgent.autonomyLevel`: `'manual'` (usuário clica "Próxima" por tarefa) ou `'autonomous'` (`runLoop()` avança sozinho). Os rótulos Assistido/Semi-autônomo/Autônomo do brief original não aparecem nesta fase — simplificação escolhida explicitamente pelo usuário; motivo: não há sinal suficiente do que o Hermes expõe (ex. classificação de risco por tarefa) para diferenciar 3 comportamentos reais ainda.
+
+### Banco de dados
+
+```sql
+-- hermes_project_agents ganha (ALTER TABLE, retrocompatível com FASE 2):
+objective     TEXT NOT NULL DEFAULT ''
+autonomyLevel TEXT NOT NULL DEFAULT 'manual'
+dodChecklist  TEXT NOT NULL DEFAULT '[]'   -- JSON: [{id,label,auto,done}]
+```
+
+Tarefas continuam em `agent_tasks` (tabela do Squad, sem mudança de schema) — `TasksService.list()` ganhou filtro opcional `projectId`.
+
+### IPC novo
+
+```
+hermes:agent:setObjective ({projectId, objective}) → requireAdmin
+hermes:agent:setAutonomy  ({projectId, level})      → requireAdmin
+hermes:dod:get            ({projectId})             → requireAuth  → DodItem[]
+hermes:dod:toggle         ({projectId, itemId, done}) → requireAdmin → DodItem[]
+hermes:dod:runChecks      ({projectId})             → requireAdmin → DodItem[]
+```
+
+### O que NÃO foi feito nesta fase (propositalmente)
+
+- 3 tiers de autonomia (Assistido/Semi-autônomo/Autônomo) — simplificado para binário, decisão explícita do usuário.
+- DoD como gate automático do loop — fica informativo/checklist.
+- Parsing estruturado de eventos por subagente/tool — ainda depende do ACP (FASE 2 já registrou essa limitação).
+- Task Board visual estilo kanban (ETAPA 12 completo) — lista simples com badges já entrega o essencial; quadro visual fica para quando FASE 4 (subagents) justificar mais colunas.
+
+## Hermes Execução Paralela (v3.55.0+) — FASE 4
+
+Pesquisa confirmou que o Hermes **não expõe** um comando externo de "spawn subagente" — "Subagents" é uma capacidade interna e opaca da `AIAgent` ("spawn isolated subagents for parallel workstreams"), sem equivalente tipo `hermes subagent spawn`. O que existe e é utilizável é `hermes -w`/`--worktree` ("isolated git worktree for parallel-agent workflows"), mas a documentação não diz onde o worktree é criado, como fazer merge de volta, nem se é seguro rodar vários simultaneamente.
+
+**Decisão de arquitetura:** o NEX não depende da flag `-w`. Ele gerencia os git worktrees ele mesmo, com comandos git padrão totalmente documentados (`git worktree add/remove`, `git merge`), reaproveitando o `GitService` que já existe para o Source Control do IDE. O Hermes só roda dentro do worktree que o NEX já preparou — pra ele é só um diretório comum.
+
+### Fluxo de uma tarefa paralela
+
+```
+runLoop() (HermesAgentPanel.tsx) separa as tarefas TODO em parallelizable vs sequenciais
+  lote de até 3 parallelizable rodam via Promise.all:
+
+    ipc.hermes.parallel.start(projectId, taskId, objective)
+      → HermesService.startParallelTask()
+          worktreePath = "<remotePath>-worktrees/task-<id curto>"
+          branch       = "nex/task-<id curto>"
+          GitService.worktreeAdd(vpsId, remotePath, worktreePath, branch)
+          HermesClient.streamObjective(vpsId, { workspace: worktreePath, objective, resume: false })
+      → { streamId, worktreePath, branch }
+
+    waitForChunkStream(streamId) — mesmo canal hermes:agent:chunk das fases anteriores
+    tag = parseTaskTag(texto)
+
+    ipc.hermes.parallel.finish(projectId, worktreePath, branch, merge = tag.kind === 'done')
+      → HermesService.finishParallelTask()
+          merge=true  → GitService.merge() — git merge --no-ff
+                          sucesso → GitService.worktreeRemove() (só depois do merge)
+                          falha   → git merge --abort; branch/worktree preservados, nada é forçado
+          merge=false → não toca em nada — branch preservado para revisão manual
+
+    tarefa vira DONE (se a tag foi [TAREFA_CONCLUIDA], com nota se o merge falhou)
+              ou BLOCKED (qualquer outro caso — incluindo decisão/tag ausente, que em modo
+              paralelo não tem "turno de volta" simples: não há sessão pra retomar num worktree one-shot)
+```
+
+### `GitService` — 3 métodos novos (`packages/core/src/git/git.service.ts`)
+
+```ts
+worktreeAdd(vpsId, cwd, worktreePath, branch)   // mkdir -p do pai + git worktree add -b
+worktreeRemove(vpsId, cwd, worktreePath)        // git worktree remove --force — só pós-merge OK
+merge(vpsId, cwd, branch)                       // git merge --no-ff; em erro, git merge --abort, nunca força
+```
+
+Todos reaproveitam o `sshExec` privado que já existe em `GitService` (mesmo padrão de `add`/`commit`/`push`).
+
+### `HermesService` — injeta `GitService`
+
+Construtor passa a `(terminal, sftp, git)`. `startParallelTask`/`finishParallelTask` fazem a mesma validação de instância `running` que `streamObjective` (FASE 2), mas **não tocam** no `HermesProjectAgent` da sessão principal — é uma execução isolada, não a conversa do projeto.
+
+### Banco de dados
+
+`agent_tasks` (tabela raw-SQL do Squad, sem model Prisma — criada em `packages/db/src/index.ts:initializeDatabase()`, chamada em `apps/desktop/src/main.ts`) ganha `parallelizable INTEGER NOT NULL DEFAULT 0`, com `ALTER TABLE` incremental em `handlers.ts` para instalações existentes. O prompt de plano (`buildPlanPrompt`) pede ao próprio Hermes para marcar cada tarefa como paralelizável ou não.
+
+### IPC novo
+
+```
+hermes:parallel:start  ({projectId, taskId, objective})           → requireAdmin → { streamId, worktreePath, branch }
+hermes:parallel:finish ({projectId, worktreePath, branch, merge}) → requireAdmin → { merged, output }
+```
+
+Reaproveita `hermes:agent:chunk` (streaming) e `hermes:agent:cancel` (cancelar por streamId) — sem canais novos para isso.
+
+### Refactor — `wireHermesStream()`
+
+A lógica de plumbing de stream (registrar em `hermesStreams`, repassar `data`/`close`/`error` como `hermes:agent:chunk`, watchdog de 300s) existia só em `hermes:agent:send` (FASE 2). Com `hermes:parallel:start` precisando exatamente da mesma coisa, foi extraída para `wireHermesStream(targetWin, streamId, stream, onSettled)` em `handlers.ts` — os dois handlers chamam a mesma função, cada um com seu `onSettled` (um atualiza `HermesProjectAgent`, o outro não precisa).
+
+### UI
+
+`HermesAgentPanel.tsx`: painel "Agentes ativos" (compacto, só aparece com execução paralela em andamento — título + branch por slot); badge "paralelo" nos itens de tarefa `parallelizable`. `sendAndWait` foi dividido em `waitForChunkStream(streamId)` (espera um stream já iniciado) + `sendAndWait(prompt)` (chama `send` e delega ao anterior) — o fluxo paralelo usa só o primeiro, já que conhece o `streamId` de antemão.
+
+### O que NÃO foi feito nesta fase (propositalmente)
+
+- Depender de `hermes -w` — substituído por git worktree gerenciado pelo NEX (ver "Decisão de arquitetura" acima).
+- Resolver Decision Request interativamente em execução paralela — vira bloqueio para revisão manual.
+- Forçar merge em conflito — o branch/worktree fica intacto, sempre.
+- Grafo de dependências entre tarefas — o campo `parallelizable` é uma decisão binária por tarefa (o Hermes decide durante o plano), não um grafo de dependências explícito; suficiente para o caso comum sem a complexidade de rastrear dependências entre IDs.
+
+## Hermes Memory + Skills (v3.56.0+) — FASE 5
+
+Visibilidade só-leitura de skills/sessões do Hermes + um adapter de contexto NEX→Hermes. Ao contrário das FASEs 3/4, a pesquisa aqui confirmou uma base real e documentada (não precisou de decisão de contorno): `hermes skills list` é comando externo de verdade, skills vivem em `~/.hermes/skills/*/SKILL.md` (markdown + frontmatter YAML documentado), `hermes sessions list/stats/export` são reais, e o Hermes **injeta automaticamente** arquivos de contexto do projeto (`SOUL.md`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `.cursorrules`) no system prompt, sem nenhuma flag.
+
+### Skills — só leitura, sem YAML novo
+
+```
+HermesClient.listSkillFiles(vpsId)
+  → for f in $HOME/.hermes/skills/*/*/SKILL.md $HOME/.hermes/skills/*/SKILL.md; do
+      [ -f "$f" ] && echo "@@@FILE:$f" && cat "$f" && echo
+    done
+  → texto concatenado, um SKILL.md por bloco marcado com @@@FILE:<path>
+
+HermesService.getSkills(vpsId)
+  → parseSkillFiles(raw): separa por @@@FILE:, extrai o bloco --- ... --- (frontmatter)
+    de cada um, regex `^chave:\s*(.+)$` sobre name/description/version (campos flat,
+    documentados — não precisa de biblioteca YAML)
+  → HermesSkillInfo[] { name, description, version, path }
+```
+
+Nunca cria, edita ou apaga skills — só `cat`. Nenhuma tentativa de forçar as 3 categorias do brief original (Global/Project/System Skills); a UI mostra a categoria real (nome da pasta) do Hermes. Promoção de skill de projeto→global não é orquestrada pelo NEX — o próprio Hermes já faz gerenciamento procedural de skills sozinho via `skill_manage` após tarefas complexas (a ETAPA 20 do brief já é satisfeita pelo comportamento nativo do Hermes).
+
+### Sessões — texto bruto (formato não confirmado)
+
+```
+HermesService.getSessionsSummary(vpsId)
+  → client.execCommand(vpsId, 'sessions stats')  (reaproveita execCommand da FASE 1)
+  → client.execCommand(vpsId, 'sessions list')
+  → concatenados num único HermesCommandResult — sem parsing, já que o formato de
+    saída de `hermes sessions list` não é confirmado pela documentação
+```
+
+### Adapter de contexto — `.hermes.md`
+
+```
+HermesService.syncProjectContext(projectId)
+  → KnowledgeService.buildContext()                    — KB Global (já existe)
+  → ProjectMemoryService.buildBlock(vpsId, projectId)   — memória do projeto (já existe)
+  → concatena os dois (se ambos vazios, não escreve nada)
+  → SftpSession.writeFile("<remotePath>/.hermes.md", conteúdo)
+```
+
+**Por que `.hermes.md` e não `AGENTS.md`:** `AGENTS.md` é uma convenção usada por várias ferramentas (este próprio repo tem um `CLAUDE.md` no mesmo espírito) — o usuário pode já manter um `AGENTS.md` próprio no projeto alvo, e sobrescrevê-lo seria destrutivo. `.hermes.md` está explicitamente na lista de arquivos que o Hermes injeta e fica sob controle exclusivo do NEX (gerado com um comentário HTML avisando que é automático).
+
+Chamado manualmente (botão "Sincronizar contexto" em `HermesAgentPanel.tsx`) e automaticamente (best-effort, uma vez por objetivo novo em `startAutonomousObjective`) — não a cada mensagem, para não gerar um SFTP write a cada turno do loop.
+
+### IPC novo
+
+```
+hermes:skills:list       ({vpsId})     → requireAuth  → HermesSkillInfo[]
+hermes:sessions:summary  ({vpsId})     → requireAuth  → HermesCommandResult
+hermes:agent:syncContext ({projectId}) → requireAdmin → { written, path }
+```
+
+### UI
+
+`HermesPage.tsx` ganha 3 abas no painel direito (Console, já existente, inalterado; Skills — cards nome/versão/descrição/caminho; Sessões — texto bruto). `HermesAgentPanel.tsx` ganha o botão "Sincronizar contexto".
+
+### O que NÃO foi feito nesta fase (propositalmente)
+
+- Editar/criar/apagar skills do Hermes — só leitura (ETAPA 19 do brief: usar a API/mecanismo próprio do Hermes, nunca mexer direto nos arquivos internos).
+- Orquestrar promoção de skill projeto→global — o Hermes já faz isso sozinho.
+- Forçar as 3 categorias do brief (Global/Project/System Skills) — não existem como conceito externo do Hermes.
+- Parsing estruturado de `hermes sessions list` — formato de saída não confirmado.
+
+## Hermes Automação (v3.57.0+) — FASE 6
+
+Sexta e última fase planejada da integração Hermes: cron (agendar um objetivo Hermes sem abrir o AI Hub), execução não-assistida (o objetivo roda até o fim sem uma janela do renderer consumindo o stream) e recovery de sessão interrompida (o NEX detecta e oferece retomar sessões órfãs deixadas por um fechamento abrupto do app). As três reaproveitam mecanismos já existentes — nenhuma peça de infraestrutura nova.
+
+### Cron — `scheduled_jobs` ganha `projectId`
+
+O Ponto 7 (v3.42.0) já tinha `scheduled_jobs` + `JobExecutor` para automações do Squad. Em vez de uma tabela dedicada ao Hermes, a mesma tabela ganhou uma coluna opcional:
+
+```sql
+-- scheduled_jobs ganha (ALTER TABLE, retrocompatível):
+projectId TEXT   -- obrigatório quando agentName = 'hermes'; ignorado para os demais agentes
+```
+
+Uma automação com `agentName: 'hermes'` + `projectId` roda um objetivo Hermes no projeto indicado; qualquer outro `agentName` continua indo para `AiService.chatAgent()` com um agente do Squad, como antes. O mesmo formulário "Nova automação" em `AutomationsPage.tsx` cobre os dois casos — quando o usuário escolhe "Hermes" na lista de agentes, um seletor de projeto aparece e passa a ser obrigatório para salvar.
+
+### Execução não-assistida — `HermesService.runObjectiveUnattended()`
+
+```
+JobExecutor.executeJob(job)
+  job.agentName === 'hermes' → executeHermesJob(job)
+    → HermesService.runObjectiveUnattended(job.projectId, job.instruction)
+        → streamObjective() (mesma marcação de status/--resume da FASE 2)
+        → bufferiza toda a saída do ExecStream no próprio HermesService
+            (sem hermes:agent:chunk, sem BrowserWindow — não há UI aberta num cron)
+        → watchdog de inatividade 300s (igual ao wireHermesStream() do handlers.ts)
+          + teto duro 20min (sem usuário para cancelar manualmente um cron travado)
+    → Notification desktop com o resultado (mesmo padrão do JobExecutor original)
+```
+
+`JobExecutor` passa a receber `HermesService` no construtor — `handlers.ts` cria `hermesSvc` antes de `jobExecutor` agora (ordem invertida em relação às fases anteriores, onde `jobExecutor` não dependia de nada do Hermes).
+
+### Recovery de sessão interrompida — `HermesService.recoverInterruptedSessions()`
+
+```
+setupIpcHandlers() (boot do main process)
+  → hermesSvc.recoverInterruptedSessions()
+      → SELECT hermes_project_agents WHERE status = 'running'
+      → todo resultado é órfão por definição: ExecStream é um objeto em memória do processo
+        Electron anterior — não sobrevive a um restart, então nenhum status 'running' pode
+        estar realmente em execução no momento em que este método roda
+      → UPDATE status='error', lastError='...interrompida...' (string reconhecível pela UI)
+      → sessionStarted NÃO é tocado → o próximo streamObjective() já decide --resume sozinho
+        (mesma lógica de resume da FASE 2, nenhum código novo de retomada)
+      → UPDATE agent_tasks SET status='TODO' WHERE ownerAgent='hermes' AND status='IN_PROGRESS'
+        AND projectId = <cada projeto órfão> — destrava o loop autônomo da FASE 3 para tarefas
+        que ficaram presas em IN_PROGRESS no meio da interrupção
+```
+
+`HermesAgentPanel.tsx` mostra um banner âmbar quando `agentInfo.status === 'error' && lastError.includes('interrompida')`, com botão "Retomar sessão" que chama `resumeInterrupted()` — reenvia pelo mesmo fluxo de mensagem livre (`ipc.hermes.agent.send`) usado desde a FASE 2, sem endpoint novo.
+
+### IPC — sem canais novos
+
+Nenhum handler `hermes:*` novo nesta fase — `runObjectiveUnattended` é chamado internamente pelo `JobExecutor` (processo main), e `recoverInterruptedSessions` roda automaticamente no boot. A única superfície nova é a coluna `projectId` já aceita pelos handlers `jobs:create`/`jobs:update` existentes (o tipo `ScheduledJobInput` só ganhou um campo opcional).
+
+### O que NÃO foi feito nesta fase (propositalmente)
+
+- Sistema de cron dedicado ao Hermes — reaproveita `scheduled_jobs`/`JobExecutor` do Ponto 7 em vez de duplicar agendamento.
+- Diagnóstico de causa da interrupção (crash vs. fechamento normal vs. `kill -9`) — não é possível distinguir de dentro do processo que acabou de subir; todo `status:'running'` sobrevivente ao boot é tratado como interrompido, o que é sempre uma suposição segura (o pior caso é reenviar um "continue de onde parou" para uma sessão que na verdade tinha terminado corretamente, mas o `HermesProjectAgent` não foi atualizado a tempo — cenário raro e inofensivo).
+- Recuperação automática de Decision Requests pendentes no momento da interrupção — o usuário precisa reabrir o objetivo/tarefa manualmente após "Retomar sessão" (mesma limitação de escopo já registrada para execução paralela na FASE 4).

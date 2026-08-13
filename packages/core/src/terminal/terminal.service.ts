@@ -41,6 +41,24 @@ export class TerminalSession extends EventEmitter {
   }
 }
 
+export class ExecStream extends EventEmitter {
+  // eventos: 'data' (chunk: string), 'close' (code: number | null), 'error' (err: Error)
+  constructor(private conn: SshClient, private stream: ClientChannel) {
+    super()
+    stream.on('data', (d: Buffer) => this.emit('data', d.toString('utf8')))
+    stream.stderr?.on('data', (d: Buffer) => this.emit('data', d.toString('utf8')))
+    stream.on('close', (code: number) => {
+      this.emit('close', code)
+      try { conn.end() } catch { /* ignorar */ }
+    })
+  }
+
+  kill(): void {
+    try { this.stream.close() } catch { /* ignorar */ }
+    try { this.conn.end() } catch { /* ignorar */ }
+  }
+}
+
 export class TerminalService {
   private get db() { return getPrismaClient() }
 
@@ -73,6 +91,44 @@ export class TerminalService {
       conn.on('error', (err) => {
         clearTimeout(timer)
         reject(new Error(wasMismatch() ? FINGERPRINT_MISMATCH_MSG : err.message))
+      })
+      const config: ConnectConfig = {
+        host: vps.host, port: vps.port, username: vps.username,
+        readyTimeout: 10000, hostVerifier,
+      }
+      if (privateKey) {
+        config.privateKey = privateKey
+        if (password) config.passphrase = password
+      } else if (password) {
+        config.password = password
+      } else {
+        const agentSock = process.env['SSH_AUTH_SOCK']
+          ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
+        if (agentSock) config.agent = agentSock
+      }
+      conn.connect(config)
+    })
+  }
+
+  /** Exec one-shot com dados incrementais (não bufferiza até o fim, como `exec()`). */
+  async execStream(vpsId: string, cmd: string): Promise<ExecStream> {
+    const { vps, privateKey, password } = await this.sshConnect(vpsId)
+    return new Promise<ExecStream>((resolve, reject) => {
+      const conn = new SshClient()
+      let execStream: ExecStream | null = null
+      conn.on('ready', () => {
+        conn.exec(cmd, (err, stream) => {
+          if (err) { conn.end(); reject(err); return }
+          execStream = new ExecStream(conn, stream)
+          resolve(execStream)
+        })
+      })
+      const { hostVerifier, wasMismatch } = buildHostVerifier(vps.id, vps.sshHostFingerprint ?? null)
+      conn.on('error', (err) => {
+        const msg = wasMismatch() ? FINGERPRINT_MISMATCH_MSG : err.message
+        // Erro pré-conexão: rejeita a promise. Pós-conexão (stream já entregue): repassa via evento 'error'.
+        if (execStream) execStream.emit('error', new Error(msg))
+        else reject(new Error(msg))
       })
       const config: ConnectConfig = {
         host: vps.host, port: vps.port, username: vps.username,

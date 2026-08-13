@@ -1,6 +1,6 @@
 export { VpsService } from './vps/vps.service.js'
 export { GitService } from './git/git.service.js'
-export { TerminalService, TerminalSession } from './terminal/terminal.service.js'
+export { TerminalService, TerminalSession, ExecStream } from './terminal/terminal.service.js'
 export { SftpService, SftpSession, type FileEntry } from './sftp/sftp.service.js'
 export { ProjectsService } from './projects/projects.service.js'
 export { AccountsService } from './accounts/accounts.service.js'
@@ -22,3 +22,9 @@ export {
   parseSchedule, describeSchedule, computeNextRunAt,
   type ScheduledJob, type ScheduledJobInput, type JobSchedule,
 } from './jobs/jobs.service.js'
+export {
+  HermesService,
+  type HermesStatus, type HermesInstanceInfo, type HermesInstallResult, type HermesCommandResult,
+  type HermesAgentStatus, type HermesProjectAgentInfo, type HermesAutonomyLevel, type DodItem,
+  type HermesSkillInfo,
+} from './hermes/index.js'

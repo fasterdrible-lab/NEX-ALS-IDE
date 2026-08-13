@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Timer, Plus, Play, Trash2, ToggleLeft, ToggleRight, Clock, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import type { Project } from '@cwm/config'
 import { ipc, type ScheduledJob, type ScheduledJobInput } from '../lib/ipc'
 
 // ── client-side schedule preview (mirrors packages/core/src/jobs/jobs.service.ts) ──
@@ -59,10 +60,10 @@ function describeSchedule(schedule: JobSchedule): string {
   }
 }
 
-const AGENT_NAMES = ['jarvis', 'friday', 'fury', 'shuri', 'pepper', 'vision', 'requis', 'tester', 'reviewer', 'devops']
+const AGENT_NAMES = ['jarvis', 'friday', 'fury', 'shuri', 'pepper', 'vision', 'requis', 'tester', 'reviewer', 'devops', 'hermes']
 const AGENT_EMOJI: Record<string, string> = {
   jarvis: '🎯', friday: '⚡', fury: '🔍', shuri: '🎨', pepper: '📣',
-  vision: '📊', requis: '📋', tester: '🧪', reviewer: '👁', devops: '🚀',
+  vision: '📊', requis: '📋', tester: '🧪', reviewer: '👁', devops: '🚀', hermes: '🪽',
 }
 
 function formatRelative(iso: string | null): string {
@@ -95,10 +96,12 @@ export default function AutomationsPage() {
   const [showModal, setShowModal] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [runningId, setRunningId] = useState<string | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
 
   // Form state
   const [formInstruction, setFormInstruction] = useState('')
   const [formAgent, setFormAgent] = useState('jarvis')
+  const [formProjectId, setFormProjectId] = useState('')
   const [formSaving, setFormSaving] = useState(false)
 
   const load = useCallback(async () => {
@@ -109,6 +112,7 @@ export default function AutomationsPage() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+  useEffect(() => { ipc.projects.list().then(setProjects).catch(() => {}) }, [])
 
   // Auto-refresh every 30s so nextRunAt / lastRunAt stay fresh
   useEffect(() => {
@@ -118,15 +122,18 @@ export default function AutomationsPage() {
 
   async function handleCreate() {
     if (!formInstruction.trim()) return
+    if (formAgent === 'hermes' && !formProjectId) return
     setFormSaving(true)
     try {
       const input: ScheduledJobInput = {
         instruction: formInstruction.trim(),
         agentName: formAgent,
+        projectId: formAgent === 'hermes' ? formProjectId : undefined,
       }
       await ipc.jobs.create(input)
       setFormInstruction('')
       setFormAgent('jarvis')
+      setFormProjectId('')
       setShowModal(false)
       await load()
     } catch (e) {
@@ -251,6 +258,11 @@ export default function AutomationsPage() {
                         {job.lastRunAt && (
                           <span>último: {formatRelative(job.lastRunAt)}</span>
                         )}
+                        {job.agentName === 'hermes' && job.projectId && (
+                          <span className="px-1.5 py-0.5 rounded" style={{ background: 'rgba(183,141,255,0.1)', color: '#B78DFF' }}>
+                            {projects.find(p => p.id === job.projectId)?.name ?? 'projeto removido'}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -364,12 +376,40 @@ export default function AutomationsPage() {
                     <option key={a} value={a}>{AGENT_EMOJI[a]} {a.charAt(0).toUpperCase() + a.slice(1)}</option>
                   ))}
                 </select>
+                {formAgent === 'hermes' && (
+                  <p className="text-[11px] mt-1.5" style={{ color: 'rgba(183,141,255,0.7)' }}>
+                    Roda como objetivo Hermes (execução não-assistida) no projeto escolhido abaixo — sem abrir o AI Hub.
+                  </p>
+                )}
               </div>
+
+              {/* Project (Hermes only) */}
+              {formAgent === 'hermes' && (
+                <div>
+                  <label className="text-xs mb-1.5 block" style={{ color: 'rgba(248,248,252,0.5)' }}>Projeto</label>
+                  <select
+                    value={formProjectId}
+                    onChange={e => setFormProjectId(e.target.value)}
+                    className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(183,141,255,0.2)', color: 'rgba(248,248,252,0.9)' }}
+                  >
+                    <option value="">Selecione um projeto…</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} — {p.vpsServer?.name ?? p.vpsServerId}</option>
+                    ))}
+                  </select>
+                  {projects.length === 0 && (
+                    <p className="text-[11px] mt-1.5" style={{ color: 'rgba(248,248,252,0.35)' }}>
+                      Nenhum projeto cadastrado — crie um em Projetos primeiro.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => { setShowModal(false); setFormInstruction(''); setFormAgent('jarvis') }}
+                onClick={() => { setShowModal(false); setFormInstruction(''); setFormAgent('jarvis'); setFormProjectId('') }}
                 className="px-4 py-2 rounded-lg text-xs"
                 style={{ color: 'rgba(248,248,252,0.4)' }}
               >
@@ -377,7 +417,7 @@ export default function AutomationsPage() {
               </button>
               <button
                 onClick={handleCreate}
-                disabled={!formInstruction.trim() || formSaving}
+                disabled={!formInstruction.trim() || formSaving || (formAgent === 'hermes' && !formProjectId)}
                 className="px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-40 flex items-center gap-2"
                 style={{ background: 'rgba(217,164,65,0.15)', border: '1px solid rgba(217,164,65,0.3)', color: '#F2C879' }}
               >

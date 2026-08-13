@@ -137,6 +137,29 @@ export class GitService {
     return this.sshExec(vpsId, cwd, 'git pull 2>&1')
   }
 
+  /** Cria um git worktree isolado (mkdir -p do diretório pai + git worktree add -b). */
+  async worktreeAdd(vpsId: string, cwd: string, worktreePath: string, branch: string): Promise<string> {
+    const parent = worktreePath.slice(0, worktreePath.lastIndexOf('/')) || '.'
+    await this.sshExec(vpsId, cwd, `mkdir -p ${JSON.stringify(parent)}`)
+    return this.sshExec(vpsId, cwd, `git worktree add ${JSON.stringify(worktreePath)} -b ${JSON.stringify(branch)} 2>&1`)
+  }
+
+  /** Remove um worktree — só deve ser chamado após merge bem-sucedido (nada a perder). */
+  async worktreeRemove(vpsId: string, cwd: string, worktreePath: string): Promise<string> {
+    return this.sshExec(vpsId, cwd, `git worktree remove ${JSON.stringify(worktreePath)} --force 2>&1`)
+  }
+
+  /** Merge cauteloso: nunca força, aborta e preserva o branch em caso de conflito. */
+  async merge(vpsId: string, cwd: string, branch: string): Promise<{ success: boolean; output: string }> {
+    try {
+      const output = await this.sshExec(vpsId, cwd, `git merge --no-ff ${JSON.stringify(branch)} -m ${JSON.stringify(`merge: ${branch}`)} 2>&1`)
+      return { success: true, output }
+    } catch (e) {
+      await this.sshExec(vpsId, cwd, 'git merge --abort 2>/dev/null || true').catch(() => {})
+      return { success: false, output: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
   async log(vpsId: string, cwd: string, n = 20): Promise<GitCommit[]> {
     try {
       const out = await this.sshExec(vpsId, cwd, `git log --oneline -${n} --format="%H|%s|%an|%ar" 2>&1`)

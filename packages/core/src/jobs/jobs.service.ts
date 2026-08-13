@@ -18,6 +18,7 @@ export interface ScheduledJob {
   lastResult: string | null
   nextRunAt: string
   vpsId: string | null
+  projectId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -27,6 +28,8 @@ export interface ScheduledJobInput {
   title?: string
   agentName?: string
   vpsId?: string
+  /** Obrigatório quando agentName === 'hermes' — define qual projeto/workspace recebe o objetivo. */
+  projectId?: string
 }
 
 // ── Natural-language parser ───────────────────────────────────────────────────
@@ -161,10 +164,10 @@ export class ScheduledJobsService {
     const now = new Date().toISOString()
     await this.db.$executeRawUnsafe(
       `INSERT INTO scheduled_jobs
-         (id, title, instruction, agentName, schedule, isActive, nextRunAt, vpsId, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+         (id, title, instruction, agentName, schedule, isActive, nextRunAt, vpsId, projectId, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
       id, title, input.instruction, input.agentName ?? 'jarvis',
-      scheduleJson, nextRunAt, input.vpsId ?? null, now, now,
+      scheduleJson, nextRunAt, input.vpsId ?? null, input.projectId ?? null, now, now,
     )
     return (await this.get(id))!
   }
@@ -184,7 +187,7 @@ export class ScheduledJobsService {
 
     await this.db.$executeRawUnsafe(
       `UPDATE scheduled_jobs
-         SET title=?, instruction=?, agentName=?, schedule=?, isActive=?, nextRunAt=?, vpsId=?, updatedAt=?
+         SET title=?, instruction=?, agentName=?, schedule=?, isActive=?, nextRunAt=?, vpsId=?, projectId=?, updatedAt=?
        WHERE id=?`,
       (data.title ?? job.title).slice(0, 80),
       data.instruction ?? job.instruction,
@@ -193,6 +196,7 @@ export class ScheduledJobsService {
       data.isActive !== undefined ? data.isActive : job.isActive,
       nextRunAt,
       data.vpsId !== undefined ? data.vpsId : job.vpsId,
+      data.projectId !== undefined ? data.projectId : job.projectId,
       now, id,
     )
     return (await this.get(id))!

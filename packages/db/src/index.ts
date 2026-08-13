@@ -197,6 +197,7 @@ export async function initializeDatabase(): Promise<void> {
       "priority"    TEXT NOT NULL DEFAULT 'medium',
       "projectId"   TEXT,
       "sessionId"   TEXT,
+      "parallelizable" INTEGER NOT NULL DEFAULT 0,
       "createdAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -223,6 +224,7 @@ export async function initializeDatabase(): Promise<void> {
       "lastResult"  TEXT,
       "nextRunAt"   TEXT NOT NULL DEFAULT (datetime('now')),
       "vpsId"       TEXT,
+      "projectId"   TEXT,
       "createdAt"   TEXT NOT NULL DEFAULT (datetime('now')),
       "updatedAt"   TEXT NOT NULL DEFAULT (datetime('now'))
     )`,
