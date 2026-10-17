@@ -1,10 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { Client as SshClient, type ConnectConfig } from 'ssh2'
 import { getPrismaClient } from '@cwm/db'
 import { VpsServerSchema, type VpsServerInput, type TestConnectionResult, type ClaudeCheckResult, encryptPassword, decryptPassword } from '@cwm/config'
-import { buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
+import { applySshAuth, buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
 
 export class VpsService {
   private get db() {
@@ -49,10 +46,6 @@ export class VpsService {
   private async _sshExec(vpsId: string, command: string, timeoutMs = 15000): Promise<string> {
     const vps = await this.findById(vpsId)
     const settings = await this.db.settings.findUnique({ where: { id: 'default' } })
-    const keyPath = settings?.sshKeyPath || join(homedir(), '.ssh', 'id_rsa')
-
-    let privateKey: Buffer | undefined
-    try { privateKey = readFileSync(keyPath) } catch { /* sem chave explícita */ }
 
     const plainPassword = vps.sshPassword ? decryptPassword(vps.sshPassword) : undefined
 
@@ -108,18 +101,7 @@ export class VpsService {
         hostVerifier,
       }
 
-      if (privateKey) {
-        config.privateKey = privateKey
-        // sshPassword funciona como passphrase quando chave privada está configurada
-        if (plainPassword) config.passphrase = plainPassword
-      } else if (plainPassword) {
-        config.password = plainPassword
-      } else {
-        // SSH agent: Unix (SSH_AUTH_SOCK) ou Windows OpenSSH (named pipe)
-        const agentSock = process.env['SSH_AUTH_SOCK']
-          ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
-        if (agentSock) config.agent = agentSock
-      }
+      applySshAuth(config, settings?.sshKeyPath, plainPassword)
 
       conn.connect(config)
     })

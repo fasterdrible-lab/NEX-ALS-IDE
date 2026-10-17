@@ -1,5 +1,42 @@
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import type { AuthMethod, ConnectConfig } from 'ssh2'
 import { getPrismaClient } from '@cwm/db'
+
+const DEFAULT_KEY_NAMES = ['id_ed25519', 'id_ecdsa', 'id_rsa']
+
+/**
+ * Configura a autenticação no ConnectConfig tentando, em ordem:
+ *   1. chave configurada em Settings (se houver)
+ *   2. chaves padrão de ~/.ssh (id_ed25519, id_ecdsa, id_rsa)
+ *   3. senha da VPS
+ * Assim uma única configuração global funciona para VPS que aceitam só chave,
+ * só senha, ou ambas. A senha também é usada como passphrase das chaves
+ * (chaves sem passphrase a ignoram; chaves que não decifram são puladas pelo ssh2).
+ * Sem chave nem senha, recorre ao SSH agent.
+ */
+export function applySshAuth(config: ConnectConfig, sshKeyPath: string | null | undefined, password?: string): void {
+  const username = config.username ?? 'root'
+  const paths = [sshKeyPath, ...DEFAULT_KEY_NAMES.map(n => join(homedir(), '.ssh', n))]
+    .filter((p): p is string => !!p)
+  const methods: AuthMethod[] = []
+  for (const p of new Set(paths)) {
+    let key: Buffer
+    try { key = readFileSync(p) } catch { continue }
+    methods.push({ type: 'publickey', username, key, ...(password ? { passphrase: password } : {}) } as AuthMethod)
+  }
+  if (password) methods.push({ type: 'password', username, password } as AuthMethod)
+
+  if (methods.length) {
+    config.authHandler = methods
+    return
+  }
+  const agentSock = process.env['SSH_AUTH_SOCK']
+    ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
+  if (agentSock) config.agent = agentSock
+}
 
 function persistFingerprint(vpsId: string, fp: string): void {
   getPrismaClient().vpsServer

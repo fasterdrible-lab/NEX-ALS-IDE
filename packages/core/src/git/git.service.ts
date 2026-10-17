@@ -1,10 +1,7 @@
-import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { Client as SshClient, type ConnectConfig } from 'ssh2'
 import { getPrismaClient } from '@cwm/db'
 import { decryptPassword, type GitStatus, type GitFileStatus, type GitCommit } from '@cwm/config'
-import { buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
+import { applySshAuth, buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
 
 export class GitService {
   private get db() { return getPrismaClient() }
@@ -14,9 +11,6 @@ export class GitService {
     if (!vps) throw new Error(`VPS não encontrada: ${vpsId}`)
 
     const settings = await this.db.settings.findUnique({ where: { id: 'default' } })
-    const keyPath = settings?.sshKeyPath || join(homedir(), '.ssh', 'id_rsa')
-    let privateKey: Buffer | undefined
-    try { privateKey = readFileSync(keyPath) } catch { }
     const password = vps.sshPassword ? decryptPassword(vps.sshPassword) : undefined
 
     return new Promise<string>((resolve, reject) => {
@@ -57,9 +51,7 @@ export class GitService {
         host: vps.host, port: vps.port, username: vps.username,
         readyTimeout: 10000, hostVerifier,
       }
-      if (privateKey) config.privateKey = privateKey
-      else if (password) config.password = password
-      else if (process.env['SSH_AUTH_SOCK']) config.agent = process.env['SSH_AUTH_SOCK']
+      applySshAuth(config, settings?.sshKeyPath, password)
       conn.connect(config)
     })
   }

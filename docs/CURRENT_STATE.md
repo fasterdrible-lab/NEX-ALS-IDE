@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
-**Data:** 2026-08-13
-**Versão:** 3.57.4
+**Data:** 2026-10-17
+**Versão:** 3.57.5
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Fix — VPS só-chave falhava na autenticação SSH (v3.57.5)
+
+VPS com `PasswordAuthentication no` (ex.: 204.168.180.25) falhava com "Autenticação falhou": todos os serviços SSH usavam **ou** chave (default inexistente `~/.ssh/id_rsa`) **ou** senha, nunca ambas. Novo helper `applySshAuth` em `packages/core/src/ssh/ssh-connect.ts` tenta chave configurada → chaves padrão de `~/.ssh` → senha, aplicado nos 5 serviços SSH.
 
 ## Fix — watchdogs de 90s sobrepostos e curtos demais (v3.57.4)
 

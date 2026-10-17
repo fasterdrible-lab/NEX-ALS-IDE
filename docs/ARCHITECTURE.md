@@ -305,6 +305,22 @@ buildHostVerifier(vpsId, storedFp)
     → msg: "Fingerprint SSH mudou — possível ataque MITM..."
 ```
 
+## Autenticação SSH (v3.57.5+)
+
+```
+Conexão SSH (VpsService/TerminalService/SftpService/GitService/TunnelService)
+    ↓ antes de conn.connect(config)
+applySshAuth(config, settings.sshKeyPath, vpsPassword)   [packages/core/src/ssh/ssh-connect.ts]
+    → config.authHandler = [
+        publickey: settings.sshKeyPath (se definido)
+        publickey: ~/.ssh/id_ed25519, id_ecdsa, id_rsa (os que existirem)
+        password:  senha da VPS (se cadastrada; também usada como passphrase das chaves)
+      ]
+    → sem chave nem senha: config.agent = SSH_AUTH_SOCK | \\.\pipe\openssh-ssh-agent
+```
+
+Uma única configuração global atende VPS que aceitam só chave, só senha ou ambas — o ssh2 tenta cada método em ordem até um ser aceito.
+
 ## Autenticação multi-usuário (v3.8.0+)
 
 ```

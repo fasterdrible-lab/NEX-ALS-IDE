@@ -1,11 +1,8 @@
 import { EventEmitter } from 'node:events'
-import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { Client as SshClient, type ConnectConfig, type ClientChannel } from 'ssh2'
 import { getPrismaClient } from '@cwm/db'
 import { decryptPassword } from '@cwm/config'
-import { buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
+import { applySshAuth, buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
 
 export class TerminalSession extends EventEmitter {
   readonly sessionId: string
@@ -66,15 +63,12 @@ export class TerminalService {
     const vps = await this.db.vpsServer.findUnique({ where: { id: vpsId } })
     if (!vps) throw new Error(`VPS não encontrada: ${vpsId}`)
     const settings = await this.db.settings.findUnique({ where: { id: 'default' } })
-    const keyPath = settings?.sshKeyPath || join(homedir(), '.ssh', 'id_rsa')
-    let privateKey: Buffer | undefined
-    try { privateKey = readFileSync(keyPath) } catch { }
     const password = vps.sshPassword ? decryptPassword(vps.sshPassword) : undefined
-    return { vps, privateKey, password }
+    return { vps, sshKeyPath: settings?.sshKeyPath, password }
   }
 
   async exec(vpsId: string, cmd: string, timeoutMs = 20000): Promise<string> {
-    const { vps, privateKey, password } = await this.sshConnect(vpsId)
+    const { vps, sshKeyPath, password } = await this.sshConnect(vpsId)
     return new Promise<string>((resolve, reject) => {
       const conn = new SshClient()
       const timer = setTimeout(() => { conn.end(); reject(new Error('Timeout')) }, timeoutMs)
@@ -96,23 +90,14 @@ export class TerminalService {
         host: vps.host, port: vps.port, username: vps.username,
         readyTimeout: 10000, hostVerifier,
       }
-      if (privateKey) {
-        config.privateKey = privateKey
-        if (password) config.passphrase = password
-      } else if (password) {
-        config.password = password
-      } else {
-        const agentSock = process.env['SSH_AUTH_SOCK']
-          ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
-        if (agentSock) config.agent = agentSock
-      }
+      applySshAuth(config, sshKeyPath, password)
       conn.connect(config)
     })
   }
 
   /** Exec one-shot com dados incrementais (não bufferiza até o fim, como `exec()`). */
   async execStream(vpsId: string, cmd: string): Promise<ExecStream> {
-    const { vps, privateKey, password } = await this.sshConnect(vpsId)
+    const { vps, sshKeyPath, password } = await this.sshConnect(vpsId)
     return new Promise<ExecStream>((resolve, reject) => {
       const conn = new SshClient()
       let execStream: ExecStream | null = null
@@ -134,22 +119,13 @@ export class TerminalService {
         host: vps.host, port: vps.port, username: vps.username,
         readyTimeout: 10000, hostVerifier,
       }
-      if (privateKey) {
-        config.privateKey = privateKey
-        if (password) config.passphrase = password
-      } else if (password) {
-        config.password = password
-      } else {
-        const agentSock = process.env['SSH_AUTH_SOCK']
-          ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
-        if (agentSock) config.agent = agentSock
-      }
+      applySshAuth(config, sshKeyPath, password)
       conn.connect(config)
     })
   }
 
   async openShell(vpsId: string): Promise<TerminalSession> {
-    const { vps, privateKey, password } = await this.sshConnect(vpsId)
+    const { vps, sshKeyPath, password } = await this.sshConnect(vpsId)
     const sessionId = `term_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 
     return new Promise<TerminalSession>((resolve, reject) => {
@@ -180,16 +156,7 @@ export class TerminalService {
         host: vps.host, port: vps.port, username: vps.username,
         readyTimeout: 15000, hostVerifier,
       }
-      if (privateKey) {
-        config.privateKey = privateKey
-        if (password) config.passphrase = password
-      } else if (password) {
-        config.password = password
-      } else {
-        const agentSock = process.env['SSH_AUTH_SOCK']
-          ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
-        if (agentSock) config.agent = agentSock
-      }
+      applySshAuth(config, sshKeyPath, password)
       conn.connect(config)
     })
   }

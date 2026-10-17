@@ -1,5 +1,19 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.57.5] — 2026-10-17
+
+### Corrigido — VPS que aceita só chave SSH falhava com "Autenticação falhou"
+
+**Sintoma reportado:** VPS-1 (`root@204.168.180.25`) mostrava "Autenticação falhou — verifique usuário/chave/senha SSH" no botão Testar, enquanto `ssh root@204.168.180.25` pelo terminal do Windows conectava normalmente.
+
+**Causa raiz:** a VPS tem `PasswordAuthentication no` (só aceita `publickey`). Os 5 serviços SSH (`VpsService`, `TerminalService`, `SftpService`, `GitService`, `TunnelService`) usavam **ou** a chave **ou** a senha: com `settings.sshKeyPath` vazio, tentavam o default `~/.ssh/id_rsa` (inexistente nesta máquina) e caíam para a senha cadastrada — recusada pelo servidor. Configurar uma chave global também não resolvia, porque aí a senha virava só passphrase e VPS que aceitam apenas senha passariam a falhar. O OpenSSH do terminal funcionava porque lê `~/.ssh/config` (que define `IdentityFile` por host); o ssh2 não lê.
+
+**Fix — `packages/core/src/ssh/ssh-connect.ts`:** novo helper `applySshAuth(config, sshKeyPath, password)` que monta um `authHandler` do ssh2 tentando em ordem: chave de Configurações (se definida) → chaves padrão de `~/.ssh` (`id_ed25519`, `id_ecdsa`, `id_rsa`) → senha da VPS. A senha continua sendo passada como passphrase das chaves; chaves que não decifram são puladas. Sem chave nem senha, mantém o fallback para SSH agent. Os 6 pontos de conexão dos 5 serviços passam a usar o helper (removida a lógica duplicada).
+
+**Operacional:** chave `id_ed25519` adicionada ao `authorized_keys` da VPS-1.
+
+Testado com ssh2 real contra as 3 VPS (só-chave, chave+senha, só-senha) e no app instalado. `tsc --noEmit` do `@cwm/core` limpo.
+
 ## [3.57.4] — 2026-08-13
 
 ### Corrigido — watchdog de 90s curto demais para tarefas reais do Squad + dois timeouts sobrepostos

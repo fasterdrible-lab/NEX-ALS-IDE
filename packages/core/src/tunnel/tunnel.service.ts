@@ -1,11 +1,8 @@
 import net from 'node:net'
-import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { Client as SshClient, type ConnectConfig } from 'ssh2'
 import { getPrismaClient } from '@cwm/db'
 import { decryptPassword } from '@cwm/config'
-import { buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
+import { applySshAuth, buildHostVerifier, FINGERPRINT_MISMATCH_MSG } from '../ssh/ssh-connect.js'
 
 export interface TunnelInfo {
   id: string
@@ -23,9 +20,6 @@ export class TunnelService {
   private async buildConnectConfig(vpsId: string): Promise<{ config: ConnectConfig; wasMismatch: () => boolean }> {
     const vps = await this.db.vpsServer.findUniqueOrThrow({ where: { id: vpsId } })
     const settings = await this.db.settings.findUnique({ where: { id: 'default' } })
-    const keyPath = settings?.sshKeyPath || join(homedir(), '.ssh', 'id_rsa')
-    let privateKey: Buffer | undefined
-    try { privateKey = readFileSync(keyPath) } catch { /* sem chave */ }
     const plainPassword = vps.sshPassword ? decryptPassword(vps.sshPassword) : undefined
 
     const { hostVerifier, wasMismatch } = buildHostVerifier(vps.id, vps.sshHostFingerprint ?? null)
@@ -33,16 +27,7 @@ export class TunnelService {
       host: vps.host, port: vps.port, username: vps.username,
       readyTimeout: 15000, hostVerifier,
     }
-    if (privateKey) {
-      config.privateKey = privateKey
-      if (plainPassword) config.passphrase = plainPassword
-    } else if (plainPassword) {
-      config.password = plainPassword
-    } else {
-      const sock = process.env['SSH_AUTH_SOCK']
-        ?? (process.platform === 'win32' ? '\\\\.\\pipe\\openssh-ssh-agent' : undefined)
-      if (sock) config.agent = sock
-    }
+    applySshAuth(config, settings?.sshKeyPath, plainPassword)
     return { config, wasMismatch }
   }
 
