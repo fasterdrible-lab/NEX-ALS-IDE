@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-17
-**Versão:** 3.57.5
+**Versão:** 3.57.6
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Fix — Hermes Agent Mode testado em VPS real pela 1ª vez (v3.57.6)
+
+Hermes v0.22.2 instalado na VPS-1 (modelo grátis `poolside/laguna-s-2.1:free`). 3 bugs corrigidos em `hermes-client.ts`: `--resume` quebrava o `-q` (toda 2ª mensagem falhava → agora `--query-file`), PATH sem o diretório de instalação root, e "Iniciar" reportando `running` com processo morto. Descoberto que o Hermes bloqueia comandos perigosos em headless e tem `--format stream-json` — base da próxima fase (Autorizar/Negar + activity feed estruturado).
 
 ## Fix — VPS só-chave falhava na autenticação SSH (v3.57.5)
 

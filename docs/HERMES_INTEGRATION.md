@@ -52,6 +52,18 @@ Ao contrário das fases 3/4, aqui a pesquisa confirmou uma base sólida e docume
 - **`hermes memory` (`setup`/`status`/`off`)** configura *provedores externos* de memória (Honcho/mem0/etc.) — não é um browser de conteúdo de memória. Não é o que a ETAPA 18 pede.
 - **Auto-injeção de contexto:** o Hermes carrega automaticamente `SOUL.md`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `.cursorrules` do diretório do projeto (e de `~/.hermes/`) para dentro do system prompt — **sem nenhuma flag**. Essa é exatamente a "ponte" que a ETAPA 18 pede; não precisou ser inventada, só aproveitada — ver `docs/ARCHITECTURE.md` → "Hermes Memory + Skills (FASE 5)".
 
+## Fato real — teste contra VPS real (v3.57.6, Hermes v0.22.2)
+
+Primeiro teste de ponta a ponta, na VPS-1. Corrigiu 3 bugs (ver CHANGELOG 3.57.6) e confirmou:
+
+- **Instalação:** `install.sh --non-interactive --skip-browser --skip-computer-use` (headless, sem Chromium). Comando em `~/.local/bin/hermes`, código em `~/.hermes/hermes-agent`. Configurar provider depois com `hermes setup`/`hermes model` (interativo — feito pelo usuário no Terminal SSH do NEX).
+- **Modelos gratuitos (Nous Portal, sem créditos):** `poolside/laguna-s-2.1:free`, `poolside/laguna-xs-2.1:free`, `stepfun/step-3.7-flash:free`, `stepfun/step-5-preview:free`. Modelos pagos falham com `Billing or credits exhausted`.
+- **`hermes chat --query-file PATH`** lê o prompt sem shell — substitui `-q "$(cat …)"`.
+- **`--format stream-json`** (implica `-Q`) emite JSONL: `{"type":"system","subtype":"init","model","session_id"}`, `{"type":"text","text"}` (tokens), `{"type":"tool_use","name","input"}`, `{"type":"tool_result","name","output"}` (output é string JSON), `{"type":"result","exit_code","text","error","tokens","duration_ms","session_id"}`.
+- **Aprovação de comandos perigosos em headless:** bloqueados por padrão, com `tool_result.output` contendo `"error": "BLOCKED: Command flagged as dangerous (<motivo>) but single-query mode (-q) runs without a user present…"`. `execute_code` (Python arbitrário) também é bloqueado. Liberar só via `approvals.single_query_mode: approve` em `config.yaml` ou `--yolo` — **o NEX não deve usar nenhum dos dois**; a governança fica no NEX (próxima fase).
+- **`hermes gateway`** sem plataformas configuradas continua rodando (log: `No messaging platforms enabled`) e roda o scheduler de cron — serve como "serviço" para o status `running`.
+- **Outras flags úteis não usadas ainda:** `--checkpoints` (snapshot antes de operação destrutiva de arquivo), `--run-budget SECONDS`, `--max-turns N`, `-c <nome> --create-if-missing` (sessão nomeada por projeto).
+
 ## Roadmap de fases
 
 | Fase | Escopo | Status |

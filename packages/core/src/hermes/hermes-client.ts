@@ -6,9 +6,14 @@ import type { SftpService } from '../sftp/sftp.service.js'
  * .bashrc/.profile do usuário (incluindo o que o installer do Hermes adiciona)
  * não é herdado automaticamente. Todo comando precisa reexportar o PATH —
  * mesmo problema já resolvido para o Claude CLI em vps.service.ts.
+ *
+ * Instalado como root, o installer usa /usr/local/lib/hermes-agent/ (Hermes v0.20.0).
+ * O comando real fica em venv/bin/ — o `hermes` na raiz do repo é só um launcher
+ * que quebra (ModuleNotFoundError) se o venv não tiver as dependências, então
+ * NÃO entra no PATH: uma instalação incompleta deve continuar como "não instalado".
  */
 const PATH_PREFIX =
-  'export PATH="$PATH:/usr/local/bin:/usr/bin:$HOME/.local/bin:$HOME/.hermes/bin:$HOME/.npm/bin";'
+  'export PATH="$PATH:/usr/local/bin:/usr/bin:$HOME/.local/bin:$HOME/.hermes/bin:$HOME/.npm/bin:/usr/local/lib/hermes-agent/venv/bin";'
 
 const NEX_LOG_DIR = '$HOME/.hermes-nex'
 const NEX_LOG_FILE = `${NEX_LOG_DIR}/gateway.log`
@@ -55,7 +60,17 @@ export class HermesClient {
     )
     const out = await this.run(vpsId, `cat ${NEX_PID_FILE} 2>/dev/null || true`)
     const pid = parseInt(out.trim(), 10)
-    return Number.isFinite(pid) ? pid : null
+    if (!Number.isFinite(pid)) return null
+    // `$!` existe mesmo quando o nohup falha na hora (ex.: binário fora do PATH) —
+    // confirmar que o processo sobreviveu antes de reportar 'running'.
+    const check = await this.run(
+      vpsId,
+      `sleep 2; kill -0 ${pid} 2>/dev/null && echo alive || { echo dead; tail -5 ${NEX_LOG_FILE} 2>/dev/null; }`
+    )
+    if (!check.trim().startsWith('alive')) {
+      throw new Error(`hermes gateway encerrou logo após iniciar: ${check.replace(/^dead\s*/, '').trim() || 'sem log'}`)
+    }
+    return pid
   }
 
   async stopGateway(vpsId: string, pid: number | null): Promise<void> {
@@ -96,11 +111,14 @@ export class HermesClient {
   }
 
   /**
-   * Envia um objetivo ao Hermes via `hermes chat -q` (inclui saída de tools no
-   * transcript — melhor para activity feed do que `hermes -z`, que só devolve
-   * a resposta final). O objetivo é escrito num arquivo remoto via SFTP e lido
-   * de volta com `$(cat …)` para não precisar escapar aspas/quebras de linha
-   * do texto do usuário dentro do comando SSH (mesma técnica do Chat Claude do IDE-21).
+   * Envia um objetivo ao Hermes via `hermes chat --query-file` (one-shot em non-TTY).
+   * O objetivo é escrito num arquivo remoto via SFTP e lido pelo próprio Hermes
+   * (`--query-file`, v0.22+), que não passa o conteúdo por nenhum shell — nada do
+   * texto do usuário entra na string do comando SSH.
+   *
+   * Antes usava `-q ${resumeFlag} "$(cat …)"`: com resume, o argparse pegava
+   * `--resume` como valor de `-q` e falhava ("expected one argument") — toda
+   * mensagem a partir da segunda num projeto quebrava.
    */
   async streamObjective(
     vpsId: string,
@@ -124,7 +142,7 @@ export class HermesClient {
     const cmd = [
       PATH_PREFIX,
       `cd "${opts.workspace}" &&`,
-      `hermes -Q chat -q ${resumeFlag} "$(cat "${remoteFile}")";`,
+      `hermes chat -Q --query-file "${remoteFile}" ${resumeFlag} </dev/null;`,
       `rm -f "${remoteFile}"`,
     ].join(' ')
 

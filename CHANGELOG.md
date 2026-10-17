@@ -1,5 +1,21 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.57.6] — 2026-10-17
+
+### Corrigido — 3 bugs que impediam o Agent Mode do Hermes de funcionar numa VPS real
+
+Primeiro teste de ponta a ponta contra VPS real (VPS-1, Hermes Agent **v0.22.2**). Nenhum dos bugs aparecia em `typecheck`/`build` — só rodando de verdade.
+
+**1. Agent Mode quebrava a partir da 2ª mensagem — `packages/core/src/hermes/hermes-client.ts` (`streamObjective`):** o comando era `hermes -Q chat -q --resume latest --in "<ws>" "$(cat arquivo)"`. Com `resume`, o argparse do Hermes consumia `--resume` como valor de `-q` e abortava com `error: argument -q/--query: expected one argument`. Agora usa `hermes chat -Q --query-file "<arquivo>" [--resume latest --in "<ws>"] </dev/null` — `--query-file` (v0.22+) lê o objetivo direto do arquivo sem passar por shell, eliminando também o `"$(cat …)"`. Verificado na VPS com texto contendo aspas, `$(...)` e crases.
+
+**2. Hermes instalado como root não era detectado — `PATH_PREFIX`:** o installer antigo (v0.20) instalava em `/usr/local/lib/hermes-agent/` sem symlink no PATH. Adicionado `/usr/local/lib/hermes-agent/venv/bin` (o comando real). A raiz do repo **não** entra no PATH de propósito: o `hermes` dali é um launcher que quebra (`ModuleNotFoundError`) quando o venv está incompleto — instalação incompleta deve continuar aparecendo como "não instalado". O installer atual (v0.22) usa `~/.local/bin`, já coberto.
+
+**3. "Iniciar" reportava `running` mesmo com o processo morto — `startGateway`:** `$!` existe mesmo quando o `nohup` falha na hora (ex.: `nohup: failed to run command 'hermes'`, encontrado no log real da VPS-1). Agora espera 2s, confirma com `kill -0` e, se o processo morreu, lança erro com as últimas linhas do `gateway.log`.
+
+**Operacional (fora do código):** VPS-2 sem espaço (80%) → limpeza segura (build cache, imagens órfãs, journal, caches npm/apt, instalação quebrada do Hermes): 15 GB → 38 GB livres, 20/20 containers ativos. Hermes v0.22.2 instalado na VPS-1, login Nous Portal, modelo padrão `poolside/laguna-s-2.1:free`.
+
+**Descoberta para a próxima fase:** em modo headless o Hermes **bloqueia sozinho** comandos perigosos (`BLOCKED: Command flagged as dangerous … single-query mode (-q) runs without a user present`), inclusive tentativas de contorno via `execute_code`. E `--format stream-json` emite eventos JSONL (`system/init`, `text`, `tool_use`, `tool_result`, `result`). Base para o fluxo Autorizar/Negar e o activity feed estruturado — ver `docs/HERMES_INTEGRATION.md`.
+
 ## [3.57.5] — 2026-10-17
 
 ### Corrigido — VPS que aceita só chave SSH falhava com "Autenticação falhou"
