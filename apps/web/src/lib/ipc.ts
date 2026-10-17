@@ -85,6 +85,39 @@ export interface HermesSkillInfo {
   path: string
 }
 
+/** Evento operacional do Hermes (stream-json) — sem chain-of-thought, só o que foi feito. */
+export interface HermesActivity {
+  kind: 'init' | 'tool' | 'tool_error'
+  tool: string
+  summary: string
+}
+
+/** Comando que o Hermes teve bloqueado por ser perigoso e aguarda decisão do usuário. */
+export interface HermesApprovalRequest {
+  id: string
+  tool: string
+  command: string
+  reason: string
+  /** false para execute_code (Python arbitrário) — o NEX só informa, não reexecuta. */
+  executable: boolean
+}
+
+export interface HermesAgentChunk {
+  type: 'text_delta' | 'activity' | 'approval_request' | 'done' | 'error'
+  streamId: string
+  delta?: string
+  error?: string
+  activity?: HermesActivity
+  approval?: HermesApprovalRequest
+}
+
+export interface HermesApprovalResult {
+  executed: boolean
+  success: boolean
+  output: string
+  command: string
+}
+
 declare global {
   interface Window {
     electron: {
@@ -210,10 +243,12 @@ export const ipc = {
         invoke<{ streamId: string }>('hermes:agent:send', { projectId, objective }),
       cancel: (streamId: string) =>
         invoke<{ success: boolean }>('hermes:agent:cancel', streamId),
-      onChunk: (cb: (chunk: { type: string; delta?: string; error?: string; streamId: string }) => void) => {
+      onChunk: (cb: (chunk: HermesAgentChunk) => void) => {
         if (!window.electron) return () => {}
         return window.electron.on('hermes:agent:chunk', cb as (...args: unknown[]) => void)
       },
+      resolveApproval: (approvalId: string, approve: boolean) =>
+        invoke<HermesApprovalResult>('hermes:approval:resolve', { approvalId, approve }),
       setObjective: (projectId: string, objective: string) =>
         invoke<void>('hermes:agent:setObjective', { projectId, objective }),
       setAutonomy: (projectId: string, level: HermesAutonomyLevel) =>

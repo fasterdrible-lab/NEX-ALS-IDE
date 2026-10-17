@@ -1,5 +1,6 @@
-import type { TerminalService, ExecStream } from '../terminal/terminal.service.js'
+import type { TerminalService } from '../terminal/terminal.service.js'
 import type { SftpService } from '../sftp/sftp.service.js'
+import { HermesEventStream } from './hermes-events.js'
 
 /**
  * ssh2 `exec()` não roda um shell de login, então o PATH configurado no
@@ -123,7 +124,7 @@ export class HermesClient {
   async streamObjective(
     vpsId: string,
     opts: { workspace: string; objective: string; resume: boolean }
-  ): Promise<ExecStream> {
+  ): Promise<HermesEventStream> {
     const homeOut = await this.run(vpsId, 'echo $HOME')
     const home = homeOut.trim() || '~'
     const remoteDir = `${home}/.hermes-nex`
@@ -142,10 +143,19 @@ export class HermesClient {
     const cmd = [
       PATH_PREFIX,
       `cd "${opts.workspace}" &&`,
-      `hermes chat -Q --query-file "${remoteFile}" ${resumeFlag} </dev/null;`,
+      `hermes chat -Q --format stream-json --query-file "${remoteFile}" ${resumeFlag} </dev/null;`,
       `rm -f "${remoteFile}"`,
     ].join(' ')
 
-    return this.terminal.execStream(vpsId, cmd)
+    return new HermesEventStream(await this.terminal.execStream(vpsId, cmd))
+  }
+
+  /**
+   * Executa um comando que o Hermes teve bloqueado (dangerous em modo headless) e que o
+   * usuário autorizou explicitamente na UI. Roda no workspace do projeto. O comando vem do
+   * próprio Hermes, não de input livre — e só chega aqui após clique em "Autorizar".
+   */
+  async runApprovedCommand(vpsId: string, workspace: string, command: string): Promise<string> {
+    return this.run(vpsId, `cd "${workspace}" && { ${command}\n} 2>&1; echo "[exit $?]"`, 120000)
   }
 }

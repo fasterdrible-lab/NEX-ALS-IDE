@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-17
-**Versão:** 3.57.6
+**Versão:** 3.58.0
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Hermes FASE A — governança + activity feed (v3.58.0)
+
+Agent Mode passa a usar `hermes chat --format stream-json`. Comandos perigosos que o Hermes bloqueia em headless viram cartão Autorizar/Negar no painel; o NEX executa o autorizado (auditado em `tool_execution_log`) e devolve o resultado ao Hermes. Faixa "Atividade" mostra cada ferramenta usada. Erros reais do Hermes (créditos, provider) agora aparecem. Pendente: validar o loop autônomo completo pela UI na VPS-1.
 
 ## Fix — Hermes Agent Mode testado em VPS real pela 1ª vez (v3.57.6)
 

@@ -58,6 +58,7 @@ const ALLOWED_CHANNELS = new Set([
   'hermes:status', 'hermes:install', 'hermes:update', 'hermes:start', 'hermes:stop',
   'hermes:restart', 'hermes:exec', 'hermes:logs',
   'hermes:agent:status', 'hermes:agent:send', 'hermes:agent:cancel', 'hermes:agent:chunk',
+  'hermes:approval:resolve',
   'hermes:agent:setObjective', 'hermes:agent:setAutonomy',
   'hermes:dod:get', 'hermes:dod:toggle', 'hermes:dod:runChecks',
   'hermes:parallel:start', 'hermes:parallel:finish',

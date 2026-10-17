@@ -26,5 +26,5 @@ export {
   HermesService,
   type HermesStatus, type HermesInstanceInfo, type HermesInstallResult, type HermesCommandResult,
   type HermesAgentStatus, type HermesProjectAgentInfo, type HermesAutonomyLevel, type DodItem,
-  type HermesSkillInfo,
+  type HermesSkillInfo, HermesEventStream, type HermesEvent,
 } from './hermes/index.js'

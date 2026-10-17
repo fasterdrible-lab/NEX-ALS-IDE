@@ -12,7 +12,8 @@ import {
   DiagnosticsService,
   TerminalService,
   TerminalSession,
-  type ExecStream,
+  type HermesEventStream,
+  type HermesEvent,
   SftpService,
   SftpSession,
   GitService,
@@ -110,7 +111,10 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
   const hermesSvc = new HermesService(terminal, sftpService, git, knowledgeSvc, memorySvc)
-  const hermesStreams = new Map<string, ExecStream>()
+  const hermesStreams = new Map<string, HermesEventStream>()
+  // Comandos que o Hermes teve bloqueados (dangerous em headless), aguardando Autorizar/Negar.
+  // O renderer só referencia pelo id — o comando em si nunca vem da UI.
+  const hermesApprovals = new Map<string, { projectId: string; workspace?: string; command: string; tool: string }>()
   const jobExecutor = new JobExecutor(hermesSvc)
   // Claude Code subprocess streams (account-based, sem API key)
   const claudeProcs = new Map<string, { kill: () => void }>()
@@ -451,11 +455,14 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
    * Fiação comum de streaming Hermes (usada por hermes:agent:send e hermes:parallel:start):
    * registra em hermesStreams, repassa data/close/error como hermes:agent:chunk, aplica watchdog
    * de inatividade (300s — execuções agenticas podem ser bem mais lentas que uma resposta simples).
+   * Eventos estruturados do stream-json viram chunks `activity` (feed) e `approval_request`
+   * (comando bloqueado → Autorizar/Negar); o `result` final decide sucesso/erro.
    */
   function wireHermesStream(
     targetWin: BrowserWindow | null,
     streamId: string,
-    stream: ExecStream,
+    stream: HermesEventStream,
+    ctx: { projectId: string; workspace?: string },
     onSettled: (ok: boolean, lastError?: string) => void,
   ): void {
     hermesStreams.set(streamId, stream)
@@ -478,9 +485,32 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       lastChunkAt = Date.now()
       try { targetWin?.webContents.send('hermes:agent:chunk', { streamId, type: 'text_delta', delta: chunk }) } catch { /* janela fechada */ }
     })
+    stream.on('event', (e: HermesEvent) => {
+      lastChunkAt = Date.now()
+      const send = (payload: Record<string, unknown>) => {
+        try { targetWin?.webContents.send('hermes:agent:chunk', { streamId, ...payload }) } catch { /* janela fechada */ }
+      }
+      if (e.kind === 'tool_use') send({ type: 'activity', activity: { kind: 'tool', tool: e.tool, summary: e.summary } })
+      else if (e.kind === 'tool_result' && !e.ok) send({ type: 'activity', activity: { kind: 'tool_error', tool: e.tool, summary: e.summary } })
+      else if (e.kind === 'init') send({ type: 'activity', activity: { kind: 'init', tool: '', summary: e.model } })
+      else if (e.kind === 'blocked') {
+        const approvalId = crypto.randomUUID()
+        // execute_code (Python arbitrário) não é reexecutável com segurança pelo NEX — só informa.
+        const executable = e.tool === 'terminal' && e.command.length > 0
+        if (executable) hermesApprovals.set(approvalId, { projectId: ctx.projectId, workspace: ctx.workspace, command: e.command, tool: e.tool })
+        send({ type: 'approval_request', approval: { id: approvalId, tool: e.tool, command: e.command, reason: e.reason, executable } })
+      }
+    })
     stream.on('close', (code: number | null) => {
-      const ok = code === 0 || hasData
-      finish(ok, ok ? undefined : `hermes encerrou com código ${code}`)
+      const r = stream.result
+      const ok = r ? r.ok : (code === 0 && hasData)
+      const lastError = ok ? undefined : (r?.error || `hermes encerrou sem resultado (código ${code})`)
+      finish(ok, lastError)
+      // Erro reportado pelo próprio Hermes (ex.: créditos esgotados) — antes se perdia em silêncio.
+      if (!ok && lastError) {
+        try { targetWin?.webContents.send('hermes:agent:chunk', { streamId, type: 'error', error: lastError }) } catch { /* janela fechada */ }
+        return
+      }
       try { targetWin?.webContents.send('hermes:agent:chunk', { streamId, type: 'done' }) } catch { /* janela fechada */ }
     })
     stream.on('error', (err: Error) => {
@@ -508,7 +538,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       const targetWin = BrowserWindow.fromWebContents(event.sender)
       const streamId = crypto.randomUUID()
       const { stream } = await hermesSvc.streamObjective(projectId, objective)
-      wireHermesStream(targetWin, streamId, stream, (ok, lastError) => {
+      wireHermesStream(targetWin, streamId, stream, { projectId }, (ok, lastError) => {
         void hermesSvc.markAgentActivity(projectId, {
           status: ok ? 'idle' : 'error',
           sessionStarted: ok ? true : undefined,
@@ -524,6 +554,22 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     if (stream) { stream.kill(); hermesStreams.delete(streamId) }
     return { success: true }
   })
+
+  // Governança — resolve um comando que o Hermes teve bloqueado. Aprovar = o NEX executa o
+  // comando (registrado em tool_execution_log como exec_dangerous); negar só descarta. O
+  // renderer depois avisa o Hermes do desfecho via hermes:agent:send (resume da sessão).
+  ipcMain.handle('hermes:approval:resolve', (_, { approvalId, approve }: { approvalId: string; approve: boolean }) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      if (typeof approvalId !== 'string' || typeof approve !== 'boolean') throw new Error('Parâmetros inválidos')
+      const pending = hermesApprovals.get(approvalId)
+      if (!pending) throw new Error('Solicitação de aprovação não encontrada ou já resolvida')
+      hermesApprovals.delete(approvalId)
+      if (!approve) return { executed: false, success: false, output: '', command: pending.command }
+      const r = await hermesSvc.runApprovedCommand(pending.projectId, pending.command, pending.workspace)
+      return { executed: true, success: r.success, output: r.output, command: pending.command }
+    })
+  )
 
   // Hermes — FASE 3: Autonomous Loop (objetivo/autonomia persistidos + DoD checklist)
   ipcMain.handle('hermes:agent:setObjective', (_, { projectId, objective }: { projectId: string; objective: string }) =>
@@ -550,7 +596,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       const targetWin = BrowserWindow.fromWebContents(event.sender)
       const streamId = crypto.randomUUID()
       const { stream, worktreePath, branch } = await hermesSvc.startParallelTask(projectId, taskId, objective)
-      wireHermesStream(targetWin, streamId, stream, () => {
+      wireHermesStream(targetWin, streamId, stream, { projectId, workspace: worktreePath }, () => {
         // status da tarefa é decidido pelo renderer via parsing das tags — nada a persistir aqui
       })
       return { streamId, worktreePath, branch }

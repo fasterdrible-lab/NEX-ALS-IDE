@@ -1,5 +1,23 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.58.0] — 2026-10-17
+
+### Adicionado — Hermes FASE A: governança (Autorizar/Negar) + activity feed estruturado
+
+Implementa as ETAPAS 7, 14 e 30 do brief de Autonomous Development sobre o comportamento **real** do Hermes v0.22 verificado na VPS-1: em headless ele bloqueia sozinho comandos perigosos, e `--format stream-json` emite eventos JSONL.
+
+**Novo — `packages/core/src/hermes/hermes-events.ts` (`HermesEventStream`):** embrulha o `ExecStream` do `hermes chat --format stream-json`, parseia JSONL linha a linha (bufferizando linhas partidas entre chunks SSH) e expõe `'data'` só com o texto (contrato antigo preservado — loop por tags, cron e execução paralela não mudaram) + `'event'` com `init`/`tool_use`/`tool_result`/`blocked`/`result`. Validado com JSONL real capturado da VPS, cortado em pedaços de 37 bytes.
+
+**Governança — comando bloqueado vira decisão do usuário:** `wireHermesStream` (`handlers.ts`) registra cada bloqueio `terminal` num Map do main e envia `approval_request` ao renderer. Novo IPC `hermes:approval:resolve` (admin) recebe **só o id** — o comando nunca vem da UI. Autorizar → `HermesService.runApprovedCommand` executa no workspace do projeto (validado contra `remotePath`/worktrees) e registra em `tool_execution_log` como `exec_dangerous` confirmado; o painel então avisa o Hermes do desfecho na mesma sessão (reenviando a tarefa e lendo a tag, como no Decision Request). Negar → o Hermes é instruído a não contornar. `execute_code` bloqueado só pode ser negado. O NEX nunca usa `--yolo` nem `approvals.single_query_mode: approve`.
+
+**UI — `HermesAgentPanel.tsx`:** cartão vermelho "Hermes deseja executar" (comando exato + motivo + Autorizar/Negar); faixa "Atividade" com cada ferramenta usada e falhas em âmbar; loop autônomo pausa enquanto houver aprovação pendente.
+
+**Corrigido — sucesso/erro decidido pelo `result` do Hermes:** antes era `code === 0 || hasData`, mas o comando SSH termina em `; rm -f <arquivo>`, então o exit code era sempre 0 — erros como "créditos esgotados" viravam uma resposta vazia "concluída". Agora o erro real do Hermes aparece no painel e no cron.
+
+**Operacional (VPS-1):** `hermes setup` havia gravado `model.base_url` do OpenRouter com `provider: auto`, deixando o Hermes "sem provider" mesmo logado no Nous → `hermes config set model.provider nous`. Credencial Nous também ficou em pausa após uma tentativa de modelo pago → `hermes auth reset nous`. Ambos documentados no troubleshooting.
+
+`pnpm typecheck` limpo (5 pacotes).
+
 ## [3.57.6] — 2026-10-17
 
 ### Corrigido — 3 bugs que impediam o Agent Mode do Hermes de funcionar numa VPS real

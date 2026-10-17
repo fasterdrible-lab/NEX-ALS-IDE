@@ -74,6 +74,7 @@ Primeiro teste de ponta a ponta, na VPS-1. Corrigiu 3 bugs (ver CHANGELOG 3.57.6
 | **4 — Execução Paralela** | Não é "spawn de subagente" (não existe API externa) — execução paralela real via git worktrees gerenciados pelo NEX, ownership por isolamento de worktree, painel de agentes ativos | ✅ v3.55.0 |
 | **5 — Memory + Skills** | Visibilidade só-leitura de skills (`SKILL.md`) e sessões; adapter de contexto NEX→Hermes via `.hermes.md` (auto-injetado pelo Hermes, sem flag) | ✅ v3.56.0 |
 | **6 — Automação** | Cron (`scheduled_jobs`+`projectId`), execução não-assistida (`runObjectiveUnattended`), recovery de sessão interrompida (`recoverInterruptedSessions`) | ✅ v3.57.0 |
+| **A — Governança + eventos** | `stream-json` → activity feed estruturado; comandos bloqueados pelo Hermes viram Autorizar/Negar no NEX (execução pelo NEX, auditada em `tool_execution_log`); erro real do Hermes exibido | ✅ v3.58.0 |
 | 7 — Monitoramento | Integração com `NotificationMonitor`, incident diagnostics, auto-repair seguro | ⏳ pendente |
 
 ## FASE 1 — o que foi entregue
@@ -225,12 +226,30 @@ Ver seção "Hermes Automação (FASE 6)" em `docs/ARCHITECTURE.md` para o detal
 | Execução não-assistida sempre bate no teto de 20min | Objetivo complexo demais para rodar sem supervisão, ou o Hermes está preso num loop interno | Reduzir o escopo do objetivo agendado, ou rodar manualmente via AI Hub (Agent Mode) primeiro para calibrar o tempo esperado |
 | Job Hermes falha com "sem projeto associado" | Job criado/editado sem `projectId` (ex.: via `jobs:update` direto, fora da UI) | Recriar o job pela tela de Automações, que valida o projeto obrigatório para `agentName: 'hermes'` |
 
+## FASE A — o que foi entregue (v3.58.0)
+
+Ver "Hermes Governança + Eventos estruturados" em `docs/ARCHITECTURE.md`. Resumo funcional:
+
+- Faixa **Atividade** no topo da saída: cada ferramenta que o Hermes usa (`write_file`, `terminal`…), com horário, e falhas de ferramenta em âmbar — sem chain-of-thought, só o que foi feito
+- Quando o Hermes tenta um comando perigoso, ele mesmo bloqueia; o NEX mostra o cartão **"Hermes deseja executar"** com o comando exato e o motivo → **Autorizar** (o NEX executa e devolve o resultado ao Hermes) ou **Negar** (o Hermes é instruído a não contornar)
+- O loop autônomo pausa enquanto houver aprovação pendente
+- Erros reais do Hermes (ex.: créditos esgotados, provider não configurado) aparecem como erro, em vez de uma resposta vazia
+
+## Troubleshooting (FASE A)
+
+| Sintoma | Causa provável | Verificação |
+|---|---|---|
+| "Hermes is not connected to any AI provider yet" mesmo logado no Nous | (a) credencial em pausa após tentativa de modelo pago (`hermes auth list` mostra `exhausted … (Nm left)`); (b) `hermes setup` gravou `model.base_url` do OpenRouter com `provider: auto` | (a) `hermes auth reset nous`; (b) `hermes config set model.provider nous` (limpa o `base_url` sozinho) |
+| Cartão de aprovação não aparece mesmo o Hermes dizendo que foi bloqueado | Bloqueio veio de ferramenta diferente de `terminal`/`execute_code`, ou formato do `tool_result` mudou numa versão nova do Hermes | Rodar o objetivo à mão com `--format stream-json` na VPS e conferir o campo `output.error` do `tool_result` |
+| "Solicitação de aprovação não encontrada" ao clicar Autorizar | App reiniciado depois do bloqueio (aprovações vivem em memória) | Reenviar o objetivo — o Hermes vai pedir de novo |
+
 ## Limitações conhecidas
 
+0. **Aprovação é pós-execução, não pausa o Hermes** (FASE A) — em headless o Hermes não espera resposta: ele recebe o bloqueio, segue (ou termina) sem o comando, e o desfecho da decisão chega numa nova mensagem da mesma sessão. Na prática, a tarefa é reenviada com "o NEX executou X, resultado Y".
 1. ~~Sem modo headless confirmado~~ — **resolvido na FASE 2**, ver seção própria acima.
 2. **`hermes gateway` como proxy de "serviço"** — é a aproximação mais razoável disponível hoje; pode ser revisado quando existir um "Hermes Bridge" dedicado escutando em `127.0.0.1`.
-3. **Sem teste de ponta a ponta contra VPS real** (FASE 1 a 6) — instalação, envio de objetivo, loop autônomo, execução paralela, sincronização de contexto e automação real ficam a cargo do usuário; validado via `pnpm typecheck && pnpm build` limpos e revisão manual dos comandos shell/SSH/git gerados (sem interpolação insegura de input do usuário). A FASE 4 continua sendo a de maior incerteza prática (múltiplos streams SSH concorrentes).
-4. **Sem parsing estruturado de activity feed** (FASE 2) — depende do adaptador ACP, cuja página de documentação retornou 404 na pesquisa; o painel de saída é texto corrido.
+3. **Teste contra VPS real parcial** — v3.57.6/3.58.0 validaram na VPS-1: instalação, detecção, gateway, `--query-file`/`--resume`, `stream-json`, bloqueio de comando perigoso e o wrapper de comando aprovado. Ainda **não** validado ponta a ponta pela UI do NEX: loop autônomo completo, execução paralela, cron. Texto original: **Sem teste de ponta a ponta contra VPS real** (FASE 1 a 6) — instalação, envio de objetivo, loop autônomo, execução paralela, sincronização de contexto e automação real ficam a cargo do usuário; validado via `pnpm typecheck && pnpm build` limpos e revisão manual dos comandos shell/SSH/git gerados (sem interpolação insegura de input do usuário). A FASE 4 continua sendo a de maior incerteza prática (múltiplos streams SSH concorrentes).
+4. ~~Sem parsing estruturado de activity feed~~ — **resolvido na FASE A** com `--format stream-json` (Hermes v0.22), sem precisar de ACP nem Bridge.
 5. **Duração de `hermes chat -q` não testada contra caso real** — o watchdog de inatividade de 300s é uma estimativa; pode precisar de ajuste depois de uso real com tarefas agenticas longas. Num loop autônomo (sequencial ou paralelo) isso se acumula por tarefa.
 6. **3 tiers de autonomia não implementados** (FASE 3) — simplificado para binário Manual/Autônomo por decisão explícita do usuário; refinar quando houver mais sinal do que o Hermes expõe por tarefa (ex. classificação de risco).
 7. **DoD não é gate automático** (FASE 3) — é checklist informativo; auto-detectar/rodar build de stack arbitrária ficou fora de escopo por risco de falso-positivo/negativo.

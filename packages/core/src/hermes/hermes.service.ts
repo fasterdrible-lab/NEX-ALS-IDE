@@ -1,5 +1,7 @@
 import { getPrismaClient } from '@cwm/db'
-import type { TerminalService, ExecStream } from '../terminal/terminal.service.js'
+import type { TerminalService } from '../terminal/terminal.service.js'
+import type { HermesEventStream, HermesEvent } from './hermes-events.js'
+import { toolExecutor } from '../ai/hub/tool-executor.js'
 import type { SftpService } from '../sftp/sftp.service.js'
 import type { GitService } from '../git/git.service.js'
 import type { KnowledgeService } from '../knowledge/knowledge.service.js'
@@ -228,8 +230,8 @@ export class HermesService {
     await this.db.hermesProjectAgent.update({ where: { projectId }, data: { autonomyLevel: level } })
   }
 
-  /** Abre o stream de execução do objetivo — quem chama é responsável por consumir os eventos do ExecStream. */
-  async streamObjective(projectId: string, objective: string): Promise<{ vpsId: string; stream: ExecStream }> {
+  /** Abre o stream de execução do objetivo — quem chama é responsável por consumir os eventos do HermesEventStream. */
+  async streamObjective(projectId: string, objective: string): Promise<{ vpsId: string; stream: HermesEventStream }> {
     const project = await this.db.project.findUnique({ where: { id: projectId }, include: { vpsServer: true } })
     if (!project) throw new Error(`Projeto não encontrado: ${projectId}`)
     if (!project.vpsServer) throw new Error('Projeto sem VPS associada — configure a VPS do projeto antes de usar o Agent Mode.')
@@ -298,7 +300,16 @@ export class HermesService {
       }, hardCapMs)
 
       stream.on('data', (chunk: string) => { buf += chunk; hasData = true; lastChunkAt = Date.now() })
-      stream.on('close', (code: number | null) => finish(code === 0 || hasData))
+      stream.on('event', (e: HermesEvent) => {
+        lastChunkAt = Date.now()
+        // Sem usuário para autorizar: o bloqueio fica registrado na saída (vai para a notificação).
+        if (e.kind === 'blocked') buf += `\n\n[bloqueado — requer autorização] ${e.reason}: ${e.command}\n`
+      })
+      stream.on('close', (code: number | null) => {
+        const r = stream.result
+        if (r) finish(r.ok, r.ok ? undefined : r.error || 'Hermes terminou com erro')
+        else finish(code === 0 && hasData, hasData ? undefined : `hermes encerrou sem resultado (código ${code})`)
+      })
       stream.on('error', (err: Error) => finish(false, err.message))
     })
   }
@@ -399,13 +410,45 @@ export class HermesService {
   }
 
   /**
+   * Governança — executa um comando que o Hermes teve bloqueado em modo headless e que o
+   * usuário autorizou na UI. O NEX executa (não o Hermes com --yolo), no workspace do projeto,
+   * e registra em tool_execution_log como exec_dangerous confirmado — mesmo trilho de
+   * auditoria das tools do AI Hub. `workspace` permite rodar dentro de um worktree paralelo.
+   */
+  async runApprovedCommand(projectId: string, command: string, workspace?: string): Promise<HermesCommandResult> {
+    const project = await this.db.project.findUnique({ where: { id: projectId } })
+    if (!project) throw new Error(`Projeto não encontrado: ${projectId}`)
+    const cwd = workspace || project.remotePath
+    const root = project.remotePath.replace(/\/+$/, '')
+    const insideProject = cwd === root || cwd.startsWith(`${root}/`) || cwd.startsWith(`${root}-worktrees/`)
+    if (!insideProject) throw new Error('Workspace fora do projeto')
+    let output: string
+    let success: boolean
+    try {
+      output = await this.client.runApprovedCommand(project.vpsServerId, cwd, command)
+      success = /\[exit 0\]\s*$/.test(output)
+    } catch (err) {
+      output = err instanceof Error ? err.message : String(err)
+      success = false
+    }
+    await toolExecutor.logExecution({
+      toolName: 'hermes:approved_command',
+      input: { projectId, workspace: cwd, command },
+      output,
+      tier: 'exec_dangerous',
+      confirmed: true,
+    })
+    return { success, output }
+  }
+
+  /**
    * Inicia uma tarefa em execução paralela: cria um git worktree isolado (gerenciado pelo NEX,
    * não pela flag `-w` do Hermes, que é pouco documentada) e roda o objetivo dentro dele, sem
    * `--resume` (cada worktree é uma execução one-shot, não uma sessão conversacional).
    */
   async startParallelTask(
     projectId: string, taskId: string, objective: string
-  ): Promise<{ vpsId: string; stream: ExecStream; worktreePath: string; branch: string }> {
+  ): Promise<{ vpsId: string; stream: HermesEventStream; worktreePath: string; branch: string }> {
     const project = await this.db.project.findUnique({ where: { id: projectId }, include: { vpsServer: true } })
     if (!project) throw new Error(`Projeto não encontrado: ${projectId}`)
     if (!project.vpsServer) throw new Error('Projeto sem VPS associada — configure a VPS do projeto antes de usar o Agent Mode.')

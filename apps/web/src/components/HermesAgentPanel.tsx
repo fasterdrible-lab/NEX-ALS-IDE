@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Bot, Send, Loader2, Square, ExternalLink, Play, ListChecks,
-  ChevronDown, ChevronRight, RefreshCw, CheckCircle2,
+  ChevronDown, ChevronRight, RefreshCw, CheckCircle2, ShieldAlert, Wrench, AlertTriangle,
 } from 'lucide-react'
 import type { Project } from '@cwm/config'
 import {
   ipc, type HermesProjectAgentInfo, type HermesStatus, type HermesAgentStatus,
   type HermesAutonomyLevel, type DodItem, type AgentTask, type TaskStatus,
+  type HermesActivity, type HermesApprovalRequest,
 } from '../lib/ipc'
 
 const HERMES_STATUS_LABEL: Record<HermesStatus, string> = {
@@ -111,6 +112,23 @@ const REMINDER_PROMPT = 'Você não incluiu nenhuma tag obrigatória. Termine AG
 
 interface PendingDecision { taskId: string; question: string; options: string[] }
 
+/** Aprovação pendente + de onde veio: tarefa sequencial (dá para retomar a sessão) ou worktree paralelo (one-shot). */
+interface PendingApproval extends HermesApprovalRequest { taskId: string | null; parallel: boolean }
+
+interface ActivityEntry extends HermesActivity { at: number }
+
+const ACTIVITY_CAP = 200
+
+function buildApprovalFollowUp(a: PendingApproval, r: { executed: boolean; success: boolean; output: string }): string {
+  if (!r.executed) {
+    return `O usuário NEGOU o comando bloqueado: \`${a.command}\`. Não tente contorná-lo por outro caminho `
+      + '(outro comando, script ou ferramenta com o mesmo efeito). Siga sem ele; se for indispensável, finalize com '
+      + '[TAREFA_BLOQUEADA: motivo] ou [DECISAO_NECESSARIA pergunta="..." opcoes="A|B"].'
+  }
+  return `O usuário AUTORIZOU e o NEX executou por você o comando que estava bloqueado: \`${a.command}\`\n`
+    + `Resultado (${r.success ? 'sucesso' : 'falhou'}):\n${r.output.slice(-3000)}\n\nContinue a partir daqui.`
+}
+
 export default function HermesAgentPanel() {
   const [projects, setProjects] = useState<Project[]>([])
   const [projectId, setProjectId] = useState('')
@@ -141,6 +159,33 @@ export default function HermesAgentPanel() {
   // ── Adapter de contexto NEX→Hermes (FASE 5) ───────────────────────────────
   const [syncingContext, setSyncingContext] = useState(false)
   const [syncContextMsg, setSyncContextMsg] = useState('')
+
+  // ── Governança + activity feed (stream-json) ──────────────────────────────
+  const [activity, setActivity] = useState<ActivityEntry[]>([])
+  const [approvals, setApprovals] = useState<PendingApproval[]>([])
+  const [resolvingApproval, setResolvingApproval] = useState<string | null>(null)
+  const approvalsRef = useRef<PendingApproval[]>([])
+  const currentTaskRef = useRef<string | null>(null)
+  const parallelStreamsRef = useRef<Set<string>>(new Set())
+  useEffect(() => { approvalsRef.current = approvals }, [approvals])
+  useEffect(() => { setActivity([]); setApprovals([]) }, [projectId])
+
+  // Listener global (não depende de `sending`): captura atividade e bloqueios de qualquer
+  // stream deste painel — mensagem livre, loop sequencial ou tarefa paralela.
+  useEffect(() => {
+    const unsub = ipc.hermes.agent.onChunk((chunk) => {
+      if (chunk.type === 'activity' && chunk.activity) {
+        const entry: ActivityEntry = { ...chunk.activity, at: Date.now() }
+        setActivity(prev => [...prev.slice(-(ACTIVITY_CAP - 1)), entry])
+      }
+      if (chunk.type === 'approval_request' && chunk.approval) {
+        const parallel = parallelStreamsRef.current.has(chunk.streamId)
+        const pending: PendingApproval = { ...chunk.approval, parallel, taskId: parallel ? null : currentTaskRef.current }
+        setApprovals(prev => prev.some(a => a.id === pending.id) ? prev : [...prev, pending])
+      }
+    })
+    return () => { try { unsub() } catch { /* ignorar */ } }
+  }, [])
 
   const scrollOutput = () => setTimeout(() => {
     if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight
@@ -200,6 +245,7 @@ export default function HermesAgentPanel() {
 
   const handleSend = useCallback(async () => {
     if (!projectId || !chatInput.trim() || sending || planning || looping) return
+    currentTaskRef.current = null
     setSending(true)
     setOutput('')
     try {
@@ -275,9 +321,13 @@ export default function HermesAgentPanel() {
 
   const executeTask = useCallback(async (task: AgentTask): Promise<'done' | 'blocked' | 'decision' | 'error'> => {
     let prompt = buildTaskPrompt(task)
+    currentTaskRef.current = task.id
     for (let attempt = 0; attempt < 2; attempt++) {
       const { text, ok } = await sendAndWait(prompt)
       if (!ok) return 'error'
+      // Comando bloqueado aguardando o usuário: a tarefa espera a decisão (resolveApproval
+      // reenvia a tarefa com o desfecho e lê a tag dali) em vez de gastar o lembrete.
+      if (approvalsRef.current.some(a => a.taskId === task.id)) return 'decision'
       const tag = parseTaskTag(text)
       if (tag.kind === 'done') {
         await ipc.tasks.update(task.id, { status: 'DONE' }).catch(() => {})
@@ -315,8 +365,10 @@ export default function HermesAgentPanel() {
       await ipc.tasks.update(task.id, { status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] falha ao iniciar execução paralela` }).catch(() => {})
       return 'error'
     }
+    parallelStreamsRef.current.add(start.streamId)
     setActiveParallel(prev => new Map(prev).set(task.id, { title: task.title, branch: start.branch }))
     const { text, ok } = await waitForChunkStream(start.streamId)
+    parallelStreamsRef.current.delete(start.streamId)
     setActiveParallel(prev => { const next = new Map(prev); next.delete(task.id); return next })
 
     if (!ok) {
@@ -355,6 +407,8 @@ export default function HermesAgentPanel() {
       let guard = 0
       const cap = 20
       while (!loopStopRef.current) {
+        // Governança: nunca segue com comando perigoso aguardando Autorizar/Negar.
+        if (approvalsRef.current.length > 0) break
         const current = await ipc.tasks.list({ projectId, ownerAgent: 'hermes' }).catch(() => [] as AgentTask[])
         setTasks(current)
         const todo = current.filter(t => t.status === 'TODO')
@@ -404,6 +458,7 @@ export default function HermesAgentPanel() {
   const startAutonomousObjective = useCallback(async () => {
     if (!projectId || !goalInput.trim() || planning || looping) return
     const obj = goalInput.trim()
+    currentTaskRef.current = null
     setPlanning(true)
     setOutput('')
     await ipc.hermes.agent.setObjective(projectId, obj).catch(() => {})
@@ -456,6 +511,58 @@ export default function HermesAgentPanel() {
       if (autonomyLevel === 'autonomous' && !stillPending) void runLoop()
     }
   }, [pendingDecision, tasks, sendAndWait, loadTasks, autonomyLevel, runLoop])
+
+  /**
+   * Autorizar/Negar um comando que o Hermes teve bloqueado. Autorizar = o NEX executa (main
+   * process, auditado em tool_execution_log). Depois avisa o Hermes do desfecho na mesma sessão;
+   * se o bloqueio veio de uma tarefa sequencial, reenvia a tarefa e lê a tag — igual ao Decision
+   * Request. Tarefa paralela é one-shot (worktree sem sessão): o comando roda no worktree e a
+   * tarefa fica para revisão manual.
+   */
+  const resolveApproval = useCallback(async (a: PendingApproval, approve: boolean) => {
+    if (sending || planning || looping || resolvingApproval) return
+    setResolvingApproval(a.id)
+    let result = { executed: false, success: false, output: '' }
+    try {
+      if (a.executable) result = await ipc.hermes.agent.resolveApproval(a.id, approve)
+      setOutput(prev => `${prev}\n\n[governança] ${approve ? 'Autorizado' : 'Negado'}: ${a.command}`
+        + (result.executed ? `\n${result.output.slice(-1500)}` : ''))
+      scrollOutput()
+    } catch (e) {
+      setOutput(prev => `${prev}\n\n[erro ao resolver aprovação] ${String(e)}`)
+      setResolvingApproval(null)
+      return
+    }
+    setApprovals(prev => prev.filter(x => x.id !== a.id))
+    setResolvingApproval(null)
+    if (a.parallel) return
+
+    const task = a.taskId ? tasks.find(t => t.id === a.taskId) : undefined
+    setLooping(true)
+    let stillPending = false
+    try {
+      const followUp = buildApprovalFollowUp(a, result)
+      const { text, ok } = await sendAndWait(task ? `${buildTaskPrompt(task)}\n\n${followUp}` : followUp)
+      if (ok && task) {
+        currentTaskRef.current = task.id
+        const tag = parseTaskTag(text)
+        if (approvalsRef.current.some(x => x.taskId === task.id)) stillPending = true
+        else if (tag.kind === 'done') await ipc.tasks.update(task.id, { status: 'DONE' }).catch(() => {})
+        else if (tag.kind === 'blocked') {
+          await ipc.tasks.update(task.id, {
+            status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${tag.reason}`.trim(),
+          }).catch(() => {})
+        } else if (tag.kind === 'decision') {
+          setPendingDecision({ taskId: task.id, question: tag.question, options: tag.options })
+          stillPending = true
+        }
+        await loadTasks()
+      }
+    } finally {
+      setLooping(false)
+      if (autonomyLevel === 'autonomous' && !stillPending && approvalsRef.current.length === 0) void runLoop()
+    }
+  }, [sending, planning, looping, resolvingApproval, tasks, sendAndWait, loadTasks, autonomyLevel, runLoop])
 
   const changeAutonomy = useCallback(async (level: HermesAutonomyLevel) => {
     setAutonomyLevel(level)
@@ -671,6 +778,48 @@ export default function HermesAgentPanel() {
               </div>
             )}
 
+            {/* Governança — comandos que o Hermes teve bloqueados por serem perigosos */}
+            {approvals.map(a => (
+              <div key={a.id} className="border border-red-700/50 bg-red-950/30 rounded-lg p-3 space-y-2">
+                <p className="text-[10px] text-red-400 uppercase tracking-widest font-semibold flex items-center gap-1.5">
+                  <ShieldAlert size={12} /> Hermes deseja executar
+                </p>
+                <pre className="text-[11px] font-mono text-slate-100 bg-slate-950 border border-slate-800 rounded px-2 py-1.5 whitespace-pre-wrap break-all max-h-32 overflow-auto">{a.command || '(comando não informado)'}</pre>
+                <p className="text-[10px] text-slate-400">
+                  Motivo do bloqueio: <span className="text-slate-300">{a.reason}</span>
+                  {a.parallel && ' · tarefa paralela (worktree)'}
+                </p>
+                {a.executable ? (
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => void resolveApproval(a, true)}
+                      disabled={busy || resolvingApproval !== null}
+                      className="flex-1 text-[11px] py-1 rounded bg-red-700 hover:bg-red-600 disabled:opacity-30 flex items-center justify-center gap-1"
+                    >
+                      {resolvingApproval === a.id ? <Loader2 size={11} className="animate-spin" /> : null} Autorizar
+                    </button>
+                    <button
+                      onClick={() => void resolveApproval(a, false)}
+                      disabled={busy || resolvingApproval !== null}
+                      className="flex-1 text-[11px] py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30"
+                    >
+                      Negar
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => void resolveApproval(a, false)}
+                    disabled={busy || resolvingApproval !== null}
+                    className="w-full text-[11px] py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30"
+                    title="Código Python arbitrário não é reexecutado pelo NEX"
+                  >
+                    Negar (não executável pelo NEX)
+                  </button>
+                )}
+                {busy && <p className="text-[9px] text-slate-500">Aguarde a execução atual terminar para decidir.</p>}
+              </div>
+            ))}
+
             {/* Decision Request */}
             {pendingDecision && (
               <div className="border border-amber-700/50 bg-amber-950/30 rounded-lg p-3 space-y-2">
@@ -755,8 +904,26 @@ export default function HermesAgentPanel() {
         )}
       </div>
 
-      {/* ═══ Coluna direita — saída ao vivo + mensagem livre ═══ */}
+      {/* ═══ Coluna direita — atividade + saída ao vivo + mensagem livre ═══ */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        {activity.length > 0 && (
+          <div className="shrink-0 max-h-40 overflow-y-auto border-b border-slate-800 bg-slate-900/60 px-3 py-2 space-y-0.5">
+            <p className="text-[9px] text-slate-500 uppercase tracking-widest pb-1">Atividade</p>
+            {activity.slice(-40).map((e, i) => (
+              <div key={`${e.at}-${i}`} className="flex items-start gap-2 text-[10px] font-mono">
+                <span className="text-slate-600 shrink-0">{new Date(e.at).toLocaleTimeString('pt-BR')}</span>
+                {e.kind === 'tool_error'
+                  ? <AlertTriangle size={10} className="text-amber-400 shrink-0 mt-0.5" />
+                  : e.kind === 'init'
+                    ? <Bot size={10} className="text-purple-400 shrink-0 mt-0.5" />
+                    : <Wrench size={10} className="text-sky-400 shrink-0 mt-0.5" />}
+                <span className={`truncate ${e.kind === 'tool_error' ? 'text-amber-300' : 'text-slate-400'}`}>
+                  {e.kind === 'init' ? `sessão iniciada · ${e.summary}` : `${e.tool}${e.summary ? ` — ${e.summary}` : ''}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         <pre ref={outputRef} className="flex-1 overflow-auto p-4 text-xs font-mono whitespace-pre-wrap text-slate-300 bg-slate-950">
           {output || (projectId ? '(nenhuma saída ainda)' : 'Selecione um projeto para começar.')}
         </pre>

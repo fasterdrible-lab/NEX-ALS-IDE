@@ -1155,3 +1155,50 @@ Nenhum handler `hermes:*` novo nesta fase — `runObjectiveUnattended` é chamad
 - Sistema de cron dedicado ao Hermes — reaproveita `scheduled_jobs`/`JobExecutor` do Ponto 7 em vez de duplicar agendamento.
 - Diagnóstico de causa da interrupção (crash vs. fechamento normal vs. `kill -9`) — não é possível distinguir de dentro do processo que acabou de subir; todo `status:'running'` sobrevivente ao boot é tratado como interrompido, o que é sempre uma suposição segura (o pior caso é reenviar um "continue de onde parou" para uma sessão que na verdade tinha terminado corretamente, mas o `HermesProjectAgent` não foi atualizado a tempo — cenário raro e inofensivo).
 - Recuperação automática de Decision Requests pendentes no momento da interrupção — o usuário precisa reabrir o objetivo/tarefa manualmente após "Retomar sessão" (mesma limitação de escopo já registrada para execução paralela na FASE 4).
+
+## Hermes Governança + Eventos estruturados (v3.58.0+) — FASE A
+
+Base: comportamento real do Hermes v0.22 em headless — bloqueia comandos perigosos sozinho e emite JSONL com `--format stream-json` (ver `docs/HERMES_INTEGRATION.md`).
+
+```
+HermesClient.streamObjective()
+  → hermes chat -Q --format stream-json --query-file <arquivo> [--resume latest --in <ws>]
+  → new HermesEventStream(execStream)                 [packages/core/src/hermes/hermes-events.ts]
+       parse JSONL linha a linha (bufferiza linhas partidas entre chunks SSH)
+       'data'  ← só o texto dos eventos `text`   (contrato antigo: tags [TAREFA_CONCLUIDA] etc.)
+       'event' ← HermesEvent: init | tool_use | tool_result | blocked | result
+       .result ← último `result` (exit_code/error) — decide sucesso, não o exit code do SSH
+
+wireHermesStream() (handlers.ts)
+  tool_use / tool_result com erro / init  → chunk { type:'activity' }        → feed "Atividade"
+  blocked (tool=terminal)                 → hermesApprovals.set(id, {projectId, workspace, command})
+                                          → chunk { type:'approval_request', approval:{id,...} }
+  close: result.ok=false                  → chunk { type:'error', error: result.error }
+                                            (ex.: "créditos esgotados" — antes virava 'done' silencioso)
+
+Usuário clica Autorizar/Negar (HermesAgentPanel)
+  → hermes:approval:resolve { approvalId, approve }       [requireAdmin]
+       renderer manda só o id — o comando vem do Map do main, nunca da UI
+       approve → HermesService.runApprovedCommand(projectId, command, workspace)
+                   → valida workspace ⊂ remotePath (ou <remotePath>-worktrees/)
+                   → cd <ws> && { <command> } 2>&1; echo "[exit $?]"   (via TerminalService.exec)
+                   → toolExecutor.logExecution(toolName:'hermes:approved_command', tier:'exec_dangerous', confirmed:true)
+  → renderer avisa o Hermes do desfecho na mesma sessão (--resume):
+       bloqueio durante tarefa sequencial → reenvia buildTaskPrompt(task) + desfecho, lê a tag (igual Decision Request)
+       mensagem livre → só o desfecho
+       tarefa paralela (worktree one-shot, sem sessão) → executa no worktree, sem follow-up
+```
+
+- **O NEX nunca liga `--yolo` nem `approvals.single_query_mode: approve`** — a aprovação é sempre do usuário, e a execução é do NEX.
+- **`execute_code` bloqueado** (Python arbitrário) aparece com `executable:false`: só "Negar" — o NEX não reexecuta código.
+- **Loop autônomo pausa** enquanto houver aprovação pendente (`runLoop` checa `approvalsRef` a cada iteração); uma tarefa cujo stream gerou bloqueio retorna `'decision'` em vez de gastar o lembrete de tag.
+- Aprovações pendentes vivem em memória do main (`hermesApprovals`) — não sobrevivem a restart do app (o Hermes já terminou a execução sem o comando; basta reenviar).
+- Execução não-assistida (cron) não tem quem aprove: o bloqueio é anexado à saída como `[bloqueado — requer autorização]` e chega na notificação.
+
+### IPC novo
+
+| Canal | Auth | Descrição |
+|---|---|---|
+| `hermes:approval:resolve` | admin | `{ approvalId, approve }` → `{ executed, success, output, command }` |
+
+Chunks novos em `hermes:agent:chunk`: `activity` (`{kind:'init'|'tool'|'tool_error', tool, summary}`) e `approval_request` (`{id, tool, command, reason, executable}`).
