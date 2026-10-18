@@ -56,8 +56,10 @@ export class HermesClient {
 
   async version(vpsId: string): Promise<string> {
     const out = await this.run(vpsId, '(hermes --version || hermes -V || echo "") 2>&1')
-    const trimmed = out.trim().split('\n').pop()?.trim() ?? ''
-    return trimmed || 'unknown'
+    // v0.22+ imprime várias linhas (versão, diretório, Python, "Up to date"…) — a versão vem na 1ª.
+    const lines = out.split('\n').map(l => l.trim()).filter(Boolean)
+    const tagged = lines.find(l => /^Hermes Agent v\d/i.test(l)) ?? lines[0] ?? ''
+    return tagged.match(/v\d+(\.\d+)+[\w.-]*/)?.[0] ?? (tagged || 'unknown')
   }
 
   async installPath(vpsId: string): Promise<string> {
@@ -73,7 +75,35 @@ export class HermesClient {
     return this.run(vpsId, 'hermes update 2>&1', 300000)
   }
 
+  /**
+   * PID do gateway vivo, venha de onde vier: o processo que o NEX iniciou (`pid`), o serviço
+   * systemd que o `hermes setup` instala (`hermes-gateway.service` → `… gateway run`) ou um
+   * `hermes gateway` manual. `[g]ateway` evita que o pgrep case com a própria linha do bash.
+   */
+  async findGatewayPid(vpsId: string, pid: number | null): Promise<number | null> {
+    const own = pid ? `kill -0 ${pid} 2>/dev/null && echo ${pid} && exit 0;` : ''
+    const out = await this.run(vpsId, `${own} pgrep -o -f "hermes.*[g]ateway( run)?$|[g]ateway run$" || true`)
+    const found = parseInt(out.trim().split('\n')[0] ?? '', 10)
+    return Number.isFinite(found) ? found : null
+  }
+
   async startGateway(vpsId: string): Promise<number | null> {
+    // Uma instância de gateway por host (o Hermes recusa uma segunda): adota a que já existir.
+    const existing = await this.findGatewayPid(vpsId, null)
+    if (existing) {
+      await this.run(vpsId, `mkdir -p ${NEX_LOG_DIR}; echo ${existing} > ${NEX_PID_FILE}`)
+      return existing
+    }
+    // Serviço instalado pelo `hermes setup` (systemd/launchd): sobe por ele, sobrevive a reboot.
+    const viaService = await this.run(vpsId, 'hermes gateway start >/dev/null 2>&1 && echo ok || echo no')
+    if (viaService.trim().endsWith('ok')) {
+      await this.run(vpsId, 'sleep 3')
+      const svcPid = await this.findGatewayPid(vpsId, null)
+      if (svcPid) {
+        await this.run(vpsId, `mkdir -p ${NEX_LOG_DIR}; echo ${svcPid} > ${NEX_PID_FILE}`)
+        return svcPid
+      }
+    }
     await this.run(
       vpsId,
       `mkdir -p ${NEX_LOG_DIR}; nohup hermes gateway > ${NEX_LOG_FILE} 2>&1 & echo $! > ${NEX_PID_FILE}; sleep 1; cat ${NEX_PID_FILE}`,
@@ -95,17 +125,13 @@ export class HermesClient {
   }
 
   async stopGateway(vpsId: string, pid: number | null): Promise<void> {
+    // Primeiro pelo serviço — senão o systemd religa o gateway logo depois do kill.
+    await this.run(vpsId, 'hermes gateway stop >/dev/null 2>&1 || true', 30000)
     if (pid) {
       await this.run(vpsId, `kill ${pid} 2>/dev/null || true`)
     }
-    await this.run(vpsId, 'pkill -f "hermes gateway" 2>/dev/null || true')
+    await this.run(vpsId, 'pkill -f "hermes.*[g]ateway( run)?$|[g]ateway run$" 2>/dev/null || true')
     await this.run(vpsId, `rm -f ${NEX_PID_FILE}`)
-  }
-
-  async isRunning(vpsId: string, pid: number | null): Promise<boolean> {
-    if (!pid) return false
-    const out = await this.run(vpsId, `kill -0 ${pid} 2>/dev/null && echo alive || echo dead`)
-    return out.trim().includes('alive')
   }
 
   async execCommand(vpsId: string, args: string): Promise<string> {

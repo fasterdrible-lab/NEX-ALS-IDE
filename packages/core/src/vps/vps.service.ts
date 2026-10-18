@@ -160,8 +160,17 @@ export class VpsService {
       `  echo CWM_INSTALLED;`,
       `  timeout 3 "$CLAUDE" --version 2>/dev/null | grep -oE "[0-9]+\\.[0-9]+\\.[0-9]+" | head -1 || echo "";`,
       `  echo CWM_AUTH;`,
-      `  EMAIL=$(grep -rh "email" ~/.claude/ 2>/dev/null | grep -oE "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]+" | head -1);`,
-      `  if [ -n "$EMAIL" ]; then echo "logged_in $EMAIL"; else echo "not_logged_in"; fi;`,
+      // `claude auth status` (JSON) é a fonte da conta logada. Antes: grep -r "email" em ~/.claude/
+      // inteiro, que pegava o 1º e-mail de qualquer arquivo — ex.: support@anthropic.com dos
+      // manifestos de plugins. Fallback (CLI antigo sem `auth status`): só o oauthAccount de ~/.claude.json.
+      `  AUTH=$(timeout 10 "$CLAUDE" auth status 2>/dev/null);`,
+      `  if printf "%s" "$AUTH" | grep -qE "\\"loggedIn\\": *(true|false)"; then`,
+      `    EMAIL=$(printf "%s" "$AUTH" | tr "," "\\n" | grep "\\"email\\"" | grep -oE "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]+" | head -1);`,
+      `    if printf "%s" "$AUTH" | grep -qE "\\"loggedIn\\": *true"; then echo "logged_in $EMAIL"; else echo "not_logged_in"; fi;`,
+      `  else`,
+      `    EMAIL=$(tr "," "\\n" < ~/.claude.json 2>/dev/null | grep "\\"emailAddress\\"" | grep -oE "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]+" | head -1);`,
+      `    if [ -n "$EMAIL" ]; then echo "logged_in $EMAIL"; else echo "not_logged_in"; fi;`,
+      `  fi;`,
       `else`,
       `  echo CWM_NOT_INSTALLED;`,
       `fi`,

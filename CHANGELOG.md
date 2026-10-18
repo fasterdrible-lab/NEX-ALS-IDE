@@ -1,5 +1,22 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.59.3] — 2026-10-17
+
+### Corrigido — "Iniciar" do Hermes falhava com gateway já rodando; versão e conta Claude erradas; cards do Lançador
+
+**1. "hermes gateway encerrou logo após iniciar: The host gateway already serves profile 'default'" — `hermes-client.ts`:** o `hermes setup` instala o gateway como serviço systemd (`hermes-gateway.service`, enabled), e o Hermes só aceita um gateway por host. O NEX tentava subir um segundo via `nohup`. Agora:
+- `findGatewayPid()` acha o gateway vivo venha de onde vier (PID do NEX, serviço systemd ou manual) via `pgrep -f "hermes.*[g]ateway( run)?$|[g]ateway run$"` — o `[g]` evita casar com a própria linha do bash.
+- **Iniciar:** adota o gateway existente → senão `hermes gateway start` (serviço) → senão o `nohup` antigo.
+- **Parar:** `hermes gateway stop` antes do kill (senão o systemd religa); o `pkill -f "hermes gateway"` antigo nem casava com o processo real (`… gateway run`).
+- **Status** (`getStatus`) também reconhece gateway iniciado fora do NEX.
+- Verificado na VPS-1: detecção → PID do serviço; Parar → nenhum processo; Iniciar → serviço `active`, PID novo vivo.
+
+**2. Versão "Up to date":** o Hermes v0.22 imprime várias linhas em `--version` e o NEX pegava a última. Agora extrai `vX.Y.Z` da linha "Hermes Agent v…".
+
+**3. Lançador mostrava "Logado (support@anthropic.com)" — `vps.service.ts` (`checkClaudeCode`):** o e-mail vinha de `grep -r "email" ~/.claude/` — o primeiro e-mail de qualquer arquivo (era o manifesto do marketplace de plugins). Agora usa `claude auth status` (JSON: `loggedIn` + `email`); fallback para CLI antigo lê só `oauthAccount.emailAddress` de `~/.claude.json`. Comando capturado do código compilado e executado nas VPS: VPS-1 → fasterdrible@gmail.com, VPS-2 → phpos40@gmail.com.
+
+**4. Cards de VPS do Lançador com botões por cima do texto — `Launcher.tsx`:** 7 botões `shrink-0` na mesma linha das informações estouravam o card de meia largura. Botões agora numa linha própria, com `flex-wrap`.
+
 ## [3.59.2] — 2026-10-17
 
 ### Corrigido — tela Hermes: "Could not convert value … of the field `lastSeen` to type `DateTime`"

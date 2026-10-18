@@ -128,7 +128,9 @@ export default function Launcher() {
             {vps.map(v => {
               const claudeStatus = claudeStatuses[v.id]
               return (
-                <div key={v.id} className="card flex items-center justify-between gap-3">
+                // Botões numa linha própria com quebra: 7 botões shrink-0 ao lado das informações
+                // estouravam o card de meia largura e ficavam por cima do texto.
+                <div key={v.id} className="card flex flex-col gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="p-2.5 bg-slate-800 rounded-lg shrink-0">
                       <Server size={16} className="text-slate-300" />
@@ -139,7 +141,7 @@ export default function Launcher() {
                       <ClaudeBadge status={claudeStatus} />
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => navigate(`/ide/${v.id}/${encodeURIComponent(v.name)}`)}
                       className="btn-primary text-xs py-1.5 px-3"

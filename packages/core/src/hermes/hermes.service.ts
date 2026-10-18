@@ -90,14 +90,15 @@ export class HermesService {
         return this.upsert(vpsId, { status: 'not_installed', lastSeen: new Date(), lastError: '' })
       }
 
-      const pid = existing?.pid ?? null
-      const running = await this.client.isRunning(vpsId, pid)
+      // Reconhece também gateway iniciado fora do NEX (serviço systemd do `hermes setup`).
+      const livePid = await this.client.findGatewayPid(vpsId, existing?.pid ?? null)
+      const running = livePid !== null
       const version = await this.client.version(vpsId)
       const installPath = await this.client.installPath(vpsId)
 
       return this.upsert(vpsId, {
         status: running ? 'running' : 'installed',
-        version, installPath, pid: running ? pid : null,
+        version, installPath, pid: livePid,
         lastSeen: new Date(), lastError: '',
       })
     } catch (err) {
