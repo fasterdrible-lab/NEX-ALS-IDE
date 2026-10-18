@@ -118,7 +118,7 @@ function TaskModal({ onClose, onCreated }: { onClose: () => void; onCreated: () 
           <button onClick={onClose} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">Cancelar</button>
           <button onClick={submit} disabled={!title.trim() || saving}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 transition-colors"
-            style={{ background: 'rgba(217,164,65,0.14)', border: '1px solid rgba(217,164,65,0.28)', color: '#F2C879' }}>
+            style={{ background: 'rgba(26,140,255,0.14)', border: '1px solid rgba(26,140,255,0.28)', color: '#7CC0FF' }}>
             {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Criar
           </button>
         </div>
@@ -200,17 +200,17 @@ export default function PlanningPage() {
   })
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#080612', color: '#F8F8FC' }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#050B16', color: '#F7F9FC' }}>
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-3 shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#0D0A24' }}>
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#08111F' }}>
         <button onClick={() => navigate(-1)}
           className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
           <ArrowLeft size={13} /> Voltar
         </button>
         <div className="w-px h-4 bg-slate-800" />
-        <ClipboardList size={14} style={{ color: '#D9A441' }} />
-        <span className="text-sm font-semibold" style={{ color: '#F2C879' }}>Planejamento</span>
+        <ClipboardList size={14} style={{ color: '#1A8CFF' }} />
+        <span className="text-sm font-semibold" style={{ color: '#7CC0FF' }}>Planejamento</span>
         <div className="flex-1" />
         {!loading && (
           <span className="text-xs text-slate-600">
@@ -223,7 +223,7 @@ export default function PlanningPage() {
         </button>
         <button onClick={() => setTaskModal(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
-          style={{ background: 'rgba(217,164,65,0.1)', border: '1px solid rgba(217,164,65,0.25)', color: '#F2C879' }}>
+          style={{ background: 'rgba(26,140,255,0.1)', border: '1px solid rgba(26,140,255,0.25)', color: '#7CC0FF' }}>
           <Plus size={11} /> Nova Tarefa
         </button>
       </div>
@@ -363,22 +363,22 @@ export default function PlanningPage() {
           {/* Agent tabs */}
           <div className="flex items-center gap-0 overflow-x-auto" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
             <div className="flex items-center gap-1.5 px-3 py-2 shrink-0">
-              <Brain size={12} style={{ color: '#D9A441' }} />
+              <Brain size={12} style={{ color: '#1A8CFF' }} />
               <span className="text-[10px] text-slate-500 uppercase tracking-wider">Contexto por Agente</span>
             </div>
             {AGENT_NAMES.map(a => (
               <button key={a} onClick={() => setAgentCtxTab(a)}
                 className="flex items-center gap-1 px-3 py-2 text-[10px] shrink-0 transition-colors whitespace-nowrap"
                 style={agentCtxTab === a
-                  ? { color: '#F2C879', borderBottom: '2px solid #D9A441' }
-                  : { color: 'rgba(248,248,252,0.35)', borderBottom: '2px solid transparent' }}>
+                  ? { color: '#7CC0FF', borderBottom: '2px solid #1A8CFF' }
+                  : { color: 'rgba(247,249,252,0.35)', borderBottom: '2px solid transparent' }}>
                 {AGENT_EMOJI[a]} {a}
               </button>
             ))}
             {ctxDirty && (
               <button onClick={saveCtx}
                 className="ml-auto mr-3 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-medium shrink-0"
-                style={{ background: 'rgba(217,164,65,0.12)', border: '1px solid rgba(217,164,65,0.25)', color: '#F2C879' }}>
+                style={{ background: 'rgba(26,140,255,0.12)', border: '1px solid rgba(26,140,255,0.25)', color: '#7CC0FF' }}>
                 <Check size={10} /> Salvar
               </button>
             )}

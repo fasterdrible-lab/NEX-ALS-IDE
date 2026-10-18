@@ -118,7 +118,7 @@ export default function HermesPage() {
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden">
       {/* ═══ TOP BAR ═══ */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[#0D0A24] border-b border-purple-900/40 shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#08111F] border-b border-purple-900/40 shrink-0">
         <div className="flex items-center gap-3">
           <Bot size={16} className="text-purple-400" />
           <span className="text-sm font-bold text-purple-300 tracking-wide">HERMES</span>

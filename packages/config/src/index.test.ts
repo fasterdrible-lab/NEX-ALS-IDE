@@ -2,7 +2,28 @@ import { describe, it, expect } from 'vitest'
 import {
   encryptPassword, decryptPassword,
   VpsServerSchema, ProjectSchema, ClaudeAccountSchema, SettingsSchema,
+  HermesAutonomyLevelSchema, HermesDevRulesSchema, HERMES_DEV_RULES_MAX,
 } from './index'
+
+describe('HermesAutonomyLevelSchema', () => {
+  it('aceita os 3 níveis', () => {
+    for (const l of ['manual', 'semi', 'autonomous']) expect(HermesAutonomyLevelSchema.parse(l)).toBe(l)
+  })
+  it('rejeita valor fora do enum', () => {
+    expect(HermesAutonomyLevelSchema.safeParse('yolo').success).toBe(false)
+  })
+})
+
+describe('HermesDevRulesSchema', () => {
+  it('aceita texto vazio e texto no limite', () => {
+    expect(HermesDevRulesSchema.safeParse('').success).toBe(true)
+    expect(HermesDevRulesSchema.safeParse('x'.repeat(HERMES_DEV_RULES_MAX)).success).toBe(true)
+  })
+  it('rejeita acima do limite e não-string', () => {
+    expect(HermesDevRulesSchema.safeParse('x'.repeat(HERMES_DEV_RULES_MAX + 1)).success).toBe(false)
+    expect(HermesDevRulesSchema.safeParse(42).success).toBe(false)
+  })
+})
 
 describe('encryptPassword / decryptPassword', () => {
   it('round-trips a plain password', () => {

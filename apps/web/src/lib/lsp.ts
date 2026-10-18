@@ -110,7 +110,7 @@ export async function connectLSP(monaco: Monaco, langKey: string, portOverride?:
   const writer = new WebSocketMessageWriter(socket)
 
   const client = new MonacoLanguageClient({
-    name: `NEX-ALS ${config.name}`,
+    name: `Zeus ${config.name}`,
     clientOptions: {
       documentSelector: config.documentSelector,
       errorHandler: {

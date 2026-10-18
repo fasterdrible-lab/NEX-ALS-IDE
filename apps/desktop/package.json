@@ -1,7 +1,7 @@
 {
   "name": "@cwm/desktop",
-  "version": "3.61.0",
-  "description": "NEX-ALS IDE â€” gerenciador de ambientes VPS com IDE integrado",
+  "version": "3.65.0",
+  "description": "Zeus IDE — gerenciador de ambientes VPS com IDE integrado",
   "author": "NEX-ALS",
   "private": true,
   "main": "out/main/index.js",
@@ -34,7 +34,7 @@
   },
   "build": {
     "appId": "com.nexals.ide",
-    "productName": "NEX-ALS IDE",
+    "productName": "Zeus IDE",
     "copyright": "Copyright Â© 2026 NEX-ALS",
     "directories": {
       "output": "dist-app"
@@ -54,14 +54,18 @@
           ]
         }
       ],
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "NEX-ALS IDE",
+      "shortcutName": "Zeus IDE",
       "deleteAppDataOnUninstall": false,
       "license": "LICENSE.txt"
     },
@@ -106,6 +110,10 @@
       {
         "from": "../web/dist",
         "to": "renderer"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
       }
     ],
     "asar": false,

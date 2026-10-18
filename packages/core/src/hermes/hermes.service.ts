@@ -220,6 +220,7 @@ export class HermesService {
       hermesStatus: instance.status as HermesStatus,
       objective: agent.objective,
       autonomyLevel: agent.autonomyLevel as HermesAutonomyLevel,
+      devRules: agent.devRules,
     }
   }
 
@@ -229,6 +230,17 @@ export class HermesService {
 
   async setAutonomyLevel(projectId: string, level: HermesAutonomyLevel): Promise<void> {
     await this.db.hermesProjectAgent.update({ where: { projectId }, data: { autonomyLevel: level } })
+  }
+
+  /**
+   * ETAPA 21 — Development Rules do projeto. Persiste e regrava o `.hermes.md` na hora (o Hermes
+   * injeta esse arquivo no system prompt de toda execução). `allowEmpty`: se as regras foram
+   * apagadas e não há KB/memória, o arquivo é regravado só com o cabeçalho em vez de ficar com as
+   * regras antigas.
+   */
+  async setDevRules(projectId: string, devRules: string): Promise<{ written: boolean; path: string }> {
+    await this.db.hermesProjectAgent.update({ where: { projectId }, data: { devRules } })
+    return this.syncProjectContext(projectId, { allowEmpty: true })
   }
 
   /** Abre o stream de execução do objetivo — quem chama é responsável por consumir os eventos do HermesEventStream. */
@@ -530,16 +542,21 @@ export class HermesService {
   /**
    * Adapter ETAPA 18: o Hermes já injeta automaticamente `.hermes.md` (entre outros) do diretório
    * do projeto no system prompt — sem flag nenhuma. Este método só escreve o arquivo com o que o
-   * NEX já tem (KB Global + memória do projeto); não duplica nada, só disponibiliza.
+   * NEX já tem (Development Rules do projeto + KB Global + memória do projeto); não duplica nada,
+   * só disponibiliza. As regras vêm primeiro: são instrução, o resto é contexto.
    */
-  async syncProjectContext(projectId: string): Promise<{ written: boolean; path: string }> {
+  async syncProjectContext(projectId: string, opts?: { allowEmpty?: boolean }): Promise<{ written: boolean; path: string }> {
     const project = await this.db.project.findUnique({ where: { id: projectId } })
     if (!project) throw new Error(`Projeto não encontrado: ${projectId}`)
 
+    const agent = await this.db.hermesProjectAgent.findUnique({ where: { projectId } })
+    const rules = agent?.devRules.trim()
+      ? `## Regras de desenvolvimento deste projeto (obrigatórias)\n\n${agent.devRules.trim()}\n`
+      : ''
     const kb = await this.knowledge.buildContext().catch(() => '')
     const mem = await this.memory.buildBlock(project.vpsServerId, projectId).catch(() => '')
-    const parts = [kb, mem].map(p => p.trim()).filter(Boolean)
-    if (parts.length === 0) return { written: false, path: '' }
+    const parts = [rules, kb, mem].map(p => p.trim()).filter(Boolean)
+    if (parts.length === 0 && !opts?.allowEmpty) return { written: false, path: '' }
 
     const content = [
       '<!-- Gerado automaticamente pelo NEX-ALS IDE — não editar manualmente, será sobrescrito -->',

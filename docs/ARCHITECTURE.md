@@ -929,7 +929,7 @@ Quando `executeTask`/`resolveDecision` encontram a tag `[DECISAO_NECESSARIA ...]
 
 ### Autonomia — binário (decisão consciente, não os 3 tiers do brief original)
 
-`HermesProjectAgent.autonomyLevel`: `'manual'` (usuário clica "Próxima" por tarefa) ou `'autonomous'` (`runLoop()` avança sozinho). Os rótulos Assistido/Semi-autônomo/Autônomo do brief original não aparecem nesta fase — simplificação escolhida explicitamente pelo usuário; motivo: não há sinal suficiente do que o Hermes expõe (ex. classificação de risco por tarefa) para diferenciar 3 comportamentos reais ainda.
+`HermesProjectAgent.autonomyLevel`: `'manual'` (usuário clica "Próxima" por tarefa) ou `'autonomous'` (`runLoop()` avança sozinho). Os rótulos Assistido/Semi-autônomo/Autônomo do brief original não aparecem nesta fase — simplificação escolhida explicitamente pelo usuário; motivo: não há sinal suficiente do que o Hermes expõe (ex. classificação de risco por tarefa) para diferenciar 3 comportamentos reais ainda. **Substituído na v3.62.0 — ver "Hermes AutonomyPolicy (v3.62.0+)".**
 
 ### Banco de dados
 
@@ -1220,3 +1220,34 @@ HermesClient.streamObjective()
 ```
 
 Duas camadas de governança: o bloqueio de dangerous do próprio Hermes (→ Autorizar/Negar no NEX, FASE A) para o que **o Hermes** executa, e o managed-settings para o que **o Claude Code** executa por dentro. Watchdog de inatividade do NEX: 900s.
+
+## Hermes AutonomyPolicy + Development Rules (v3.62.0+) — ETAPAS 21/22/23
+
+A política mora no renderer (`apps/web/src/lib/autonomy-policy.ts`), onde o loop de tarefas roda — módulo puro, sem IPC.
+
+```
+AutonomyPolicy { autoAdvance, gateHighRisk, allowParallel }
+  manual (Assistido)       false  false  false   → "Próxima" a cada tarefa
+  semi   (Semi-autônomo)   true   true   true    → para antes de tarefa risk='high'
+  autonomous (Autônomo)    true   false  true
+  nível desconhecido → manual (o mais restritivo)
+
+Plano: buildPlanPrompt pede "risk":"low|medium|high"
+  → classifyTaskRisk(task, declarado) = max(declarado, detectado por regex no título/descrição)
+  → agent_tasks.risk (coluna nova, separada de priority — priority ordena a fila)
+
+runLoop(approvedTaskId?)
+  lote paralelo só se allowParallel; fecha o lote na 1ª tarefa que precisa de gate
+  next precisa de gate e não é approvedTaskId → setRiskGateTaskId(next) e sai do loop
+  cartão "Tarefa de risco alto" → "Liberar e continuar" = runLoop(next.id)
+  continuações (Decision Request, Autorizar/Negar, plano novo) usam policy.autoAdvance
+```
+
+Autorizar/Negar de comando perigoso (FASE A) é independente do nível: vale nos três.
+
+**Development Rules:** `hermes_project_agents.devRules` (TEXT, `ALTER TABLE` incremental). `hermes:agent:setDevRules` (admin, Zod `HermesDevRulesSchema` ≤ 20.000 chars) → `HermesService.setDevRules()` → `syncProjectContext(projectId, { allowEmpty: true })`. O `.hermes.md` passa a ter, nesta ordem: regras do projeto → KB Global → memória do projeto. `allowEmpty` regrava o arquivo só com o cabeçalho quando as regras são apagadas e não há mais nada, para não deixar regras antigas valendo.
+
+| Canal | Auth | Descrição |
+|---|---|---|
+| `hermes:agent:setAutonomy` | admin | agora valida `level` com `HermesAutonomyLevelSchema` (`manual`/`semi`/`autonomous`) |
+| `hermes:agent:setDevRules` | admin | `{ projectId, devRules }` → `{ written, path }` |

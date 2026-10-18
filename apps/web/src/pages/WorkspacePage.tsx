@@ -235,7 +235,7 @@ function SelectorPanel({
       </div>
 
       <div className="space-y-4 p-5 rounded-xl"
-        style={{ background: 'rgba(13,10,36,0.8)', border: '1px solid rgba(96,165,250,0.14)' }}>
+        style={{ background: 'rgba(8,17,31,0.8)', border: '1px solid rgba(96,165,250,0.14)' }}>
         <div>
           <label className="text-[10px] uppercase tracking-wider text-slate-500 mb-1.5 block">VPS</label>
           <select
@@ -335,10 +335,10 @@ export default function WorkspacePage() {
     : {}
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#080612', color: '#F8F8FC' }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#050B16', color: '#F7F9FC' }}>
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-3 shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#0D0A24' }}>
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#08111F' }}>
         <button onClick={() => navigate(-1)}
           className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
           <ArrowLeft size={13} /> Voltar
@@ -402,7 +402,7 @@ export default function WorkspacePage() {
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors"
                     style={isActive
                       ? { background: 'rgba(96,165,250,0.1)', color: '#93c5fd', borderLeft: '2px solid #60a5fa', paddingLeft: '10px' }
-                      : { color: 'rgba(248,248,252,0.4)', borderLeft: '2px solid transparent', paddingLeft: '10px' }}>
+                      : { color: 'rgba(247,249,252,0.4)', borderLeft: '2px solid transparent', paddingLeft: '10px' }}>
                     <Icon size={12} className="shrink-0" />
                     <span className="flex-1 text-left">{label}</span>
                     {count !== undefined && <span className="text-[10px]" style={{ color: isActive ? '#60a5fa' : 'rgba(255,255,255,0.2)' }}>{count}</span>}

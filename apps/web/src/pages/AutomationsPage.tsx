@@ -175,15 +175,15 @@ export default function AutomationsPage() {
     : null
 
   return (
-    <div className="h-full flex flex-col" style={{ background: '#080612' }}>
+    <div className="h-full flex flex-col" style={{ background: '#050B16' }}>
       {/* ── Header ── */}
       <div className="px-8 pt-8 pb-5" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Timer size={20} style={{ color: '#D9A441' }} />
+            <Timer size={20} style={{ color: '#1A8CFF' }} />
             <div>
-              <h1 className="text-lg font-semibold" style={{ color: '#F2C879' }}>Automações</h1>
-              <p className="text-xs" style={{ color: 'rgba(248,248,252,0.35)' }}>
+              <h1 className="text-lg font-semibold" style={{ color: '#7CC0FF' }}>Automações</h1>
+              <p className="text-xs" style={{ color: 'rgba(247,249,252,0.35)' }}>
                 {jobs.length} job{jobs.length !== 1 ? 's' : ''} · {jobs.filter(j => j.isActive).length} ativo{jobs.filter(j => j.isActive).length !== 1 ? 's' : ''}
               </p>
             </div>
@@ -191,9 +191,9 @@ export default function AutomationsPage() {
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all"
-            style={{ background: 'rgba(217,164,65,0.12)', border: '1px solid rgba(217,164,65,0.25)', color: '#F2C879' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(217,164,65,0.2)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(217,164,65,0.12)' }}
+            style={{ background: 'rgba(26,140,255,0.12)', border: '1px solid rgba(26,140,255,0.25)', color: '#7CC0FF' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(26,140,255,0.2)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(26,140,255,0.12)' }}
           >
             <Plus size={13} />
             Nova automação
@@ -205,18 +205,18 @@ export default function AutomationsPage() {
       <div className="flex-1 overflow-y-auto px-8 py-6">
         {loading && (
           <div className="flex items-center justify-center py-20">
-            <Loader2 size={20} className="animate-spin" style={{ color: 'rgba(217,164,65,0.5)' }} />
+            <Loader2 size={20} className="animate-spin" style={{ color: 'rgba(26,140,255,0.5)' }} />
           </div>
         )}
 
         {!loading && jobs.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <Timer size={36} style={{ color: 'rgba(217,164,65,0.15)' }} />
-            <p className="text-sm" style={{ color: 'rgba(248,248,252,0.3)' }}>Nenhuma automação criada ainda.</p>
+            <Timer size={36} style={{ color: 'rgba(26,140,255,0.15)' }} />
+            <p className="text-sm" style={{ color: 'rgba(247,249,252,0.3)' }}>Nenhuma automação criada ainda.</p>
             <button
               onClick={() => setShowModal(true)}
               className="text-xs px-4 py-2 rounded-lg transition-all"
-              style={{ background: 'rgba(217,164,65,0.1)', border: '1px solid rgba(217,164,65,0.2)', color: '#D9A441' }}
+              style={{ background: 'rgba(26,140,255,0.1)', border: '1px solid rgba(26,140,255,0.2)', color: '#1A8CFF' }}
             >
               Criar primeira automação
             </button>
@@ -237,16 +237,16 @@ export default function AutomationsPage() {
                     <span className="text-lg shrink-0 mt-0.5">{AGENT_EMOJI[job.agentName] ?? '⚙'}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-sm font-medium truncate" style={{ color: 'rgba(248,248,252,0.9)' }}>
+                        <span className="text-sm font-medium truncate" style={{ color: 'rgba(247,249,252,0.9)' }}>
                           {job.title}
                         </span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0"
-                          style={{ background: job.isActive ? 'rgba(96,217,176,0.1)' : 'rgba(255,255,255,0.05)', color: job.isActive ? '#60D9B0' : 'rgba(248,248,252,0.3)' }}>
+                          style={{ background: job.isActive ? 'rgba(96,217,176,0.1)' : 'rgba(255,255,255,0.05)', color: job.isActive ? '#60D9B0' : 'rgba(247,249,252,0.3)' }}>
                           {job.isActive ? 'ativo' : 'pausado'}
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-4 text-[11px]" style={{ color: 'rgba(248,248,252,0.4)' }}>
+                      <div className="flex items-center gap-4 text-[11px]" style={{ color: 'rgba(247,249,252,0.4)' }}>
                         <span className="flex items-center gap-1">
                           <Timer size={10} />
                           {describeSchedule(sched)}
@@ -273,9 +273,9 @@ export default function AutomationsPage() {
                         disabled={isRunning}
                         title="Executar agora"
                         className="p-1.5 rounded transition-colors disabled:opacity-40"
-                        style={{ color: 'rgba(248,248,252,0.4)' }}
+                        style={{ color: 'rgba(247,249,252,0.4)' }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#60D9B0' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(248,248,252,0.4)' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(247,249,252,0.4)' }}
                       >
                         {isRunning ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
                       </button>
@@ -284,7 +284,7 @@ export default function AutomationsPage() {
                         onClick={() => handleToggle(job)}
                         title={job.isActive ? 'Pausar' : 'Ativar'}
                         className="p-1.5 rounded transition-colors"
-                        style={{ color: job.isActive ? '#60D9B0' : 'rgba(248,248,252,0.3)' }}
+                        style={{ color: job.isActive ? '#60D9B0' : 'rgba(247,249,252,0.3)' }}
                       >
                         {job.isActive ? <ToggleRight size={15} /> : <ToggleLeft size={15} />}
                       </button>
@@ -293,9 +293,9 @@ export default function AutomationsPage() {
                         onClick={() => handleDelete(job.id)}
                         title="Excluir"
                         className="p-1.5 rounded transition-colors"
-                        style={{ color: 'rgba(248,248,252,0.3)' }}
+                        style={{ color: 'rgba(247,249,252,0.3)' }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f87171' }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(248,248,252,0.3)' }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(247,249,252,0.3)' }}
                       >
                         <Trash2 size={13} />
                       </button>
@@ -303,7 +303,7 @@ export default function AutomationsPage() {
                       <button
                         onClick={() => setExpandedId(isExpanded ? null : job.id)}
                         className="p-1.5 rounded transition-colors"
-                        style={{ color: 'rgba(248,248,252,0.3)' }}
+                        style={{ color: 'rgba(247,249,252,0.3)' }}
                       >
                         {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                       </button>
@@ -315,13 +315,13 @@ export default function AutomationsPage() {
                 {isExpanded && (
                   <div className="px-5 pb-4 space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                     <div className="pt-3">
-                      <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'rgba(248,248,252,0.25)' }}>Instrução</p>
-                      <p className="text-xs leading-relaxed" style={{ color: 'rgba(248,248,252,0.65)' }}>{job.instruction}</p>
+                      <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'rgba(247,249,252,0.25)' }}>Instrução</p>
+                      <p className="text-xs leading-relaxed" style={{ color: 'rgba(247,249,252,0.65)' }}>{job.instruction}</p>
                     </div>
                     {job.lastResult && (
                       <div>
-                        <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'rgba(248,248,252,0.25)' }}>Último resultado</p>
-                        <p className="text-xs leading-relaxed line-clamp-4" style={{ color: 'rgba(248,248,252,0.55)' }}>{job.lastResult}</p>
+                        <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'rgba(247,249,252,0.25)' }}>Último resultado</p>
+                        <p className="text-xs leading-relaxed line-clamp-4" style={{ color: 'rgba(247,249,252,0.55)' }}>{job.lastResult}</p>
                       </div>
                     )}
                   </div>
@@ -335,13 +335,13 @@ export default function AutomationsPage() {
       {/* ── Modal ── */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="w-full max-w-lg rounded-2xl p-6 shadow-2xl" style={{ background: '#0F0C22', border: '1px solid rgba(217,164,65,0.2)' }}>
-            <h2 className="text-base font-semibold mb-5" style={{ color: '#F2C879' }}>Nova automação</h2>
+          <div className="w-full max-w-lg rounded-2xl p-6 shadow-2xl" style={{ background: '#0F0C22', border: '1px solid rgba(26,140,255,0.2)' }}>
+            <h2 className="text-base font-semibold mb-5" style={{ color: '#7CC0FF' }}>Nova automação</h2>
 
             <div className="space-y-4">
               {/* Instruction */}
               <div>
-                <label className="text-xs mb-1.5 block" style={{ color: 'rgba(248,248,252,0.5)' }}>
+                <label className="text-xs mb-1.5 block" style={{ color: 'rgba(247,249,252,0.5)' }}>
                   Instrução em linguagem natural
                 </label>
                 <textarea
@@ -351,12 +351,12 @@ export default function AutomationsPage() {
                   placeholder='Ex: "Verifique a VPS prod todo dia às 8h e reporte o uso de CPU"'
                   rows={3}
                   className="w-full rounded-lg px-3 py-2.5 text-sm outline-none resize-none"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(217,164,65,0.15)', color: 'rgba(248,248,252,0.9)', caretColor: '#D9A441' }}
-                  onFocus={e => { e.currentTarget.style.borderColor = 'rgba(217,164,65,0.35)' }}
-                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(217,164,65,0.15)' }}
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(26,140,255,0.15)', color: 'rgba(247,249,252,0.9)', caretColor: '#1A8CFF' }}
+                  onFocus={e => { e.currentTarget.style.borderColor = 'rgba(26,140,255,0.35)' }}
+                  onBlur={e => { e.currentTarget.style.borderColor = 'rgba(26,140,255,0.15)' }}
                 />
                 {schedulePreview && (
-                  <p className="text-[11px] mt-1.5 flex items-center gap-1" style={{ color: '#D9A441' }}>
+                  <p className="text-[11px] mt-1.5 flex items-center gap-1" style={{ color: '#1A8CFF' }}>
                     <Timer size={10} />
                     Agendamento detectado: <strong>{schedulePreview}</strong>
                   </p>
@@ -365,12 +365,12 @@ export default function AutomationsPage() {
 
               {/* Agent */}
               <div>
-                <label className="text-xs mb-1.5 block" style={{ color: 'rgba(248,248,252,0.5)' }}>Agente</label>
+                <label className="text-xs mb-1.5 block" style={{ color: 'rgba(247,249,252,0.5)' }}>Agente</label>
                 <select
                   value={formAgent}
                   onChange={e => setFormAgent(e.target.value)}
                   className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(248,248,252,0.9)' }}
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(247,249,252,0.9)' }}
                 >
                   {AGENT_NAMES.map(a => (
                     <option key={a} value={a}>{AGENT_EMOJI[a]} {a.charAt(0).toUpperCase() + a.slice(1)}</option>
@@ -386,12 +386,12 @@ export default function AutomationsPage() {
               {/* Project (Hermes only) */}
               {formAgent === 'hermes' && (
                 <div>
-                  <label className="text-xs mb-1.5 block" style={{ color: 'rgba(248,248,252,0.5)' }}>Projeto</label>
+                  <label className="text-xs mb-1.5 block" style={{ color: 'rgba(247,249,252,0.5)' }}>Projeto</label>
                   <select
                     value={formProjectId}
                     onChange={e => setFormProjectId(e.target.value)}
                     className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(183,141,255,0.2)', color: 'rgba(248,248,252,0.9)' }}
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(183,141,255,0.2)', color: 'rgba(247,249,252,0.9)' }}
                   >
                     <option value="">Selecione um projeto…</option>
                     {projects.map(p => (
@@ -399,7 +399,7 @@ export default function AutomationsPage() {
                     ))}
                   </select>
                   {projects.length === 0 && (
-                    <p className="text-[11px] mt-1.5" style={{ color: 'rgba(248,248,252,0.35)' }}>
+                    <p className="text-[11px] mt-1.5" style={{ color: 'rgba(247,249,252,0.35)' }}>
                       Nenhum projeto cadastrado — crie um em Projetos primeiro.
                     </p>
                   )}
@@ -411,7 +411,7 @@ export default function AutomationsPage() {
               <button
                 onClick={() => { setShowModal(false); setFormInstruction(''); setFormAgent('jarvis'); setFormProjectId('') }}
                 className="px-4 py-2 rounded-lg text-xs"
-                style={{ color: 'rgba(248,248,252,0.4)' }}
+                style={{ color: 'rgba(247,249,252,0.4)' }}
               >
                 Cancelar
               </button>
@@ -419,7 +419,7 @@ export default function AutomationsPage() {
                 onClick={handleCreate}
                 disabled={!formInstruction.trim() || formSaving || (formAgent === 'hermes' && !formProjectId)}
                 className="px-4 py-2 rounded-lg text-xs font-medium disabled:opacity-40 flex items-center gap-2"
-                style={{ background: 'rgba(217,164,65,0.15)', border: '1px solid rgba(217,164,65,0.3)', color: '#F2C879' }}
+                style={{ background: 'rgba(26,140,255,0.15)', border: '1px solid rgba(26,140,255,0.3)', color: '#7CC0FF' }}
               >
                 {formSaving && <Loader2 size={11} className="animate-spin" />}
                 Criar automação

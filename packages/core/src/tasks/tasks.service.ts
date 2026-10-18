@@ -2,6 +2,8 @@ import { getPrismaClient } from '@cwm/db'
 
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE'
 export type TaskPriority = 'low' | 'medium' | 'high'
+/** Risco da tarefa (separado de `priority`, que ordena a fila) — o nível Semi-autônomo para antes de 'high'. */
+export type TaskRisk = 'low' | 'medium' | 'high'
 
 export interface AgentTask {
   id: string
@@ -13,6 +15,7 @@ export interface AgentTask {
   projectId: string | null
   sessionId: string | null
   parallelizable: boolean
+  risk: TaskRisk
   createdAt: string
   updatedAt: string
 }
@@ -26,7 +29,10 @@ export interface AgentTaskInput {
   projectId?: string
   sessionId?: string
   parallelizable?: boolean
+  risk?: TaskRisk
 }
+
+const toRisk = (v: unknown): TaskRisk => (v === 'medium' || v === 'high' ? v : 'low')
 
 const PRIORITY_LABEL: Record<TaskPriority, string> = { high: 'ALTA', medium: 'MÉDIA', low: 'BAIXA' }
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -38,8 +44,8 @@ const ORDER_BY = `ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1
 export class TasksService {
   private get db() { return getPrismaClient() }
 
-  private mapRow(row: AgentTask & { parallelizable: unknown }): AgentTask {
-    return { ...row, parallelizable: Boolean(row.parallelizable) }
+  private mapRow(row: AgentTask & { parallelizable: unknown; risk: unknown }): AgentTask {
+    return { ...row, parallelizable: Boolean(row.parallelizable), risk: toRisk(row.risk) }
   }
 
   async list(filters?: { status?: TaskStatus; ownerAgent?: string; projectId?: string }): Promise<AgentTask[]> {
@@ -71,8 +77,8 @@ export class TasksService {
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
     await this.db.$executeRawUnsafe(
-      `INSERT INTO agent_tasks (id, title, description, status, ownerAgent, priority, projectId, sessionId, parallelizable, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO agent_tasks (id, title, description, status, ownerAgent, priority, projectId, sessionId, parallelizable, risk, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       input.title,
       input.description ?? '',
@@ -82,6 +88,7 @@ export class TasksService {
       input.projectId ?? null,
       input.sessionId ?? null,
       input.parallelizable ? 1 : 0,
+      toRisk(input.risk),
       now, now,
     )
     return (await this.get(id))!
@@ -98,6 +105,7 @@ export class TasksService {
     if (input.projectId !== undefined)   { sets.push('projectId = ?');   params.push(input.projectId) }
     if (input.sessionId !== undefined)   { sets.push('sessionId = ?');   params.push(input.sessionId) }
     if (input.parallelizable !== undefined) { sets.push('parallelizable = ?'); params.push(input.parallelizable ? 1 : 0) }
+    if (input.risk !== undefined)        { sets.push('risk = ?');        params.push(toRisk(input.risk)) }
     if (sets.length === 0) return (await this.get(id))!
     sets.push('updatedAt = ?')
     params.push(new Date().toISOString(), id)

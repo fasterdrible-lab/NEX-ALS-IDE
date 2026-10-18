@@ -55,7 +55,8 @@ export interface HermesCommandResult {
 }
 
 export type HermesAgentStatus = 'idle' | 'running' | 'error'
-export type HermesAutonomyLevel = 'manual' | 'autonomous'
+/** manual = Assistido · semi = Semi-autônomo · autonomous = Autônomo (ver lib/autonomy-policy.ts) */
+export type HermesAutonomyLevel = 'manual' | 'semi' | 'autonomous'
 
 export interface HermesProjectAgentInfo {
   projectId: string
@@ -69,6 +70,7 @@ export interface HermesProjectAgentInfo {
   hermesStatus: HermesStatus
   objective: string
   autonomyLevel: HermesAutonomyLevel
+  devRules: string
 }
 
 export interface DodItem {
@@ -260,6 +262,8 @@ export const ipc = {
         invoke<void>('hermes:agent:setObjective', { projectId, objective }),
       setAutonomy: (projectId: string, level: HermesAutonomyLevel) =>
         invoke<void>('hermes:agent:setAutonomy', { projectId, level }),
+      setDevRules: (projectId: string, devRules: string) =>
+        invoke<{ written: boolean; path: string }>('hermes:agent:setDevRules', { projectId, devRules }),
       syncContext: (projectId: string) =>
         invoke<{ written: boolean; path: string }>('hermes:agent:syncContext', { projectId }),
     },
@@ -646,17 +650,20 @@ export interface WorkspaceReport {
 
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE'
 export type TaskPriority = 'low' | 'medium' | 'high'
+export type TaskRisk = 'low' | 'medium' | 'high'
 export interface AgentTask {
   id: string; title: string; description: string; status: TaskStatus
   ownerAgent: string; priority: TaskPriority
   projectId: string | null; sessionId: string | null
   parallelizable: boolean
+  risk: TaskRisk
   createdAt: string; updatedAt: string
 }
 export interface AgentTaskInput {
   title: string; description?: string; status?: TaskStatus
   ownerAgent?: string; priority?: TaskPriority; projectId?: string; sessionId?: string
   parallelizable?: boolean
+  risk?: TaskRisk
 }
 
 export interface SquadMemory {

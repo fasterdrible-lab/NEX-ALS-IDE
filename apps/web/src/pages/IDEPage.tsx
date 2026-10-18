@@ -2507,13 +2507,13 @@ export default function IDEPage() {
                   {/* KB suggestion banner */}
                   {kbSuggestion && (
                     <div className="flex items-center gap-2 px-3 py-1.5 text-xs shrink-0"
-                      style={{ background: 'rgba(217,164,65,0.07)', borderBottom: '1px solid rgba(217,164,65,0.14)' }}>
-                      <BookMarked size={11} style={{ color: '#D9A441' }} className="shrink-0" />
-                      <span style={{ color: '#F2C879' }} className="font-medium truncate flex-1">{kbSuggestion.title}</span>
+                      style={{ background: 'rgba(26,140,255,0.07)', borderBottom: '1px solid rgba(26,140,255,0.14)' }}>
+                      <BookMarked size={11} style={{ color: '#1A8CFF' }} className="shrink-0" />
+                      <span style={{ color: '#7CC0FF' }} className="font-medium truncate flex-1">{kbSuggestion.title}</span>
                       <button
                         onClick={() => handleSaveToKb(kbSuggestion)}
                         className="shrink-0 px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
-                        style={{ background: 'rgba(217,164,65,0.14)', color: '#D9A441' }}>
+                        style={{ background: 'rgba(26,140,255,0.14)', color: '#1A8CFF' }}>
                         Salvar na KB
                       </button>
                       <button onClick={() => setKbSuggestion(null)} className="shrink-0 text-slate-600 hover:text-slate-400">
@@ -3229,10 +3229,10 @@ export default function IDEPage() {
       {aiLearnResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.72)' }}>
           <div className="w-full max-w-lg rounded-xl p-5 shadow-2xl"
-            style={{ background: '#0F0C22', border: '1px solid rgba(217,164,65,0.2)' }}>
+            style={{ background: '#0F0C22', border: '1px solid rgba(26,140,255,0.2)' }}>
             <div className="flex items-center gap-2 mb-4">
-              <Lightbulb size={14} style={{ color: '#D9A441' }} />
-              <h3 className="text-sm font-semibold" style={{ color: '#F2C879' }}>Padrão detectado pela IA</h3>
+              <Lightbulb size={14} style={{ color: '#1A8CFF' }} />
+              <h3 className="text-sm font-semibold" style={{ color: '#7CC0FF' }}>Padrão detectado pela IA</h3>
             </div>
             <div className="space-y-3 mb-5">
               <div>
@@ -3261,7 +3261,7 @@ export default function IDEPage() {
               <button
                 onClick={() => handleSaveToKb(aiLearnResult)}
                 className="px-4 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                style={{ background: 'rgba(217,164,65,0.14)', border: '1px solid rgba(217,164,65,0.28)', color: '#F2C879' }}>
+                style={{ background: 'rgba(26,140,255,0.14)', border: '1px solid rgba(26,140,255,0.28)', color: '#7CC0FF' }}>
                 Salvar na KB
               </button>
             </div>

@@ -23,7 +23,8 @@ export interface HermesCommandResult {
 }
 
 export type HermesAgentStatus = 'idle' | 'running' | 'error'
-export type HermesAutonomyLevel = 'manual' | 'autonomous'
+/** manual = Assistido (usuário libera cada tarefa) · semi = Semi-autônomo (para antes de tarefa de risco alto) · autonomous = Autônomo */
+export type HermesAutonomyLevel = 'manual' | 'semi' | 'autonomous'
 
 export interface HermesProjectAgentInfo {
   projectId: string
@@ -37,6 +38,7 @@ export interface HermesProjectAgentInfo {
   hermesStatus: HermesStatus
   objective: string
   autonomyLevel: HermesAutonomyLevel
+  devRules: string
 }
 
 export interface DodItem {

@@ -8,8 +8,11 @@ import type { Project } from '@cwm/config'
 import {
   ipc, type HermesProjectAgentInfo, type HermesStatus, type HermesAgentStatus,
   type HermesAutonomyLevel, type DodItem, type AgentTask, type TaskStatus,
-  type HermesActivity, type HermesApprovalRequest,
+  type HermesActivity, type HermesApprovalRequest, type TaskRisk,
 } from '../lib/ipc'
+import {
+  AUTONOMY_LEVELS, AUTONOMY_POLICIES, getAutonomyPolicy, classifyTaskRisk, needsRiskGate,
+} from '../lib/autonomy-policy'
 
 const HERMES_STATUS_LABEL: Record<HermesStatus, string> = {
   unknown: 'Desconhecido', not_installed: 'Não instalado', installed: 'Instalado (parado)',
@@ -56,7 +59,7 @@ function parseTaskTag(text: string): TaskTag {
   return { kind: 'none' }
 }
 
-function parseTaskPlan(text: string): { title: string; description: string; parallelizable: boolean }[] {
+function parseTaskPlan(text: string): { title: string; description: string; parallelizable: boolean; risk: TaskRisk }[] {
   const fence = text.match(/```json\s*([\s\S]*?)```/i)
   const raw = fence ? fence[1] : (text.match(/\[[\s\S]*\]/)?.[0] ?? null)
   if (raw) {
@@ -64,27 +67,46 @@ function parseTaskPlan(text: string): { title: string; description: string; para
       const parsed: unknown = JSON.parse(raw)
       if (Array.isArray(parsed)) {
         const tasks = parsed
-          .filter((p): p is { title: string; description?: string; parallelizable?: unknown } =>
+          .filter((p): p is { title: string; description?: string; parallelizable?: unknown; risk?: unknown } =>
             !!p && typeof p === 'object' && typeof (p as { title?: unknown }).title === 'string')
-          .map(p => ({
-            title: p.title,
-            description: typeof p.description === 'string' ? p.description : '',
-            parallelizable: p.parallelizable === true,
-          }))
+          .map(p => {
+            const t = { title: p.title, description: typeof p.description === 'string' ? p.description : '' }
+            return { ...t, parallelizable: p.parallelizable === true, risk: classifyTaskRisk(t, p.risk) }
+          })
         if (tasks.length > 0) return tasks
       }
     } catch { /* cai no fallback abaixo */ }
   }
-  return [{ title: 'Objetivo completo', description: text.slice(0, 2000), parallelizable: false }]
+  const whole = { title: 'Objetivo completo', description: text.slice(0, 2000) }
+  return [{ ...whole, parallelizable: false, risk: classifyTaskRisk(whole) }]
 }
 
 function buildPlanPrompt(objective: string): string {
   return `Antes de implementar, gere a lista de tarefas para o seguinte objetivo:\n\n${objective}\n\n`
     + 'Responda APENAS com um bloco ```json contendo um array no formato '
-    + '[{"title":"...","description":"...","parallelizable":true|false}], sem nenhum texto antes ou depois do bloco. '
+    + '[{"title":"...","description":"...","parallelizable":true|false,"risk":"low|medium|high"}], sem nenhum texto antes ou depois do bloco. '
     + 'Marque "parallelizable":true apenas para tarefas que podem rodar ao mesmo tempo que outras sem conflito '
-    + '(ex.: arquivos/módulos diferentes, sem depender do resultado de outra tarefa). Na dúvida, use false.'
+    + '(ex.: arquivos/módulos diferentes, sem depender do resultado de outra tarefa). Na dúvida, use false. '
+    + 'Marque "risk":"high" para tarefas que mexem em deploy/produção, migração ou remoção de dados, secrets/credenciais, '
+    + 'pagamentos ou infraestrutura do servidor; "medium" para autenticação, banco de dados, dependências ou CI; '
+    + '"low" para o resto. Na dúvida, escolha o risco maior.'
 }
+
+const RISK_BADGE: Record<TaskRisk, { label: string; cls: string } | null> = {
+  low: null,
+  medium: { label: 'risco médio', cls: 'text-amber-400 bg-amber-950/40' },
+  high: { label: 'risco alto', cls: 'text-red-400 bg-red-950/40' },
+}
+
+const DEV_RULES_TEMPLATE = [
+  '- Siga a arquitetura e as convenções que já existem no repositório; não reestruture sem necessidade.',
+  '- Tipagem estrita: nada de `any` sem justificativa; trate os erros (nada de catch vazio).',
+  '- Valide toda entrada externa (formulários, APIs, arquivos) antes de usar ou gravar.',
+  '- Nunca escreva secrets, tokens ou senhas no código nem nos commits; use variáveis de ambiente e mantenha o .env.example atualizado.',
+  '- Funcionalidade nova vem com teste; rode os testes antes de concluir a tarefa.',
+  '- Commits pequenos, um por tarefa, em Conventional Commits.',
+  '- Não adicione dependências novas sem necessidade clara; prefira o que o projeto já usa.',
+].join('\n')
 
 function buildTaskPrompt(task: { title: string; description: string }): string {
   return [
@@ -164,6 +186,9 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
   // ── Autonomous Loop (FASE 3) ──────────────────────────────────────────────
   const [goalInput, setGoalInput] = useState('')
   const [autonomyLevel, setAutonomyLevel] = useState<HermesAutonomyLevel>('manual')
+  const policy = getAutonomyPolicy(autonomyLevel)
+  // Semi-autônomo: tarefa de risco alto em que o loop parou, aguardando o usuário liberar.
+  const [riskGateTaskId, setRiskGateTaskId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<AgentTask[]>([])
   const [planning, setPlanning] = useState(false)
   const [looping, setLooping] = useState(false)
@@ -188,6 +213,15 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
   const [syncingContext, setSyncingContext] = useState(false)
   const [syncContextMsg, setSyncContextMsg] = useState('')
 
+  // ── Development Rules (ETAPA 21) — vão para o .hermes.md ──────────────────
+  const [devRulesOpen, setDevRulesOpen] = useState(false)
+  const [devRulesDraft, setDevRulesDraft] = useState('')
+  const [devRulesSaved, setDevRulesSaved] = useState('')
+  const [savingDevRules, setSavingDevRules] = useState(false)
+  const [devRulesMsg, setDevRulesMsg] = useState('')
+  // loadStatus roda depois de cada execução — só carrega as regras ao trocar de projeto, para não apagar a edição.
+  const devRulesProjectRef = useRef<string | null>(null)
+
   // ── Governança + activity feed (stream-json) ──────────────────────────────
   const [activity, setActivity] = useState<ActivityEntry[]>([])
   const [approvals, setApprovals] = useState<PendingApproval[]>([])
@@ -205,7 +239,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
   // e trava os botões) e os cartões Autorizar/Negar pendentes. Sem isso, Voltar → reabrir
   // liberava "Próxima" no meio de uma execução e o Hermes recusava a segunda na mesma sessão.
   useEffect(() => {
-    setActivity([]); setApprovals([]); setOrphanRunning(false)
+    setActivity([]); setApprovals([]); setOrphanRunning(false); setRiskGateTaskId(null)
     if (!projectId) return
     let cancelled = false
     ipc.hermes.agent.active(projectId).then(({ streamId: activeId, approvals: pending, orphanRunning: orphan }) => {
@@ -251,6 +285,10 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
       const info = await ipc.hermes.agent.status(id)
       setAgentInfo(info)
       setAutonomyLevel(info.autonomyLevel)
+      if (devRulesProjectRef.current !== id) {
+        devRulesProjectRef.current = id
+        setDevRulesDraft(info.devRules); setDevRulesSaved(info.devRules); setDevRulesMsg('')
+      }
     } catch (e) { setAgentInfo(null); setOutput(`Erro ao consultar status: ${String(e)}`) }
     setLoadingStatus(false)
   }, [])
@@ -482,12 +520,14 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
     await Promise.all(batch.map(t => runParallelTask(t)))
   }, [runParallelTask])
 
-  const runLoop = useCallback(async () => {
+  /** `approvedTaskId`: tarefa de risco alto que o usuário acabou de liberar (Semi-autônomo) — passa pelo gate uma vez. */
+  const runLoop = useCallback(async (approvedTaskId?: string) => {
     if (looping || activeLoops.has(projectId)) return
     const handle = { stop: false }
     activeLoops.set(projectId, handle)
     notifyLoops()
     setLooping(true)
+    setRiskGateTaskId(null)
     loopStopRef.current = false
     try {
       let guard = 0
@@ -505,8 +545,11 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
         // Paralelo só para tarefas paralelizáveis CONSECUTIVAS no início da fila, na ordem do plano.
         // Antes pegava todas as paralelizáveis da lista inteira — rodava a 05/06/07/21 antes da
         // 03/04, sem a fundação que elas pressupõem.
+        // Uma tarefa que a política manda parar antes (risco alto no Semi-autônomo) também fecha o lote.
         const leading: AgentTask[] = []
-        for (const t of todo) { if (!t.parallelizable) break; leading.push(t) }
+        if (policy.allowParallel) {
+          for (const t of todo) { if (!t.parallelizable || needsRiskGate(policy, t)) break; leading.push(t) }
+        }
         // Worktree nasce do último commit: com trabalho não commitado na pasta principal, as cópias
         // paralelas não teriam esse trabalho. Nesse caso roda em sequência (que vê o diretório real).
         const clean = leading.length > 1 && agentInfo
@@ -524,6 +567,10 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
         }
 
         const next = todo[0]
+        if (needsRiskGate(policy, next) && next.id !== approvedTaskId) {
+          setRiskGateTaskId(next.id)
+          break
+        }
         await ipc.tasks.update(next.id, { status: 'IN_PROGRESS' }).catch(() => {})
         await loadTasks()
         const result = await executeTask(next)
@@ -536,7 +583,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
       setLooping(false)
       void loadStatus(projectId)
     }
-  }, [looping, projectId, agentInfo, executeTask, runParallelBatch, loadTasks, loadStatus])
+  }, [looping, projectId, agentInfo, policy, executeTask, runParallelBatch, loadTasks, loadStatus])
 
   const runNextTaskOnce = useCallback(async () => {
     if (looping) return
@@ -572,14 +619,14 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
     for (const t of planned) {
       await ipc.tasks.create({
         title: t.title, description: t.description, projectId, ownerAgent: 'hermes',
-        status: 'TODO', parallelizable: t.parallelizable,
+        status: 'TODO', parallelizable: t.parallelizable, risk: t.risk,
       }).catch(() => {})
     }
     setGoalInput('')
     await loadTasks()
     await loadStatus(projectId)
-    if (autonomyLevel === 'autonomous') void runLoop()
-  }, [projectId, goalInput, planning, looping, sendAndWait, loadTasks, loadStatus, autonomyLevel, runLoop])
+    if (policy.autoAdvance) void runLoop()
+  }, [projectId, goalInput, planning, looping, sendAndWait, loadTasks, loadStatus, policy, runLoop])
 
   const resolveDecision = useCallback(async (answer: string) => {
     if (!pendingDecision || !answer.trim()) return
@@ -608,9 +655,9 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
       await loadTasks()
     } finally {
       setLooping(false)
-      if (autonomyLevel === 'autonomous' && !stillPending) void runLoop()
+      if (policy.autoAdvance && !stillPending) void runLoop()
     }
-  }, [pendingDecision, tasks, sendAndWait, loadTasks, autonomyLevel, runLoop])
+  }, [pendingDecision, tasks, sendAndWait, loadTasks, policy, runLoop])
 
   /**
    * Autorizar/Negar um comando que o Hermes teve bloqueado. Autorizar = o NEX executa (main
@@ -662,14 +709,30 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
       }
     } finally {
       setLooping(false)
-      if (autonomyLevel === 'autonomous' && !stillPending && approvalsRef.current.length === 0) void runLoop()
+      if (policy.autoAdvance && !stillPending && approvalsRef.current.length === 0) void runLoop()
     }
-  }, [sending, planning, looping, resolvingApproval, tasks, sendAndWait, loadTasks, autonomyLevel, runLoop])
+  }, [sending, planning, looping, resolvingApproval, tasks, sendAndWait, loadTasks, policy, runLoop])
 
   const changeAutonomy = useCallback(async (level: HermesAutonomyLevel) => {
     setAutonomyLevel(level)
+    // Saiu do Semi-autônomo: o gate pendente não vale mais (Autônomo segue com "Continuar loop").
+    if (!getAutonomyPolicy(level).gateHighRisk) setRiskGateTaskId(null)
     if (projectId) await ipc.hermes.agent.setAutonomy(projectId, level).catch(() => {})
   }, [projectId])
+
+  const saveDevRules = useCallback(async () => {
+    if (!projectId) return
+    setSavingDevRules(true)
+    setDevRulesMsg('')
+    try {
+      const r = await ipc.hermes.agent.setDevRules(projectId, devRulesDraft)
+      setDevRulesSaved(devRulesDraft)
+      setDevRulesMsg(r.written ? `Salvo e gravado em ${r.path}` : 'Salvo.')
+    } catch (e) {
+      setDevRulesMsg(`Erro: ${String(e)}`)
+    }
+    setSavingDevRules(false)
+  }, [projectId, devRulesDraft])
 
   const toggleDod = useCallback(async (item: DodItem) => {
     if (item.auto || !projectId) return
@@ -791,20 +854,23 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
                 rows={3}
                 className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 disabled:opacity-50 resize-none"
               />
-              <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5 w-fit">
-                <button
-                  onClick={() => void changeAutonomy('manual')}
-                  className={`px-2 py-1 text-[10px] rounded-md transition-colors ${autonomyLevel === 'manual' ? 'bg-purple-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-                >
-                  Manual
-                </button>
-                <button
-                  onClick={() => void changeAutonomy('autonomous')}
-                  className={`px-2 py-1 text-[10px] rounded-md transition-colors ${autonomyLevel === 'autonomous' ? 'bg-purple-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
-                >
-                  Autônomo
-                </button>
+              <div role="radiogroup" aria-label="Nível de autonomia" className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5 w-fit">
+                {AUTONOMY_LEVELS.map(level => (
+                  <button
+                    key={level}
+                    role="radio"
+                    aria-checked={autonomyLevel === level}
+                    onClick={() => void changeAutonomy(level)}
+                    title={AUTONOMY_POLICIES[level].description}
+                    className={`px-2 py-1 text-[10px] rounded-md transition-colors ${autonomyLevel === level ? 'bg-purple-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    {AUTONOMY_POLICIES[level].label}
+                  </button>
+                ))}
               </div>
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                {policy.description} Comandos perigosos sempre pedem Autorizar/Negar.
+              </p>
               <button
                 onClick={() => void startAutonomousObjective()}
                 disabled={!canStartGoal}
@@ -823,6 +889,55 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
               </button>
               {syncContextMsg && <p className="text-[10px] text-slate-500 text-center">{syncContextMsg}</p>}
             </div>
+
+            {/* Development Rules (ETAPA 21) — gravadas no .hermes.md, que o Hermes lê em toda execução */}
+            {agentInfo && (
+              <div className="space-y-2">
+                <button
+                  onClick={() => setDevRulesOpen(v => !v)}
+                  aria-expanded={devRulesOpen}
+                  className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-widest hover:text-slate-300"
+                >
+                  {devRulesOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                  Regras de desenvolvimento{devRulesSaved.trim() ? ' · ativas' : ''}
+                </button>
+                {devRulesOpen && (
+                  <div className="space-y-1.5 pl-1">
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      Regras que o Hermes deve seguir neste projeto. Ficam no início do <span className="font-mono">.hermes.md</span>, lido em toda execução.
+                    </p>
+                    <textarea
+                      value={devRulesDraft}
+                      onChange={e => setDevRulesDraft(e.target.value)}
+                      maxLength={20_000}
+                      rows={7}
+                      aria-label="Regras de desenvolvimento do projeto"
+                      placeholder="Ex.: - Testes para toda funcionalidade nova&#10;- Nada de secrets no código"
+                      className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500 resize-y"
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => void saveDevRules()}
+                        disabled={savingDevRules || devRulesDraft === devRulesSaved}
+                        className="text-[10px] px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-30 flex items-center gap-1"
+                      >
+                        {savingDevRules && <Loader2 size={10} className="animate-spin" />} Salvar
+                      </button>
+                      {!devRulesDraft.trim() && (
+                        <button
+                          onClick={() => setDevRulesDraft(DEV_RULES_TEMPLATE)}
+                          className="text-[10px] text-slate-400 hover:text-slate-200"
+                        >
+                          Usar modelo
+                        </button>
+                      )}
+                      <span className="text-[9px] text-slate-600 ml-auto">{devRulesDraft.length}/20000</span>
+                    </div>
+                    {devRulesMsg && <p className="text-[10px] text-slate-500 break-all">{devRulesMsg}</p>}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Agentes ativos — execuções paralelas em andamento */}
             {activeParallel.size > 0 && (
@@ -849,7 +964,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
                   <p className="text-[10px] text-slate-500 uppercase tracking-widest">
                     Tarefas — {doneCount}/{tasks.length} concluídas
                   </p>
-                  {autonomyLevel === 'manual' && hasTodo && (
+                  {!policy.autoAdvance && hasTodo && (
                     <button
                       onClick={() => void runNextTaskOnce()}
                       disabled={busy}
@@ -858,7 +973,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
                       {looping ? <Loader2 size={11} className="animate-spin" /> : <Play size={11} />} Próxima
                     </button>
                   )}
-                  {autonomyLevel === 'autonomous' && (
+                  {policy.autoAdvance && (
                     looping || loopHandle ? (
                       <button
                         onClick={() => { loopStopRef.current = true; if (loopHandle) loopHandle.stop = true; notifyLoops() }}
@@ -868,7 +983,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
                       >
                         <Square size={11} /> {loopHandle?.stop ? 'Parando após a tarefa atual…' : 'Parar'}
                       </button>
-                    ) : hasTodo ? (
+                    ) : hasTodo && !riskGateTaskId ? (
                       <button
                         onClick={() => void runLoop()}
                         disabled={busy}
@@ -890,6 +1005,11 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
                               paralelo
                             </span>
                           )}
+                          {RISK_BADGE[t.risk] && (
+                            <span className={`shrink-0 px-1 py-0.5 rounded text-[8px] font-semibold ${RISK_BADGE[t.risk]!.cls}`}>
+                              {RISK_BADGE[t.risk]!.label}
+                            </span>
+                          )}
                         </span>
                         <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-semibold ${TASK_STATUS_COLOR[t.status]}`}>
                           {TASK_STATUS_LABEL[t.status]}
@@ -900,6 +1020,31 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
                 </div>
               </div>
             )}
+
+            {/* Semi-autônomo — loop parado antes de uma tarefa de risco alto */}
+            {riskGateTaskId && (() => {
+              const gated = tasks.find(t => t.id === riskGateTaskId)
+              if (!gated || gated.status !== 'TODO') return null
+              return (
+                <div className="border border-amber-700/50 bg-amber-950/30 rounded-lg p-3 space-y-2">
+                  <p className="text-[10px] text-amber-400 uppercase tracking-widest font-semibold flex items-center gap-1.5">
+                    <ShieldAlert size={12} /> Tarefa de risco alto
+                  </p>
+                  <p className="text-xs text-slate-200">{gated.title}</p>
+                  {gated.description && (
+                    <p className="text-[10px] text-slate-400 whitespace-pre-wrap max-h-24 overflow-auto">{gated.description}</p>
+                  )}
+                  <p className="text-[10px] text-slate-500">O loop parou aqui (Semi-autônomo). Revise e libere para continuar.</p>
+                  <button
+                    onClick={() => void runLoop(gated.id)}
+                    disabled={busy}
+                    className="w-full text-[11px] py-1 rounded bg-amber-700 hover:bg-amber-600 disabled:opacity-30 flex items-center justify-center gap-1"
+                  >
+                    <Play size={11} /> Liberar e continuar
+                  </button>
+                </div>
+              )
+            })()}
 
             {/* Governança — comandos que o Hermes teve bloqueados por serem perigosos */}
             {approvals.map(a => (

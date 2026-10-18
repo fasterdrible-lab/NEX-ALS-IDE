@@ -50,10 +50,10 @@ function evaluateStatus(stats: VpsStats | null): { status: HealthStatus; alerts:
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const STATUS_COLORS: Record<HealthStatus, { dot: string; border: string; bg: string; text: string }> = {
   ok:       { dot: '#60D9B0', border: 'rgba(96,217,176,0.2)',   bg: 'rgba(96,217,176,0.05)',   text: '#60D9B0' },
-  warn:     { dot: '#F2C879', border: 'rgba(242,200,121,0.25)', bg: 'rgba(242,200,121,0.06)',  text: '#F2C879' },
+  warn:     { dot: '#7CC0FF', border: 'rgba(124,192,255,0.25)', bg: 'rgba(124,192,255,0.06)',  text: '#7CC0FF' },
   critical: { dot: '#f87171', border: 'rgba(248,113,113,0.3)',  bg: 'rgba(248,113,113,0.07)', text: '#f87171' },
   offline:  { dot: '#6b7280', border: 'rgba(107,114,128,0.2)',  bg: 'rgba(255,255,255,0.02)',  text: '#6b7280' },
-  checking: { dot: '#D9A441', border: 'rgba(217,164,65,0.2)',   bg: 'rgba(217,164,65,0.04)',   text: '#D9A441' },
+  checking: { dot: '#1A8CFF', border: 'rgba(26,140,255,0.2)',   bg: 'rgba(26,140,255,0.04)',   text: '#1A8CFF' },
 }
 
 function StatusDot({ status }: { status: HealthStatus }) {
@@ -69,11 +69,11 @@ function StatusDot({ status }: { status: HealthStatus }) {
 }
 
 function MiniBar({ label, value, unit }: { label: string; value: number; unit?: string }) {
-  const color = value >= T.cpu.crit ? '#f87171' : value >= T.cpu.warn ? '#F2C879' : '#60D9B0'
+  const color = value >= T.cpu.crit ? '#f87171' : value >= T.cpu.warn ? '#7CC0FF' : '#60D9B0'
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
-        <span className="text-[10px]" style={{ color: 'rgba(248,248,252,0.4)' }}>{label}</span>
+        <span className="text-[10px]" style={{ color: 'rgba(247,249,252,0.4)' }}>{label}</span>
         <span className="text-[11px] font-mono font-semibold" style={{ color }}>{value}{unit ?? '%'}</span>
       </div>
       <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
@@ -208,20 +208,20 @@ export default function OperatorPage() {
   const okCount   = healthArr.filter(h => h.status === 'ok').length
 
   return (
-    <div className="h-screen flex flex-col" style={{ background: '#080612', color: 'rgba(248,248,252,0.85)' }}>
+    <div className="h-screen flex flex-col" style={{ background: '#050B16', color: 'rgba(247,249,252,0.85)' }}>
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-6 py-3 shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.3)' }}>
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/')} className="p-1.5 rounded transition-colors"
-            style={{ color: 'rgba(248,248,252,0.4)' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#F2C879' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(248,248,252,0.4)' }}>
+            style={{ color: 'rgba(247,249,252,0.4)' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#7CC0FF' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(247,249,252,0.4)' }}>
             <ArrowLeft size={16} />
           </button>
           <div className="flex items-center gap-2">
-            <Shield size={16} style={{ color: '#D9A441' }} />
-            <span className="text-sm font-semibold" style={{ color: '#F2C879' }}>Operador de Infraestrutura</span>
+            <Shield size={16} style={{ color: '#1A8CFF' }} />
+            <span className="text-sm font-semibold" style={{ color: '#7CC0FF' }}>Operador de Infraestrutura</span>
           </div>
           {/* Summary badges */}
           <div className="flex items-center gap-2 ml-4">
@@ -233,7 +233,7 @@ export default function OperatorPage() {
             )}
             {warnCount > 0 && (
               <span className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                style={{ background: 'rgba(242,200,121,0.15)', color: '#F2C879' }}>
+                style={{ background: 'rgba(124,192,255,0.15)', color: '#7CC0FF' }}>
                 {warnCount} atenção
               </span>
             )}
@@ -248,7 +248,7 @@ export default function OperatorPage() {
 
         <div className="flex items-center gap-3">
           {lastCheck && (
-            <span className="text-[10px]" style={{ color: 'rgba(248,248,252,0.3)' }}>
+            <span className="text-[10px]" style={{ color: 'rgba(247,249,252,0.3)' }}>
               último check: {formatTime(lastCheck)}
             </span>
           )}
@@ -267,9 +267,9 @@ export default function OperatorPage() {
             onClick={() => void checkAll()}
             disabled={checking}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 transition-all"
-            style={{ background: 'rgba(217,164,65,0.1)', border: '1px solid rgba(217,164,65,0.2)', color: '#F2C879' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(217,164,65,0.18)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(217,164,65,0.1)' }}
+            style={{ background: 'rgba(26,140,255,0.1)', border: '1px solid rgba(26,140,255,0.2)', color: '#7CC0FF' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(26,140,255,0.18)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(26,140,255,0.1)' }}
           >
             {checking ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
             Verificar Tudo
@@ -283,8 +283,8 @@ export default function OperatorPage() {
         <div className="flex-1 overflow-y-auto p-6">
           {vpsList.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-4">
-              <Shield size={40} style={{ color: 'rgba(217,164,65,0.15)' }} />
-              <p className="text-sm" style={{ color: 'rgba(248,248,252,0.3)' }}>Nenhuma VPS cadastrada.</p>
+              <Shield size={40} style={{ color: 'rgba(26,140,255,0.15)' }} />
+              <p className="text-sm" style={{ color: 'rgba(247,249,252,0.3)' }}>Nenhuma VPS cadastrada.</p>
             </div>
           )}
           <div className="grid grid-cols-1 gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
@@ -295,13 +295,13 @@ export default function OperatorPage() {
                   {/* Card header */}
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <p className="text-sm font-semibold" style={{ color: 'rgba(248,248,252,0.9)' }}>{vps.name}</p>
-                      <p className="text-[10px] font-mono" style={{ color: 'rgba(248,248,252,0.35)' }}>{vps.host}</p>
+                      <p className="text-sm font-semibold" style={{ color: 'rgba(247,249,252,0.9)' }}>{vps.name}</p>
+                      <p className="text-[10px] font-mono" style={{ color: 'rgba(247,249,252,0.35)' }}>{vps.host}</p>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      {status === 'checking' && <Loader2 size={12} className="animate-spin" style={{ color: '#D9A441' }} />}
+                      {status === 'checking' && <Loader2 size={12} className="animate-spin" style={{ color: '#1A8CFF' }} />}
                       {status === 'ok'       && <Wifi size={12} style={{ color: '#60D9B0' }} />}
-                      {status === 'warn'     && <AlertTriangle size={12} style={{ color: '#F2C879' }} />}
+                      {status === 'warn'     && <AlertTriangle size={12} style={{ color: '#7CC0FF' }} />}
                       {status === 'critical' && <XCircle size={12} style={{ color: '#f87171' }} />}
                       {status === 'offline'  && <WifiOff size={12} style={{ color: '#6b7280' }} />}
                       <StatusDot status={status} />
@@ -315,14 +315,14 @@ export default function OperatorPage() {
                       <MiniBar label="RAM" value={stats.ram.usagePercent} />
                       <MiniBar label="Disco" value={stats.disk.usagePercent} />
                       <div className="flex items-center gap-1 pt-1">
-                        <Clock size={9} style={{ color: 'rgba(248,248,252,0.25)' }} />
-                        <span className="text-[10px]" style={{ color: 'rgba(248,248,252,0.25)' }}>
+                        <Clock size={9} style={{ color: 'rgba(247,249,252,0.25)' }} />
+                        <span className="text-[10px]" style={{ color: 'rgba(247,249,252,0.25)' }}>
                           up {stats.uptime}
                         </span>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs py-4 text-center" style={{ color: 'rgba(248,248,252,0.3)' }}>
+                    <p className="text-xs py-4 text-center" style={{ color: 'rgba(247,249,252,0.3)' }}>
                       {error ?? (status === 'checking' ? 'Conectando…' : 'Sem dados')}
                     </p>
                   )}
@@ -331,7 +331,7 @@ export default function OperatorPage() {
                   {vpsAlerts.length > 0 && (
                     <div className="mt-3 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                       {vpsAlerts.map((a, i) => (
-                        <p key={i} className="text-[10px] leading-relaxed" style={{ color: status === 'critical' ? '#f87171' : '#F2C879' }}>
+                        <p key={i} className="text-[10px] leading-relaxed" style={{ color: status === 'critical' ? '#f87171' : '#7CC0FF' }}>
                           ⚠ {a}
                         </p>
                       ))}
@@ -359,10 +359,10 @@ export default function OperatorPage() {
               {analysing ? (
                 <div className="flex items-center gap-2 py-4 justify-center">
                   <Loader2 size={14} className="animate-spin" style={{ color: '#B78DFF' }} />
-                  <span className="text-xs" style={{ color: 'rgba(248,248,252,0.4)' }}>Analisando…</span>
+                  <span className="text-xs" style={{ color: 'rgba(247,249,252,0.4)' }}>Analisando…</span>
                 </div>
               ) : (
-                <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'rgba(248,248,252,0.7)' }}>
+                <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'rgba(247,249,252,0.7)' }}>
                   {analysis}
                 </p>
               )}
@@ -372,33 +372,33 @@ export default function OperatorPage() {
           {/* Alert feed */}
           <div className="flex-1 overflow-y-auto">
             <div className="px-4 pt-4 pb-2 flex items-center gap-2">
-              <Bell size={11} style={{ color: 'rgba(248,248,252,0.35)' }} />
-              <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'rgba(248,248,252,0.3)' }}>
+              <Bell size={11} style={{ color: 'rgba(247,249,252,0.35)' }} />
+              <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'rgba(247,249,252,0.3)' }}>
                 Alertas ({alerts.length})
               </span>
             </div>
             {alerts.length === 0 && (
               <div className="flex flex-col items-center justify-center py-8 gap-2">
                 <CheckCircle size={20} style={{ color: 'rgba(96,217,176,0.3)' }} />
-                <p className="text-xs" style={{ color: 'rgba(248,248,252,0.25)' }}>Sem alertas</p>
+                <p className="text-xs" style={{ color: 'rgba(247,249,252,0.25)' }}>Sem alertas</p>
               </div>
             )}
             <div className="px-3 pb-4 space-y-2">
               {alerts.map(a => (
                 <div key={a.id} className="rounded-lg px-3 py-2"
                   style={{
-                    background: a.level === 'critical' ? 'rgba(248,113,113,0.07)' : 'rgba(242,200,121,0.07)',
-                    border: `1px solid ${a.level === 'critical' ? 'rgba(248,113,113,0.15)' : 'rgba(242,200,121,0.12)'}`,
+                    background: a.level === 'critical' ? 'rgba(248,113,113,0.07)' : 'rgba(124,192,255,0.07)',
+                    border: `1px solid ${a.level === 'critical' ? 'rgba(248,113,113,0.15)' : 'rgba(124,192,255,0.12)'}`,
                   }}>
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-[10px] font-semibold" style={{ color: a.level === 'critical' ? '#f87171' : '#F2C879' }}>
+                    <span className="text-[10px] font-semibold" style={{ color: a.level === 'critical' ? '#f87171' : '#7CC0FF' }}>
                       {a.vpsName}
                     </span>
-                    <span className="text-[9px]" style={{ color: 'rgba(248,248,252,0.25)' }}>
+                    <span className="text-[9px]" style={{ color: 'rgba(247,249,252,0.25)' }}>
                       {formatTime(a.time)}
                     </span>
                   </div>
-                  <p className="text-[10px]" style={{ color: 'rgba(248,248,252,0.55)' }}>{a.message}</p>
+                  <p className="text-[10px]" style={{ color: 'rgba(247,249,252,0.55)' }}>{a.message}</p>
                 </div>
               ))}
             </div>

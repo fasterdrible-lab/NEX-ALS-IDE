@@ -151,8 +151,9 @@ model HermesProjectAgent {
   lastActivity     DateTime?
   lastError        String    @default("")
   objective        String    @default("")
-  autonomyLevel    String    @default("manual") // manual|autonomous
+  autonomyLevel    String    @default("manual") // manual (Assistido)|semi|autonomous
   dodChecklist     String    @default("[]")     // JSON: [{id,label,done,auto}]
+  devRules         String    @default("")       // Development Rules do projeto → .hermes.md
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

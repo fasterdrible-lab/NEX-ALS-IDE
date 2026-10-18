@@ -2065,7 +2065,7 @@ export default function SquadPage() {
               >
                 {savingSkill ? '…' : 'Salvar Skill'}
               </button>
-              <button onClick={() => setSkillSaveBanner(null)} style={{ color: 'rgba(248,248,252,0.3)' }}>
+              <button onClick={() => setSkillSaveBanner(null)} style={{ color: 'rgba(247,249,252,0.3)' }}>
                 <X size={13} />
               </button>
             </div>
@@ -2074,8 +2074,8 @@ export default function SquadPage() {
 
         {/* Ponto 1: Memory save banner — shown after pipeline/autonomous completes */}
         {memorySaveBanner && !isPipelineRunning && !isAutonomousRunning && (
-          <div className="mx-6 mb-2 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-xs" style={{ background: 'rgba(217,164,65,0.06)', border: '1px solid rgba(217,164,65,0.18)' }}>
-            <div className="flex items-center gap-2 min-w-0" style={{ color: '#F2C879' }}>
+          <div className="mx-6 mb-2 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl text-xs" style={{ background: 'rgba(26,140,255,0.06)', border: '1px solid rgba(26,140,255,0.18)' }}>
+            <div className="flex items-center gap-2 min-w-0" style={{ color: '#7CC0FF' }}>
               <Sparkles size={12} className="shrink-0" />
               <span className="truncate">Salvar esta solução na Memória do projeto?</span>
             </div>
@@ -2096,11 +2096,11 @@ export default function SquadPage() {
                   } catch (e) { console.error(e) } finally { setSavingMemory(false) }
                 }}
                 className="px-3 py-1 rounded-lg font-medium transition-all"
-                style={{ background: 'rgba(217,164,65,0.14)', border: '1px solid rgba(217,164,65,0.25)', color: '#F2C879' }}
+                style={{ background: 'rgba(26,140,255,0.14)', border: '1px solid rgba(26,140,255,0.25)', color: '#7CC0FF' }}
               >
                 {savingMemory ? '…' : 'Salvar Memória'}
               </button>
-              <button onClick={() => setMemorySaveBanner(null)} style={{ color: 'rgba(248,248,252,0.3)' }}>
+              <button onClick={() => setMemorySaveBanner(null)} style={{ color: 'rgba(247,249,252,0.3)' }}>
                 <X size={13} />
               </button>
             </div>
@@ -2110,7 +2110,7 @@ export default function SquadPage() {
         {/* Skill match badge — shown when input matches skill triggers */}
         {matchedSkills.length > 0 && !isStreaming && (
           <div className="mx-6 mb-1.5 flex items-center gap-2 flex-wrap">
-            <span className="text-[10px]" style={{ color: 'rgba(248,248,252,0.3)' }}>Skills:</span>
+            <span className="text-[10px]" style={{ color: 'rgba(247,249,252,0.3)' }}>Skills:</span>
             {matchedSkills.map(s => (
               <span
                 key={s.id}
@@ -2127,24 +2127,24 @@ export default function SquadPage() {
         {/* Phase B: Smart routing badge */}
         {suggestedRoute && suggestedRoute.agent !== activeAgent && !/^@\w+/.test(input.trim()) && !isStreaming && (
           <div className="mx-6 mb-1 flex items-center gap-2">
-            <span className="text-[10px]" style={{ color: 'rgba(248,248,252,0.25)' }}>🎯</span>
+            <span className="text-[10px]" style={{ color: 'rgba(247,249,252,0.25)' }}>🎯</span>
             <button
               onClick={() => { setActiveAgent(suggestedRoute.agent); setSuggestedRoute(null) }}
               title={`Redirecionar para ${AGENT_META[suggestedRoute.agent].label} (${suggestedRoute.reason})`}
               className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium transition-all"
               style={{
-                background: suggestedRoute.confidence === 'high' ? 'rgba(217,164,65,0.08)' : 'rgba(100,116,139,0.08)',
-                border: `1px solid ${suggestedRoute.confidence === 'high' ? 'rgba(217,164,65,0.22)' : 'rgba(100,116,139,0.2)'}`,
-                color: suggestedRoute.confidence === 'high' ? '#F2C879' : 'rgba(248,248,252,0.35)',
+                background: suggestedRoute.confidence === 'high' ? 'rgba(26,140,255,0.08)' : 'rgba(100,116,139,0.08)',
+                border: `1px solid ${suggestedRoute.confidence === 'high' ? 'rgba(26,140,255,0.22)' : 'rgba(100,116,139,0.2)'}`,
+                color: suggestedRoute.confidence === 'high' ? '#7CC0FF' : 'rgba(247,249,252,0.35)',
               }}
             >
               {AGENT_META[suggestedRoute.agent].emoji}
               <span>{AGENT_META[suggestedRoute.agent].label}</span>
-              <span style={{ color: 'rgba(248,248,252,0.25)' }}>— {suggestedRoute.reason}</span>
+              <span style={{ color: 'rgba(247,249,252,0.25)' }}>— {suggestedRoute.reason}</span>
               {suggestedRoute.confidence === 'high' && (
                 <span
                   className="text-[9px] px-1 py-0.5 rounded font-semibold"
-                  style={{ background: 'rgba(217,164,65,0.12)', color: '#D9A441', border: '1px solid rgba(217,164,65,0.18)' }}
+                  style={{ background: 'rgba(26,140,255,0.12)', color: '#1A8CFF', border: '1px solid rgba(26,140,255,0.18)' }}
                 >auto</span>
               )}
             </button>

@@ -1,4 +1,5 @@
 import { getPrismaClient } from '@cwm/db'
+import { HermesAutonomyLevelSchema, HermesDevRulesSchema } from '@cwm/config'
 import type { IpcMain } from 'electron'
 import { BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
 import fs from 'node:fs/promises'
@@ -55,7 +56,7 @@ async function fetchClaudeUsage(accessToken: string): Promise<Record<string, unk
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
-        'User-Agent': 'NEX-ALS-IDE/1.0',
+        'User-Agent': 'Zeus-IDE/1.0',
       },
       timeout: 6000,
     }, res => {
@@ -180,6 +181,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           objective TEXT NOT NULL DEFAULT '',
           autonomyLevel TEXT NOT NULL DEFAULT 'manual',
           dodChecklist TEXT NOT NULL DEFAULT '[]',
+          devRules TEXT NOT NULL DEFAULT '',
           createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )`,
@@ -213,6 +215,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     await db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN objective TEXT NOT NULL DEFAULT ''`).catch(() => {})
     await db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN autonomyLevel TEXT NOT NULL DEFAULT 'manual'`).catch(() => {})
     await db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN dodChecklist TEXT NOT NULL DEFAULT '[]'`).catch(() => {})
+    // Development Rules (v3.62.0)
+    await db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN devRules TEXT NOT NULL DEFAULT ''`).catch(() => {})
     for (const [table, { ddl, dateCols }] of Object.entries(HERMES_TABLES)) {
       await migrateHermesDateColumns(table, ddl, dateCols)
         .catch((e: unknown) => console.error(`[DB] falha ao migrar datas de ${table}:`, e))
@@ -225,6 +229,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
   // Migração incremental para instalações que já tinham agent_tasks antes da FASE 4 (v3.55.0)
   void db.$executeRawUnsafe(`ALTER TABLE agent_tasks ADD COLUMN parallelizable INTEGER NOT NULL DEFAULT 0`).catch(() => {})
+  // Risco por tarefa — usado pelo nível Semi-autônomo da AutonomyPolicy (v3.62.0)
+  void db.$executeRawUnsafe(`ALTER TABLE agent_tasks ADD COLUMN risk TEXT NOT NULL DEFAULT 'low'`).catch(() => {})
   // Migração incremental para instalações que já tinham scheduled_jobs antes da FASE 6 (v3.57.0)
   void db.$executeRawUnsafe(`ALTER TABLE scheduled_jobs ADD COLUMN projectId TEXT`).catch(() => {})
 
@@ -669,8 +675,12 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('hermes:agent:setObjective', (_, { projectId, objective }: { projectId: string; objective: string }) =>
     wrapHandler(() => { requireAdmin(); return hermesSvc.setObjective(projectId, objective) })
   )
-  ipcMain.handle('hermes:agent:setAutonomy', (_, { projectId, level }: { projectId: string; level: 'manual' | 'autonomous' }) =>
-    wrapHandler(() => { requireAdmin(); return hermesSvc.setAutonomyLevel(projectId, level) })
+  ipcMain.handle('hermes:agent:setAutonomy', (_, { projectId, level }: { projectId: string; level: unknown }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.setAutonomyLevel(projectId, HermesAutonomyLevelSchema.parse(level)) })
+  )
+  // ETAPA 21 — Development Rules do projeto (persiste + regrava .hermes.md)
+  ipcMain.handle('hermes:agent:setDevRules', (_, { projectId, devRules }: { projectId: string; devRules: unknown }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.setDevRules(projectId, HermesDevRulesSchema.parse(devRules)) })
   )
   ipcMain.handle('hermes:dod:get', (_, { projectId }: { projectId: string }) =>
     wrapHandler(() => { requireAuth(); return hermesSvc.getDodChecklist(projectId) })
@@ -717,7 +727,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('debug:openDevTools', (_, { wsUrl }: { wsUrl: string }) => {
     const devWin = new (require('electron').BrowserWindow)({
       width: 1200, height: 800,
-      title: 'NEX-ALS IDE — Debug',
+      title: 'Zeus IDE — Debug',
       webPreferences: { nodeIntegration: false, contextIsolation: true },
     })
     devWin.loadURL(wsUrl)
@@ -728,7 +738,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('local:openFolder', async () => {
     const result = await dialog.showOpenDialog(win!, {
       properties: ['openDirectory'],
-      title: 'Abrir pasta local no NEX-ALS IDE',
+      title: 'Abrir pasta local no Zeus IDE',
     })
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]
@@ -842,7 +852,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('config:export', async () => {
     try { requireAdmin() } catch (e) { return { error: (e as Error).message } }
     const { filePath, canceled } = await dialog.showSaveDialog(win!, {
-      title: 'Exportar configurações NEX-ALS IDE',
+      title: 'Exportar configurações Zeus IDE',
       defaultPath: `hexagon-ide-backup-${new Date().toISOString().slice(0,10)}.json`,
       filters: [{ name: 'JSON', extensions: ['json'] }],
     })
@@ -869,7 +879,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('config:import', async () => {
     try { requireAdmin() } catch (e) { return { error: (e as Error).message } }
     const { filePaths, canceled } = await dialog.showOpenDialog(win!, {
-      title: 'Importar configurações NEX-ALS IDE',
+      title: 'Importar configurações Zeus IDE',
       filters: [{ name: 'JSON', extensions: ['json'] }],
       properties: ['openFile'],
     })
@@ -878,7 +888,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       const raw = await fs.readFile(filePaths[0], 'utf-8')
       const backup = JSON.parse(raw)
       if (!backup.version || !Array.isArray(backup.vps)) {
-        return { success: false, error: 'Arquivo inválido ou não é um backup do NEX-ALS IDE.' }
+        return { success: false, error: 'Arquivo inválido ou não é um backup do Zeus IDE.' }
       }
       let imported = { vps: 0, projects: 0, accounts: 0 }
       for (const v of (backup.vps ?? [])) {
@@ -992,7 +1002,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     catch (err) { return { success: false, error: err instanceof Error ? err.message : String(err) } }
   })
 
-  // ── Provedores de IA — NEX-ALS AI HUB ────────────────────────────────────
+  // ── Provedores de IA — Zeus AI HUB ────────────────────────────────────
   ipcMain.handle('ai:chatAgent',  (_, data) => wrapHandler(() => aiSvc.chatAgent(data)))
   ipcMain.handle('ai:list',       () => wrapHandler(() => aiSvc.listProviders()))
   ipcMain.handle('ai:save',       (_, data) => wrapHandler(() => aiSvc.saveProvider(data)))

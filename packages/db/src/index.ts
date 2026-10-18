@@ -198,6 +198,7 @@ export async function initializeDatabase(): Promise<void> {
       "projectId"   TEXT,
       "sessionId"   TEXT,
       "parallelizable" INTEGER NOT NULL DEFAULT 0,
+      "risk"        TEXT NOT NULL DEFAULT 'low',
       "createdAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,

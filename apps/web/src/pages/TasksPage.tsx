@@ -99,23 +99,23 @@ export default function TasksPage() {
   const done = tasks.filter(t => t.status === 'DONE').length
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#080612' }}>
+    <div className="flex flex-col h-full" style={{ background: '#050B16' }}>
 
       {/* Header */}
       <div
         className="px-6 py-4 flex items-center justify-between shrink-0"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(13,10,36,0.8)' }}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(8,17,31,0.8)' }}
       >
         <div className="flex items-center gap-3">
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(217,164,65,0.1)', border: '1px solid rgba(217,164,65,0.2)' }}
+            style={{ background: 'rgba(26,140,255,0.1)', border: '1px solid rgba(26,140,255,0.2)' }}
           >
-            <ClipboardList size={15} style={{ color: '#D9A441' }} />
+            <ClipboardList size={15} style={{ color: '#1A8CFF' }} />
           </div>
           <div>
-            <h1 className="text-sm font-semibold" style={{ color: '#F2C879' }}>Tarefas do Squad</h1>
-            <p className="text-[10px]" style={{ color: 'rgba(248,248,252,0.3)' }}>
+            <h1 className="text-sm font-semibold" style={{ color: '#7CC0FF' }}>Tarefas do Squad</h1>
+            <p className="text-[10px]" style={{ color: 'rgba(247,249,252,0.3)' }}>
               {total} tarefas · {done} concluídas
             </p>
           </div>
@@ -123,9 +123,9 @@ export default function TasksPage() {
         <button
           onClick={openCreate}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-          style={{ background: 'rgba(217,164,65,0.1)', border: '1px solid rgba(217,164,65,0.25)', color: '#F2C879' }}
-          onMouseEnter={e => { (e.currentTarget).style.background = 'rgba(217,164,65,0.18)' }}
-          onMouseLeave={e => { (e.currentTarget).style.background = 'rgba(217,164,65,0.1)' }}
+          style={{ background: 'rgba(26,140,255,0.1)', border: '1px solid rgba(26,140,255,0.25)', color: '#7CC0FF' }}
+          onMouseEnter={e => { (e.currentTarget).style.background = 'rgba(26,140,255,0.18)' }}
+          onMouseLeave={e => { (e.currentTarget).style.background = 'rgba(26,140,255,0.1)' }}
         >
           <Plus size={13} />
           Nova tarefa
@@ -135,7 +135,7 @@ export default function TasksPage() {
       {/* Kanban */}
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
-          <Loader2 size={20} className="animate-spin" style={{ color: 'rgba(248,248,252,0.2)' }} />
+          <Loader2 size={20} className="animate-spin" style={{ color: 'rgba(247,249,252,0.2)' }} />
         </div>
       ) : (
         <div className="flex-1 overflow-x-auto p-5">
@@ -155,7 +155,7 @@ export default function TasksPage() {
                     </div>
                     <span
                       className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                      style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(248,248,252,0.4)' }}
+                      style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(247,249,252,0.4)' }}
                     >
                       {cards.length}
                     </span>
@@ -167,7 +167,7 @@ export default function TasksPage() {
                     style={{ background: col.bg, border: `1px solid ${col.border}`, borderTop: 'none', minHeight: 100 }}
                   >
                     {cards.length === 0 && (
-                      <p className="text-center text-[10px] py-6 italic" style={{ color: 'rgba(248,248,252,0.15)' }}>
+                      <p className="text-center text-[10px] py-6 italic" style={{ color: 'rgba(247,249,252,0.15)' }}>
                         Vazio
                       </p>
                     )}
@@ -181,7 +181,7 @@ export default function TasksPage() {
                           key={task.id}
                           className="group rounded-xl p-3 cursor-pointer transition-all"
                           style={{
-                            background: 'rgba(13,10,36,0.7)',
+                            background: 'rgba(8,17,31,0.7)',
                             border: '1px solid rgba(255,255,255,0.07)',
                           }}
                           onClick={() => openEdit(task)}
@@ -202,13 +202,13 @@ export default function TasksPage() {
                           </div>
 
                           {/* Title */}
-                          <p className="text-xs font-medium leading-snug mb-1" style={{ color: 'rgba(248,248,252,0.85)' }}>
+                          <p className="text-xs font-medium leading-snug mb-1" style={{ color: 'rgba(247,249,252,0.85)' }}>
                             {task.title}
                           </p>
 
                           {/* Description */}
                           {task.description && (
-                            <p className="text-[10px] leading-relaxed line-clamp-2 mb-2" style={{ color: 'rgba(248,248,252,0.35)' }}>
+                            <p className="text-[10px] leading-relaxed line-clamp-2 mb-2" style={{ color: 'rgba(247,249,252,0.35)' }}>
                               {task.description}
                             </p>
                           )}
@@ -258,20 +258,20 @@ export default function TasksPage() {
         >
           <div
             className="w-full max-w-md rounded-2xl p-6 space-y-4"
-            style={{ background: '#0D0A24', border: '1px solid rgba(217,164,65,0.2)' }}
+            style={{ background: '#08111F', border: '1px solid rgba(26,140,255,0.2)' }}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold" style={{ color: '#F2C879' }}>
+              <h2 className="text-sm font-semibold" style={{ color: '#7CC0FF' }}>
                 {modal.mode === 'create' ? 'Nova tarefa' : 'Editar tarefa'}
               </h2>
-              <button onClick={() => setModal(null)} style={{ color: 'rgba(248,248,252,0.3)' }}>
+              <button onClick={() => setModal(null)} style={{ color: 'rgba(247,249,252,0.3)' }}>
                 <X size={15} />
               </button>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(248,248,252,0.4)' }}>Título *</label>
+                <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(247,249,252,0.4)' }}>Título *</label>
                 <input
                   autoFocus
                   value={form.title}
@@ -282,7 +282,7 @@ export default function TasksPage() {
               </div>
 
               <div>
-                <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(248,248,252,0.4)' }}>Descrição</label>
+                <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(247,249,252,0.4)' }}>Descrição</label>
                 <textarea
                   value={form.description}
                   onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
@@ -294,7 +294,7 @@ export default function TasksPage() {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(248,248,252,0.4)' }}>Status</label>
+                  <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(247,249,252,0.4)' }}>Status</label>
                   <select
                     value={form.status}
                     onChange={e => setForm(p => ({ ...p, status: e.target.value as TaskStatus }))}
@@ -307,7 +307,7 @@ export default function TasksPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(248,248,252,0.4)' }}>Prioridade</label>
+                  <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(247,249,252,0.4)' }}>Prioridade</label>
                   <select
                     value={form.priority}
                     onChange={e => setForm(p => ({ ...p, priority: e.target.value as TaskPriority }))}
@@ -319,7 +319,7 @@ export default function TasksPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(248,248,252,0.4)' }}>Agente</label>
+                  <label className="text-[10px] font-medium uppercase tracking-wide mb-1 block" style={{ color: 'rgba(247,249,252,0.4)' }}>Agente</label>
                   <select
                     value={form.ownerAgent}
                     onChange={e => setForm(p => ({ ...p, ownerAgent: e.target.value }))}
@@ -337,7 +337,7 @@ export default function TasksPage() {
               <button
                 onClick={() => setModal(null)}
                 className="px-4 py-1.5 rounded-lg text-xs transition-colors"
-                style={{ color: 'rgba(248,248,252,0.4)', border: '1px solid rgba(255,255,255,0.07)' }}
+                style={{ color: 'rgba(247,249,252,0.4)', border: '1px solid rgba(255,255,255,0.07)' }}
               >
                 Cancelar
               </button>
@@ -345,7 +345,7 @@ export default function TasksPage() {
                 onClick={() => void handleSave()}
                 disabled={!form.title.trim() || saving}
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40"
-                style={{ background: 'rgba(217,164,65,0.15)', border: '1px solid rgba(217,164,65,0.3)', color: '#F2C879' }}
+                style={{ background: 'rgba(26,140,255,0.15)', border: '1px solid rgba(26,140,255,0.3)', color: '#7CC0FF' }}
               >
                 {saving && <Loader2 size={11} className="animate-spin" />}
                 {modal.mode === 'create' ? 'Criar' : 'Salvar'}

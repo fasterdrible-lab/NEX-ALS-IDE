@@ -1,6 +1,11 @@
 import { app, BrowserWindow, ipcMain, shell, Notification, session } from 'electron'
 import path from 'node:path'
 import { setupIpcHandlers } from './ipc/handlers'
+
+// Ícone das janelas/barra de tarefas — instalado vai em resources/ (extraResources), em dev fica em build/
+const APP_ICON = app.isPackaged
+  ? path.join(process.resourcesPath, 'icon.png')
+  : path.join(__dirname, '../../build/icon.png')
 import { disconnectPrisma, initializeDatabase } from '@cwm/db'
 import { autoUpdater } from 'electron-updater'
 import { NotificationMonitor } from '@cwm/core'
@@ -61,6 +66,7 @@ function createWindow(): void {
   const rendererUrl = process.env['ELECTRON_RENDERER_URL']
 
   mainWindow = new BrowserWindow({
+    icon: APP_ICON,
     width: 1280,
     height: 820,
     minWidth: 960,
@@ -71,7 +77,7 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: false,
     },
-    title: 'NEX-ALS IDE',
+    title: 'Zeus IDE',
     show: false,
     backgroundColor: '#0f172a',
   })
@@ -98,6 +104,7 @@ function createDeployWindow(vpsId: string, vpsName: string): void {
   const hashPath = `/deploy/${vpsId}/${encodedName}`
 
   const win = new BrowserWindow({
+    icon: APP_ICON,
     width: 1200,
     height: 800,
     minWidth: 900,
@@ -131,6 +138,7 @@ function createIncidentWindow(vpsId: string, vpsName: string): void {
   const hashPath = `/incident/${vpsId}/${encodedName}`
 
   const win = new BrowserWindow({
+    icon: APP_ICON,
     width: 1440,
     height: 900,
     minWidth: 1100,
@@ -164,6 +172,7 @@ function createIdeWindow(vpsId: string, vpsName: string): void {
   const hashPath = `/ide/${vpsId}/${encodedName}`
 
   const win = new BrowserWindow({
+    icon: APP_ICON,
     width: 1280,
     height: 820,
     minWidth: 960,
@@ -174,7 +183,7 @@ function createIdeWindow(vpsId: string, vpsName: string): void {
       nodeIntegration: false,
       sandbox: false,
     },
-    title: `NEX-ALS IDE — ${vpsName}`,
+    title: `Zeus IDE — ${vpsName}`,
     show: false,
     backgroundColor: '#0f172a',
   })
@@ -190,6 +199,9 @@ function createIdeWindow(vpsId: string, vpsName: string): void {
     win.loadFile(getRendererIndexPath(), { hash: hashPath })
   }
 }
+
+// Agrupa as janelas na barra de tarefas sob o mesmo ícone do atalho instalado (appId do electron-builder)
+if (process.platform === 'win32') app.setAppUserModelId('com.nexals.ide')
 
 app.whenReady().then(async () => {
   if (app.isPackaged) setupCSP()

@@ -1,6 +1,8 @@
 node_modules/
 dist/
 build/
+# Recursos do instalador (ícone, licença) — não é saída de build
+!apps/desktop/build/
 out/
 .env
 .env.local

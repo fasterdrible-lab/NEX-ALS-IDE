@@ -127,15 +127,15 @@ export default function SkillsPage() {
   }
 
   return (
-    <div className="min-h-screen p-6" style={{ background: '#080612', color: 'rgba(248,248,252,0.9)' }}>
+    <div className="min-h-screen p-6" style={{ background: '#050B16', color: 'rgba(247,249,252,0.9)' }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-2">
             <BookOpenCheck size={20} style={{ color: '#B78DFF' }} />
-            <h1 className="text-lg font-semibold" style={{ color: '#F2C879' }}>Skills do Squad</h1>
+            <h1 className="text-lg font-semibold" style={{ color: '#7CC0FF' }}>Skills do Squad</h1>
           </div>
-          <p className="text-xs mt-0.5" style={{ color: 'rgba(248,248,252,0.4)' }}>
+          <p className="text-xs mt-0.5" style={{ color: 'rgba(247,249,252,0.4)' }}>
             Procedimentos reutilizáveis que o Squad detecta automaticamente por gatilhos.
           </p>
         </div>
@@ -157,7 +157,7 @@ export default function SkillsPage() {
       <div className="relative mb-5">
         {searchLoading
           ? <div className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'rgba(183,141,255,0.4)', borderTopColor: '#B78DFF' }} />
-          : <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(248,248,252,0.3)' }} />
+          : <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(247,249,252,0.3)' }} />
         }
         <input
           value={search}
@@ -167,7 +167,7 @@ export default function SkillsPage() {
           style={{
             background: 'rgba(255,255,255,0.04)',
             border: '1px solid rgba(255,255,255,0.08)',
-            color: 'rgba(248,248,252,0.85)',
+            color: 'rgba(247,249,252,0.85)',
           }}
         />
       </div>
@@ -190,7 +190,7 @@ export default function SkillsPage() {
       {!loading && filtered.length === 0 && (
         <div className="text-center py-20">
           <BookOpenCheck size={40} className="mx-auto mb-4 opacity-20" />
-          <p className="text-sm" style={{ color: 'rgba(248,248,252,0.3)' }}>
+          <p className="text-sm" style={{ color: 'rgba(247,249,252,0.3)' }}>
             {search ? 'Nenhuma skill encontrada para esta busca.' : 'Nenhuma skill cadastrada ainda.'}
           </p>
           {!search && (
@@ -213,17 +213,17 @@ export default function SkillsPage() {
             <div className="flex items-center gap-3 px-4 py-3">
               <div
                 className="shrink-0 px-2 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider"
-                style={{ background: CATEGORY_COLORS[skill.category as Category] ?? CATEGORY_COLORS.geral, color: 'rgba(248,248,252,0.7)' }}
+                style={{ background: CATEGORY_COLORS[skill.category as Category] ?? CATEGORY_COLORS.geral, color: 'rgba(247,249,252,0.7)' }}
               >
                 {skill.category}
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: 'rgba(248,248,252,0.9)' }}>
+                <p className="text-sm font-medium truncate" style={{ color: 'rgba(247,249,252,0.9)' }}>
                   {skill.title}
                 </p>
                 {skill.description && (
-                  <p className="text-xs truncate mt-0.5" style={{ color: 'rgba(248,248,252,0.4)' }}>
+                  <p className="text-xs truncate mt-0.5" style={{ color: 'rgba(247,249,252,0.4)' }}>
                     {skill.description}
                   </p>
                 )}
@@ -232,8 +232,8 @@ export default function SkillsPage() {
               {/* Triggers */}
               {skill.triggers.length > 0 && (
                 <div className="hidden md:flex items-center gap-1.5 shrink-0">
-                  <Tag size={10} style={{ color: 'rgba(248,248,252,0.25)' }} />
-                  <span className="text-[10px]" style={{ color: 'rgba(248,248,252,0.35)' }}>
+                  <Tag size={10} style={{ color: 'rgba(247,249,252,0.25)' }} />
+                  <span className="text-[10px]" style={{ color: 'rgba(247,249,252,0.35)' }}>
                     {skill.triggers.slice(0, 3).join(', ')}{skill.triggers.length > 3 ? ' …' : ''}
                   </span>
                 </div>
@@ -241,8 +241,8 @@ export default function SkillsPage() {
 
               {/* Usage */}
               <div className="flex items-center gap-1 shrink-0" title="Usos">
-                <Zap size={10} style={{ color: 'rgba(248,248,252,0.25)' }} />
-                <span className="text-[10px]" style={{ color: 'rgba(248,248,252,0.3)' }}>{skill.usageCount}</span>
+                <Zap size={10} style={{ color: 'rgba(247,249,252,0.25)' }} />
+                <span className="text-[10px]" style={{ color: 'rgba(247,249,252,0.3)' }}>{skill.usageCount}</span>
               </div>
 
               {/* Actions */}
@@ -250,7 +250,7 @@ export default function SkillsPage() {
                 <button
                   onClick={() => openEdit(skill)}
                   className="p-1.5 rounded transition-colors text-xs"
-                  style={{ color: 'rgba(248,248,252,0.3)' }}
+                  style={{ color: 'rgba(247,249,252,0.3)' }}
                   title="Editar"
                 >
                   ✏️
@@ -258,7 +258,7 @@ export default function SkillsPage() {
                 <button
                   onClick={() => setDeleteId(skill.id)}
                   className="p-1.5 rounded transition-colors"
-                  style={{ color: 'rgba(248,248,252,0.3)' }}
+                  style={{ color: 'rgba(247,249,252,0.3)' }}
                   title="Excluir"
                 >
                   <Trash2 size={13} />
@@ -266,7 +266,7 @@ export default function SkillsPage() {
                 <button
                   onClick={() => setExpanded(expanded === skill.id ? null : skill.id)}
                   className="p-1.5 rounded transition-colors"
-                  style={{ color: 'rgba(248,248,252,0.3)' }}
+                  style={{ color: 'rgba(247,249,252,0.3)' }}
                 >
                   {expanded === skill.id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                 </button>
@@ -294,16 +294,16 @@ export default function SkillsPage() {
                 )}
                 <pre
                   className="text-xs whitespace-pre-wrap rounded-lg p-3 mt-2 overflow-auto max-h-64"
-                  style={{ background: 'rgba(0,0,0,0.3)', color: 'rgba(248,248,252,0.7)', fontFamily: 'monospace' }}
+                  style={{ background: 'rgba(0,0,0,0.3)', color: 'rgba(247,249,252,0.7)', fontFamily: 'monospace' }}
                 >
                   {skill.content}
                 </pre>
                 {skill.examples.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-[10px] font-medium mb-1.5" style={{ color: 'rgba(248,248,252,0.35)' }}>EXEMPLOS</p>
+                    <p className="text-[10px] font-medium mb-1.5" style={{ color: 'rgba(247,249,252,0.35)' }}>EXEMPLOS</p>
                     <ul className="space-y-1">
                       {skill.examples.map((ex, i) => (
-                        <li key={i} className="text-xs pl-3 border-l-2" style={{ borderColor: 'rgba(183,141,255,0.3)', color: 'rgba(248,248,252,0.55)' }}>
+                        <li key={i} className="text-xs pl-3 border-l-2" style={{ borderColor: 'rgba(183,141,255,0.3)', color: 'rgba(247,249,252,0.55)' }}>
                           {ex}
                         </li>
                       ))}
@@ -321,14 +321,14 @@ export default function SkillsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
           <div
             className="w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col max-h-[90vh]"
-            style={{ background: '#0D0A24', border: '1px solid rgba(183,141,255,0.2)' }}
+            style={{ background: '#08111F', border: '1px solid rgba(183,141,255,0.2)' }}
           >
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <h2 className="text-sm font-semibold" style={{ color: '#F2C879' }}>
+              <h2 className="text-sm font-semibold" style={{ color: '#7CC0FF' }}>
                 {editId ? 'Editar Skill' : 'Nova Skill'}
               </h2>
-              <button onClick={() => { setShowForm(false); setEditId(null) }} style={{ color: 'rgba(248,248,252,0.35)' }}>
+              <button onClick={() => { setShowForm(false); setEditId(null) }} style={{ color: 'rgba(247,249,252,0.35)' }}>
                 <X size={16} />
               </button>
             </div>
@@ -337,54 +337,54 @@ export default function SkillsPage() {
             <div className="overflow-y-auto p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
-                  <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(248,248,252,0.5)' }}>Título *</label>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(247,249,252,0.5)' }}>Título *</label>
                   <input
                     value={form.title}
                     onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                     placeholder="Ex: Criar componente React com Tailwind"
                     className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(248,248,252,0.85)' }}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(247,249,252,0.85)' }}
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(248,248,252,0.5)' }}>Categoria</label>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(247,249,252,0.5)' }}>Categoria</label>
                   <select
                     value={form.category}
                     onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
                     className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(248,248,252,0.85)' }}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(247,249,252,0.85)' }}
                   >
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(248,248,252,0.5)' }}>
-                    Gatilhos <span style={{ color: 'rgba(248,248,252,0.3)' }}>(separados por vírgula)</span>
+                  <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(247,249,252,0.5)' }}>
+                    Gatilhos <span style={{ color: 'rgba(247,249,252,0.3)' }}>(separados por vírgula)</span>
                   </label>
                   <input
                     value={triggersInput}
                     onChange={e => setTriggersInput(e.target.value)}
                     placeholder="componente, tailwind, ui, react"
                     className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(248,248,252,0.85)' }}
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(247,249,252,0.85)' }}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(248,248,252,0.5)' }}>Descrição</label>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(247,249,252,0.5)' }}>Descrição</label>
                 <input
                   value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   placeholder="Breve descrição do que essa skill faz"
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(248,248,252,0.85)' }}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(247,249,252,0.85)' }}
                 />
               </div>
 
               <div>
-                <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(248,248,252,0.5)' }}>
-                  Conteúdo * <span style={{ color: 'rgba(248,248,252,0.3)' }}>(instruções passo-a-passo para o agente)</span>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(247,249,252,0.5)' }}>
+                  Conteúdo * <span style={{ color: 'rgba(247,249,252,0.3)' }}>(instruções passo-a-passo para o agente)</span>
                 </label>
                 <textarea
                   value={form.content}
@@ -392,13 +392,13 @@ export default function SkillsPage() {
                   placeholder="1. Identifique os props do componente&#10;2. Crie o arquivo em src/components/&#10;3. Use className com Tailwind&#10;4. Export default ao final"
                   rows={8}
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none font-mono"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(248,248,252,0.85)' }}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(247,249,252,0.85)' }}
                 />
               </div>
 
               <div>
-                <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(248,248,252,0.5)' }}>
-                  Exemplos <span style={{ color: 'rgba(248,248,252,0.3)' }}>(um por linha)</span>
+                <label className="text-xs font-medium mb-1 block" style={{ color: 'rgba(247,249,252,0.5)' }}>
+                  Exemplos <span style={{ color: 'rgba(247,249,252,0.3)' }}>(um por linha)</span>
                 </label>
                 <textarea
                   value={(form.examples ?? []).join('\n')}
@@ -406,7 +406,7 @@ export default function SkillsPage() {
                   placeholder="Crie um Button com variantes primary e secondary&#10;Crie um Card com imagem e título"
                   rows={3}
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(248,248,252,0.85)' }}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(247,249,252,0.85)' }}
                 />
               </div>
             </div>
@@ -416,7 +416,7 @@ export default function SkillsPage() {
               <button
                 onClick={() => { setShowForm(false); setEditId(null) }}
                 className="px-4 py-2 rounded-lg text-sm"
-                style={{ color: 'rgba(248,248,252,0.5)' }}
+                style={{ color: 'rgba(247,249,252,0.5)' }}
               >
                 Cancelar
               </button>
@@ -437,11 +437,11 @@ export default function SkillsPage() {
       {/* ── Delete confirm ────────────────────────────────────────────────────── */}
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-          <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: '#0D0A24', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: '#08111F', border: '1px solid rgba(239,68,68,0.2)' }}>
             <h3 className="text-sm font-semibold mb-2" style={{ color: '#f87171' }}>Excluir skill?</h3>
-            <p className="text-xs mb-5" style={{ color: 'rgba(248,248,252,0.5)' }}>Esta ação não pode ser desfeita.</p>
+            <p className="text-xs mb-5" style={{ color: 'rgba(247,249,252,0.5)' }}>Esta ação não pode ser desfeita.</p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setDeleteId(null)} className="px-4 py-2 text-sm rounded-lg" style={{ color: 'rgba(248,248,252,0.5)' }}>
+              <button onClick={() => setDeleteId(null)} className="px-4 py-2 text-sm rounded-lg" style={{ color: 'rgba(247,249,252,0.5)' }}>
                 Cancelar
               </button>
               <button

@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
-**Data:** 2026-10-17
-**Versão:** 3.61.0
+**Data:** 2026-10-18
+**Versão:** 3.65.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Hermes — AutonomyPolicy em 3 níveis + Regras de desenvolvimento (v3.62.0)
+
+Painel Agent: **Assistido** (libera cada tarefa) / **Semi-autônomo** (avança sozinho, para antes de tarefa de risco alto) / **Autônomo**. Risco por tarefa = maior entre o que o Hermes declara no plano e o detectado por palavras-chave. Regras de desenvolvimento por projeto, editáveis no painel, gravadas no início do `.hermes.md`. Autorizar/Negar continua valendo nos 3 níveis. Não testado pela UI contra a VPS ainda.
 
 ## Hermes delega a implementação ao Claude Code (v3.59.0)
 

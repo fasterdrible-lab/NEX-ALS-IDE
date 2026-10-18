@@ -6,7 +6,7 @@ import {
   Sparkles, Users, LogOut, User, BookMarked, BookOpenCheck, ClipboardList, Search, Timer, Shield, Network, CalendarClock,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import logoUrl from '/logo-nexals.png'
+import logoUrl from '/logo-zeus.png'
 
 const navItems = [
   { to: '/',            label: 'Dashboard',     icon: LayoutDashboard, end: true },
@@ -36,15 +36,15 @@ export default function Layout() {
       <aside
         className="w-56 flex flex-col shrink-0 relative"
         style={{
-          background: 'linear-gradient(180deg, #0D0A24 0%, #080612 100%)',
-          borderRight: '1px solid rgba(217,164,65,0.12)',
+          background: 'linear-gradient(180deg, #08111F 0%, #050B16 100%)',
+          borderRight: '1px solid rgba(26,140,255,0.12)',
         }}
       >
         {/* Subtle left gold accent */}
         <div
           className="absolute left-0 top-0 bottom-0 w-[2px]"
           style={{
-            background: 'linear-gradient(180deg, transparent 0%, #D9A441 30%, #F2C879 60%, transparent 100%)',
+            background: 'linear-gradient(180deg, transparent 0%, #1A8CFF 30%, #7CC0FF 60%, transparent 100%)',
             opacity: 0.4,
           }}
         />
@@ -59,7 +59,7 @@ export default function Layout() {
             {!logoError ? (
               <img
                 src={logoUrl}
-                alt="NEX-ALS"
+                alt="Zeus"
                 className="w-9 h-9 rounded-lg object-cover"
                 onError={() => setLogoError(true)}
               />
@@ -67,8 +67,8 @@ export default function Layout() {
               <div
                 className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold"
                 style={{
-                  background: 'linear-gradient(135deg, #C4912E, #F2C879)',
-                  color: '#080612',
+                  background: 'linear-gradient(135deg, #0B6FE0, #7CC0FF)',
+                  color: '#050B16',
                 }}
               >
                 ⬡
@@ -77,17 +77,15 @@ export default function Layout() {
           </div>
 
           <div className="leading-tight min-w-0">
-            <div
-              className="font-bold text-sm tracking-wide"
-              style={{ color: '#F2C879' }}
-            >
-              NEX-ALS IDE
+            <div className="font-bold text-sm tracking-wider uppercase">
+              <span style={{ color: '#E6ECF5' }}>Zeus</span>{' '}
+              <span style={{ color: '#3FA2FF' }}>IDE</span>
             </div>
             <div
-              className="text-[10px] font-light tracking-widest uppercase"
-              style={{ color: 'rgba(248,248,252,0.4)' }}
+              className="text-[8px] font-light tracking-wider uppercase leading-snug"
+              style={{ color: 'rgba(247,249,252,0.45)' }}
             >
-              Intelligence
+              Intelligent Development Environment
             </div>
           </div>
         </div>
@@ -198,20 +196,20 @@ export default function Layout() {
             onClick={() => navigate('/squad')}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200"
             style={{
-              background: 'rgba(217,164,65,0.08)',
-              border: '1px solid rgba(217,164,65,0.2)',
-              color: '#F2C879',
+              background: 'rgba(26,140,255,0.08)',
+              border: '1px solid rgba(26,140,255,0.2)',
+              color: '#7CC0FF',
             }}
             onMouseEnter={e => {
               const t = e.currentTarget
-              t.style.background = 'rgba(217,164,65,0.15)'
-              t.style.borderColor = 'rgba(217,164,65,0.4)'
-              t.style.boxShadow = '0 0 16px rgba(217,164,65,0.15)'
+              t.style.background = 'rgba(26,140,255,0.15)'
+              t.style.borderColor = 'rgba(26,140,255,0.4)'
+              t.style.boxShadow = '0 0 16px rgba(26,140,255,0.15)'
             }}
             onMouseLeave={e => {
               const t = e.currentTarget
-              t.style.background = 'rgba(217,164,65,0.08)'
-              t.style.borderColor = 'rgba(217,164,65,0.2)'
+              t.style.background = 'rgba(26,140,255,0.08)'
+              t.style.borderColor = 'rgba(26,140,255,0.2)'
               t.style.boxShadow = 'none'
             }}
           >
@@ -237,13 +235,13 @@ export default function Layout() {
               }
               style={({ isActive }) => isActive
                 ? {
-                    background: 'rgba(217,164,65,0.1)',
-                    color: '#F2C879',
-                    borderLeft: '2px solid #D9A441',
+                    background: 'rgba(26,140,255,0.1)',
+                    color: '#7CC0FF',
+                    borderLeft: '2px solid #1A8CFF',
                     paddingLeft: '10px',
                   }
                 : {
-                    color: 'rgba(248,248,252,0.5)',
+                    color: 'rgba(247,249,252,0.5)',
                     borderLeft: '2px solid transparent',
                     paddingLeft: '10px',
                   }
@@ -265,15 +263,15 @@ export default function Layout() {
               <div className="flex items-center gap-2 min-w-0">
                 <div
                   className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(217,164,65,0.12)', border: '1px solid rgba(217,164,65,0.2)' }}
+                  style={{ background: 'rgba(26,140,255,0.12)', border: '1px solid rgba(26,140,255,0.2)' }}
                 >
-                  <User size={11} style={{ color: '#D9A441' }} />
+                  <User size={11} style={{ color: '#1A8CFF' }} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium truncate" style={{ color: 'rgba(248,248,252,0.85)' }}>
+                  <p className="text-xs font-medium truncate" style={{ color: 'rgba(247,249,252,0.85)' }}>
                     {user.username}
                   </p>
-                  <p className="text-[10px]" style={{ color: 'rgba(248,248,252,0.35)' }}>
+                  <p className="text-[10px]" style={{ color: 'rgba(247,249,252,0.35)' }}>
                     {user.role === 'admin' ? 'Admin' : 'Viewer'}
                   </p>
                 </div>
@@ -282,9 +280,9 @@ export default function Layout() {
                 onClick={() => logout()}
                 title="Sair"
                 className="shrink-0 p-1.5 rounded transition-colors"
-                style={{ color: 'rgba(248,248,252,0.3)' }}
+                style={{ color: 'rgba(247,249,252,0.3)' }}
                 onMouseEnter={e => { (e.currentTarget).style.color = '#f87171' }}
-                onMouseLeave={e => { (e.currentTarget).style.color = 'rgba(248,248,252,0.3)' }}
+                onMouseLeave={e => { (e.currentTarget).style.color = 'rgba(247,249,252,0.3)' }}
               >
                 <LogOut size={12} />
               </button>
@@ -292,12 +290,12 @@ export default function Layout() {
           )}
 
           <div>
-            <p className="text-[10px] font-medium" style={{ color: 'rgba(217,164,65,0.6)' }}>
-              v3.61.0
+            <p className="text-[10px] font-medium" style={{ color: 'rgba(26,140,255,0.6)' }}>
+              v3.65.0
             </p>
             <p
               className="text-[9px] tracking-widest uppercase font-light"
-              style={{ color: 'rgba(248,248,252,0.2)' }}
+              style={{ color: 'rgba(247,249,252,0.2)' }}
             >
               Inteligência que conecta o futuro
             </p>
@@ -306,7 +304,7 @@ export default function Layout() {
       </aside>
 
       {/* ── Main content ───────────────────────────────────────────── */}
-      <main className="flex-1 overflow-auto" style={{ background: '#080612' }}>
+      <main className="flex-1 overflow-auto" style={{ background: '#050B16' }}>
         <Outlet />
       </main>
     </div>

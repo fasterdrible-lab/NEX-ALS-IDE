@@ -1,4 +1,52 @@
-# CHANGELOG — NEX-ALS IDE
+# CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
+
+## [3.65.0] — 2026-10-18
+
+### Alterado — paleta e cabeçalho no visual do logo Zeus
+
+- **Cores:** dourado NEX (`#D9A441`/`#F2C879` e escala `brand`) → azul elétrico do logo (`#1A8CFF`/`#7CC0FF`, escala `brand` 50–950); fundos roxo-escuros (`slate` customizado, `#080612`/`#0D0A24`/`#151038`…) → azul-marinho do fundo do logo (`#050B16`/`#08111F`/`#0E1B30`…). Trocado na origem (`tailwind.config.ts`, `index.css`) e nos valores fixos de 11 componentes/páginas (hex e `rgba()`), com um mapeamento único — nenhuma cor dourada ou roxo-escura fixa restante. O roxo de acento (`nex.purple`, AI HUB) foi mantido.
+- **Cabeçalho da barra lateral:** "ZEUS" em branco + "IDE" em azul, como no logo; subtítulo "Intelligence" → "Intelligent Development Environment".
+- Nomes de classes/variáveis (`brand-*`, `--nex-gold`, `glow-gold`) mantidos para não mexer em todos os componentes — agora resolvem para o azul.
+
+## [3.64.0] — 2026-10-18
+
+### Alterado — app renomeado para **Zeus IDE**
+
+Todo texto visível passa de "NEX-ALS IDE" para **Zeus IDE**: barra lateral, título das janelas (`Zeus IDE — <VPS>`), tela de login, `<title>`, diálogos (abrir pasta, exportar/importar configurações, debug), "Zeus AI HUB" e o Manual de Uso. `productName` e `shortcutName` → `Zeus IDE`: o app instala em `%LOCALAPPDATA%\Programs\Zeus IDE\Zeus IDE.exe`, e o instalador passa a ser `Zeus IDE Setup <versão>.exe`.
+
+**Mantidos de propósito:** `appId` `com.nexals.ide` (identidade do instalador — o Zeus IDE atualiza a instalação antiga em vez de virar um segundo app), a pasta de dados `%APPDATA%\@cwm\desktop` (vem do nome interno do pacote, não do nome exibido — banco e configurações intactos), o repositório `NEX-ALS-IDE` no GitHub e "NEX-ALS" como empresa no copyright.
+
+**Corrigido no Manual:** o caminho do banco aparecia como `%APPDATA%\NEX-ALS IDE\cwm.db`; o real é `%APPDATA%\@cwm\desktop\cwm.db`.
+
+**`scripts/install-local.js`:** lê o `productName` do `package.json` e fecha tanto o `Zeus IDE.exe` quanto o `NEX-ALS IDE.exe` antigo antes de instalar.
+
+## [3.63.0] — 2026-10-18
+
+### Alterado — logo Zeus IDE + ícone próprio do app (antes: ícone padrão do Electron)
+
+Primeiro passo do rebranding NEX-ALS IDE → **Zeus IDE** (logo fornecido pelo usuário). O nome do app ainda não mudou.
+- **Barra lateral:** `logo-nexals.png` → `logo-zeus.png` (símbolo Z recortado do logo; o texto "ZEUS IDE" ficaria ilegível em 36 px). Logo completo guardado em `apps/web/public/logo-zeus-full.png`.
+- **Ícone do app:** não existia `apps/desktop/build/icon.ico`, então o electron-builder usava o ícone padrão do Electron (barra de tarefas, atalho, instalador). Agora tem `icon.ico` (16–256 px) e `icon.png`, configurados em `win.icon` e nos ícones do instalador/desinstalador do NSIS.
+- **Janelas:** `BrowserWindow` recebe `icon` (`resources/icon.png` instalado, `build/icon.png` em dev) e `app.setAppUserModelId('com.nexals.ide')` agrupa as janelas sob o ícone do atalho.
+- **`.gitignore`:** `apps/desktop/build/` deixa de ser ignorada (era pega por `build/`) — o ícone e o `LICENSE.txt` exigido pelo instalador agora vão para o repositório.
+
+## [3.62.0] — 2026-10-18
+
+### Adicionado — Hermes: AutonomyPolicy com 3 níveis + Regras de desenvolvimento por projeto (ETAPAS 21/22/23)
+
+**3 níveis de autonomia** (substituem o toggle Manual/Autônomo) — `apps/web/src/lib/autonomy-policy.ts`:
+- **Assistido** (`manual`, valor antigo mantido): você libera cada tarefa com "Próxima".
+- **Semi-autônomo** (`semi`, novo): o loop avança sozinho, mas **para antes de tarefa de risco alto** e mostra o cartão "Tarefa de risco alto" → **Liberar e continuar**. Tarefa de risco alto também fecha o lote paralelo.
+- **Autônomo**: avança por todas.
+- Nos 3 níveis os comandos perigosos continuam passando por Autorizar/Negar — a política só decide quando o loop avança sem o usuário.
+
+**Risco por tarefa:** o prompt do plano pede `"risk":"low|medium|high"` (alto = deploy/produção, migração/remoção de dados, secrets, pagamentos, infra do servidor). Como rede de segurança, `classifyTaskRisk()` também detecta por palavras-chave no título/descrição e fica com o **maior** entre o declarado e o detectado — um modelo barato subestimando o risco não passa batido. Nova coluna `agent_tasks.risk` (`ALTER TABLE` incremental, padrão `low`); selo "risco médio"/"risco alto" na lista de tarefas. É separado de `priority`, que ordena a fila — usar `priority` mudaria a ordem do plano.
+
+**Regras de desenvolvimento (ETAPA 21):** seção recolhível no painel Agent, com texto por projeto (até 20.000 caracteres) e botão **Usar modelo** (7 regras padrão). Salvar grava em `hermes_project_agents.devRules` e regrava o `.hermes.md` na hora; as regras vão no início do arquivo, antes da KB Global e da memória do projeto. Apagar as regras regrava o arquivo sem elas (não fica a versão antiga).
+
+**Backend:** `HermesService.setDevRules()`; `syncProjectContext()` inclui as regras; novo IPC `hermes:agent:setDevRules` (admin). `hermes:agent:setAutonomy` e `setDevRules` validam com Zod no main (`HermesAutonomyLevelSchema`, `HermesDevRulesSchema` em `@cwm/config`) — antes o nível chegava sem validação.
+
+**Verificado:** `pnpm typecheck` (5 pacotes) e `pnpm build` limpos; 4 testes novos em `@cwm/config` (17/17); verificação da política de risco/gate (níveis, nível desconhecido → Assistido, 13 casos de classificação, gate por nível). **Não testado pela UI contra a VPS.**
 
 ## [3.61.0] — 2026-10-18
 
