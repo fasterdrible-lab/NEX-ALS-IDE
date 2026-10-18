@@ -239,8 +239,9 @@ export const ipc = {
     agent: {
       status: (projectId: string) =>
         invoke<HermesProjectAgentInfo>('hermes:agent:status', { projectId }),
-      send: (projectId: string, objective: string) =>
-        invoke<{ streamId: string }>('hermes:agent:send', { projectId, objective }),
+      /** `sessionName`: sessão nomeada do Hermes (uma por tarefa do loop); sem ela, a sessão única do projeto. */
+      send: (projectId: string, objective: string, sessionName?: string) =>
+        invoke<{ streamId: string }>('hermes:agent:send', { projectId, objective, sessionName }),
       cancel: (streamId: string) =>
         invoke<{ success: boolean }>('hermes:agent:cancel', streamId),
       onChunk: (cb: (chunk: HermesAgentChunk) => void) => {

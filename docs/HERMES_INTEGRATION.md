@@ -226,6 +226,16 @@ Ver seção "Hermes Automação (FASE 6)" em `docs/ARCHITECTURE.md` para o detal
 | Execução não-assistida sempre bate no teto de 20min | Objetivo complexo demais para rodar sem supervisão, ou o Hermes está preso num loop interno | Reduzir o escopo do objetivo agendado, ou rodar manualmente via AI Hub (Agent Mode) primeiro para calibrar o tempo esperado |
 | Job Hermes falha com "sem projeto associado" | Job criado/editado sem `projectId` (ex.: via `jobs:update` direto, fora da UI) | Recriar o job pela tela de Automações, que valida o projeto obrigatório para `agentName: 'hermes'` |
 
+## Sessões (v3.60.0)
+
+| Envio | Sessão do Hermes | Flag |
+|---|---|---|
+| Plano inicial do objetivo, mensagem livre, "Retomar sessão" | sessão do projeto | `--resume latest --in <ws>` (a 1ª vez sem flag) |
+| Cada tarefa do loop + lembrete de tag + Decision Request + follow-up de Autorizar/Negar | `nex-task-<taskId>` | `-c "nex-task-<id>" --create-if-missing --in <ws>` |
+| Tarefa paralela (worktree) | sessão nova, one-shot | — |
+
+Motivo: com uma sessão só, o histórico passava de 160k tokens em 2 tarefas (~40s por chamada). Uma execução por vez por projeto continua garantida pela trava do main + detecção na VPS (v3.59.5/3.59.7), mesmo com sessões diferentes.
+
 ## Delegação ao Claude Code (v3.59.0)
 
 **Por quê:** o modelo do Hermes pode ser gratuito/barato (ex.: `poolside/laguna-s-2.1:free`) e o código sai do **Claude Code CLI**, logado com a conta Claude do usuário **dentro da VPS** (`claude auth login` no Terminal SSH — o NEX nunca vê token). Usar a assinatura Claude diretamente como modelo do Hermes não é uma opção: exigiria plugar credencial de assinatura numa ferramenta de terceiros; para Claude como modelo do Hermes, só com **API key** da Anthropic (cobrança por uso).

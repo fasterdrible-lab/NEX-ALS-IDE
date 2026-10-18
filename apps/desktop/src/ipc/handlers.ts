@@ -571,9 +571,10 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     }, 15_000)
   }
 
-  ipcMain.handle('hermes:agent:send', (event, { projectId, objective }: { projectId: string; objective: string }) =>
+  ipcMain.handle('hermes:agent:send', (event, { projectId, objective, sessionName }: { projectId: string; objective: string; sessionName?: string }) =>
     wrapHandler(async () => {
       requireAdmin()
+      if (sessionName !== undefined && !/^[A-Za-z0-9_-]{1,80}$/.test(sessionName)) throw new Error('Nome de sessão inválido')
       // Uma execução por projeto: todas usam a mesma sessão (--resume latest) e o Hermes recusa a
       // segunda ("Refused active session … already held"). A UI esquece o que está rodando ao
       // trocar de tela, então a trava fica aqui, no main, que sobrevive à navegação.
@@ -591,7 +592,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       hermesActiveByProject.set(projectId, streamId)
       let stream: HermesEventStream
       try {
-        ({ stream } = await hermesSvc.streamObjective(projectId, objective))
+        ({ stream } = await hermesSvc.streamObjective(projectId, objective, { sessionName }))
       } catch (e) {
         hermesActiveByProject.delete(projectId)
         throw e

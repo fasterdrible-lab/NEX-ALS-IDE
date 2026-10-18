@@ -111,6 +111,14 @@ function buildParallelTaskPrompt(task: { title: string; description: string }): 
 
 const PARALLEL_CAP = 3
 
+/**
+ * Sessão do Hermes de uma tarefa do loop (`-c nex-task-<id> --create-if-missing`). Cada tarefa
+ * começa com histórico curto em vez de herdar a conversa do projeto inteiro; o contexto entre
+ * tarefas vem do repositório (código + commits) e do `.hermes.md`. O id vem do banco (UUID) —
+ * só [A-Za-z0-9_-], que é o que o main aceita.
+ */
+const taskSession = (taskId: string) => `nex-task-${taskId.replace(/[^A-Za-z0-9_-]/g, '')}`.slice(0, 80)
+
 const REMINDER_PROMPT = 'Você não incluiu nenhuma tag obrigatória. Termine AGORA com [TAREFA_CONCLUIDA], '
   + '[TAREFA_BLOQUEADA: motivo] ou [DECISAO_NECESSARIA pergunta="..." opcoes="A|B|C"]. Não repita o trabalho, apenas finalize com a tag correta.'
 
@@ -362,9 +370,9 @@ export default function HermesAgentPanel() {
   }, [])
 
   /** Envia um prompt no fluxo principal (sessão do projeto) e aguarda a conclusão. Usado pelo loop/plano sequencial. */
-  const sendAndWait = useCallback(async (prompt: string): Promise<{ text: string; ok: boolean }> => {
+  const sendAndWait = useCallback(async (prompt: string, sessionName?: string): Promise<{ text: string; ok: boolean }> => {
     try {
-      const { streamId: id } = await ipc.hermes.agent.send(projectId, prompt)
+      const { streamId: id } = await ipc.hermes.agent.send(projectId, prompt, sessionName)
       return await waitForChunkStream(id)
     } catch (e) {
       setOutput(prev => `${prev}\n\n[erro] ${String(e)}`)
@@ -376,7 +384,8 @@ export default function HermesAgentPanel() {
     let prompt = buildTaskPrompt(task)
     currentTaskRef.current = task.id
     for (let attempt = 0; attempt < 2; attempt++) {
-      const { text, ok } = await sendAndWait(prompt)
+      // Sessão própria da tarefa: o lembrete de tag (2ª tentativa) continua a mesma conversa.
+      const { text, ok } = await sendAndWait(prompt, taskSession(task.id))
       if (!ok) {
         // Execução não aconteceu ou caiu (ex.: barrada por já haver outra na sessão): a tarefa
         // volta para Pendente em vez de ficar "Em andamento" sem nada rodando.
@@ -562,7 +571,7 @@ export default function HermesAgentPanel() {
     let stillPending = false
     try {
       const prompt = `${buildTaskPrompt(task)}\n\nDecisão do usuário para "${decision.question}": ${answer.trim()}`
-      const { text, ok } = await sendAndWait(prompt)
+      const { text, ok } = await sendAndWait(prompt, taskSession(task.id))
       if (ok) {
         const tag = parseTaskTag(text)
         if (tag.kind === 'done') await ipc.tasks.update(task.id, { status: 'DONE' }).catch(() => {})
@@ -612,7 +621,9 @@ export default function HermesAgentPanel() {
     let stillPending = false
     try {
       const followUp = buildApprovalFollowUp(a, result)
-      const { text, ok } = await sendAndWait(task ? `${buildTaskPrompt(task)}\n\n${followUp}` : followUp)
+      const { text, ok } = task
+        ? await sendAndWait(`${buildTaskPrompt(task)}\n\n${followUp}`, taskSession(task.id))
+        : await sendAndWait(followUp)
       if (ok && task) {
         currentTaskRef.current = task.id
         const tag = parseTaskTag(text)

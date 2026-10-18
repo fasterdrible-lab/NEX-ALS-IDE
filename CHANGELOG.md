@@ -1,5 +1,15 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.60.0] — 2026-10-18
+
+### Melhorado — uma sessão do Hermes por tarefa do loop autônomo
+
+**Problema (MUSA AI, VPS-1):** todas as tarefas rodavam na mesma sessão do projeto (`--resume latest`). Depois de 2 tarefas o histórico já passava de **160k tokens** e cada chamada ao modelo levava ~40s (`API call #40 in=159855 latency=38.0s` no log do Hermes) — com 26 tarefas, estouraria a janela de contexto.
+
+**Fix:** cada tarefa roda numa sessão nomeada `nex-task-<id>` via `hermes chat -c <nome> --create-if-missing --in <workspace>` (`HermesClient.streamObjective` → `sessionName`; `hermes:agent:send` aceita `sessionName`, validado `^[A-Za-z0-9_-]{1,80}$` no main e no core). O lembrete de tag, a resposta a uma Decision Request e o follow-up de Autorizar/Negar continuam **na sessão da própria tarefa**; o plano inicial e a mensagem livre seguem na sessão do projeto. O contexto entre tarefas vem do repositório (código + commits por tarefa, v3.59.4) e do `.hermes.md`.
+
+**Verificado na VPS-1:** sessão nomeada continua a mesma conversa (lembrou a palavra-código); outro nome abre sessão limpa (não lembrou). Linha de comando capturada do código compilado: tarefa → `-c "nex-task-…" --create-if-missing`; livre → `--resume latest`; nome inválido (`a"; rm -rf /`) → descartado, cai no padrão.
+
 ## [3.59.7] — 2026-10-17
 
 ### Corrigido — execução do Hermes "órfã" segurava a sessão; Cancelar não parava o Hermes na VPS

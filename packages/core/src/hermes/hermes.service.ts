@@ -232,7 +232,9 @@ export class HermesService {
   }
 
   /** Abre o stream de execução do objetivo — quem chama é responsável por consumir os eventos do HermesEventStream. */
-  async streamObjective(projectId: string, objective: string): Promise<{ vpsId: string; stream: HermesEventStream }> {
+  async streamObjective(
+    projectId: string, objective: string, opts?: { sessionName?: string }
+  ): Promise<{ vpsId: string; stream: HermesEventStream }> {
     const project = await this.db.project.findUnique({ where: { id: projectId }, include: { vpsServer: true } })
     if (!project) throw new Error(`Projeto não encontrado: ${projectId}`)
     if (!project.vpsServer) throw new Error('Projeto sem VPS associada — configure a VPS do projeto antes de usar o Agent Mode.')
@@ -252,6 +254,7 @@ export class HermesService {
       workspace: project.remotePath,
       objective,
       resume: agent.sessionStarted,
+      sessionName: opts?.sessionName,
     })
 
     return { vpsId: project.vpsServerId, stream }

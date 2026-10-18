@@ -195,7 +195,7 @@ export class HermesClient {
    */
   async streamObjective(
     vpsId: string,
-    opts: { workspace: string; objective: string; resume: boolean }
+    opts: { workspace: string; objective: string; resume: boolean; sessionName?: string }
   ): Promise<HermesEventStream> {
     // Mesmo round-trip: $HOME, cria o diretório e detecta o Claude Code CLI na VPS.
     const probe = (await this.run(
@@ -213,7 +213,13 @@ export class HermesClient {
       session.destroy()
     }
 
-    const resumeFlag = opts.resume ? `--resume latest --in "${opts.workspace}"` : ''
+    // Sessão nomeada (uma por tarefa do loop): `-c <nome> --create-if-missing` abre ou continua
+    // aquela conversa. Sem nome, mantém a sessão única do projeto (`--resume latest`). Com uma
+    // sessão só para tudo, o histórico passava de 160k tokens e cada chamada ficava ~40s.
+    const sessionFlag = opts.sessionName && /^[A-Za-z0-9_-]{1,80}$/.test(opts.sessionName)
+      ? `-c "${opts.sessionName}" --create-if-missing --in "${opts.workspace}"`
+      : ''
+    const resumeFlag = sessionFlag || (opts.resume ? `--resume latest --in "${opts.workspace}"` : '')
     const skillFlag = hasClaude ? '-s claude-code' : ''
     const cmd = [
       PATH_PREFIX,
