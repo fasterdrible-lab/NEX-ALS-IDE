@@ -1,5 +1,17 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.60.1] — 2026-10-18
+
+### Corrigido — loop autônomo continuava "invisível" depois de Voltar, sem botão Parar
+
+**Sintoma reportado:** "não tem botão parar" — o loop seguia entregando tarefas (03 commitada, 04 em andamento), mas o painel mostrava só "Continuar loop" travado.
+
+**Causa:** `runLoop` é uma função async que continua viva depois que o painel desmonta; `looping` e `loopStopRef` eram do componente, então o painel reaberto não sabia do loop e não tinha como sinalizar parada.
+
+**Fix — `HermesAgentPanel.tsx`:** registro de loops ativos em nível de módulo (`activeLoops: Map<projectId, { stop }>` + listeners de re-render). Qualquer instância do painel mostra **Parar** ("Parando após a tarefa atual…" depois do clique), o loop checa `handle.stop` a cada iteração, e um segundo loop no mesmo projeto não pode começar. Os botões do painel ficam travados enquanto houver loop ativo do projeto.
+
+O loop que já estava rodando era da versão anterior em memória — o único jeito de pará-lo foi fechar o app (instalação); a tarefa em andamento terminou na VPS (reconhecida como execução órfã, v3.59.7).
+
 ## [3.60.0] — 2026-10-18
 
 ### Melhorado — uma sessão do Hermes por tarefa do loop autônomo

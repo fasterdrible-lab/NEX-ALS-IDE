@@ -112,6 +112,15 @@ function buildParallelTaskPrompt(task: { title: string; description: string }): 
 const PARALLEL_CAP = 3
 
 /**
+ * Loops autônomos ativos por projeto — em nível de módulo, não no componente. O loop é uma
+ * função async que continua viva depois que o painel desmonta (Voltar); com o estado só no
+ * componente, o painel reaberto mostrava "Continuar loop" travado e não havia como pará-lo.
+ */
+const activeLoops = new Map<string, { stop: boolean }>()
+const loopListeners = new Set<() => void>()
+const notifyLoops = () => loopListeners.forEach(fn => fn())
+
+/**
  * Sessão do Hermes de uma tarefa do loop (`-c nex-task-<id> --create-if-missing`). Cada tarefa
  * começa com histórico curto em vez de herdar a conversa do projeto inteiro; o contexto entre
  * tarefas vem do repositório (código + commits) e do `.hermes.md`. O id vem do banco (UUID) —
@@ -164,6 +173,13 @@ export default function HermesAgentPanel() {
   const [dodOpen, setDodOpen] = useState(false)
   const [runningDod, setRunningDod] = useState(false)
   const loopStopRef = useRef(false)
+  // Re-render quando um loop (de qualquer instância do painel) começa/termina/recebe Parar.
+  const [, setLoopTick] = useState(0)
+  useEffect(() => {
+    const fn = () => setLoopTick(t => t + 1)
+    loopListeners.add(fn)
+    return () => { loopListeners.delete(fn) }
+  }, [])
 
   // ── Execução paralela via git worktree (FASE 4) ───────────────────────────
   const [activeParallel, setActiveParallel] = useState<Map<string, { title: string; branch: string }>>(new Map())
@@ -467,13 +483,16 @@ export default function HermesAgentPanel() {
   }, [runParallelTask])
 
   const runLoop = useCallback(async () => {
-    if (looping) return
+    if (looping || activeLoops.has(projectId)) return
+    const handle = { stop: false }
+    activeLoops.set(projectId, handle)
+    notifyLoops()
     setLooping(true)
     loopStopRef.current = false
     try {
       let guard = 0
       const cap = 20
-      while (!loopStopRef.current) {
+      while (!loopStopRef.current && !handle.stop) {
         // Governança: nunca segue com comando perigoso aguardando Autorizar/Negar.
         if (approvalsRef.current.length > 0) break
         const current = await ipc.tasks.list({ projectId, ownerAgent: 'hermes' }).catch(() => [] as AgentTask[])
@@ -512,6 +531,8 @@ export default function HermesAgentPanel() {
         if (result !== 'done') break
       }
     } finally {
+      if (activeLoops.get(projectId) === handle) activeLoops.delete(projectId)
+      notifyLoops()
       setLooping(false)
       void loadStatus(projectId)
     }
@@ -678,7 +699,9 @@ export default function HermesAgentPanel() {
 
   const selectedProject = projects.find(p => p.id === projectId)
   const hermesReady = agentInfo?.hermesStatus === 'running'
-  const busy = sending || planning || looping || orphanRunning
+  // Loop deste projeto rodando em qualquer instância do painel (inclusive uma já desmontada).
+  const loopHandle = projectId ? activeLoops.get(projectId) : undefined
+  const busy = sending || planning || looping || orphanRunning || !!loopHandle
   const canSendChat = hermesReady && !busy && chatInput.trim().length > 0
   const canStartGoal = hermesReady && !busy && goalInput.trim().length > 0
   const doneCount = tasks.filter(t => t.status === 'DONE').length
@@ -836,12 +859,14 @@ export default function HermesAgentPanel() {
                     </button>
                   )}
                   {autonomyLevel === 'autonomous' && (
-                    looping ? (
+                    looping || loopHandle ? (
                       <button
-                        onClick={() => { loopStopRef.current = true }}
-                        className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1"
+                        onClick={() => { loopStopRef.current = true; if (loopHandle) loopHandle.stop = true; notifyLoops() }}
+                        disabled={loopHandle?.stop}
+                        className="text-[10px] text-red-400 hover:text-red-300 disabled:opacity-60 flex items-center gap-1"
+                        title="Termina a tarefa atual e não começa a próxima"
                       >
-                        <Square size={11} /> Parar
+                        <Square size={11} /> {loopHandle?.stop ? 'Parando após a tarefa atual…' : 'Parar'}
                       </button>
                     ) : hasTodo ? (
                       <button
