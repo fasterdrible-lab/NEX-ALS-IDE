@@ -172,7 +172,26 @@ export default function HermesAgentPanel() {
   const currentTaskRef = useRef<string | null>(null)
   const parallelStreamsRef = useRef<Set<string>>(new Set())
   useEffect(() => { approvalsRef.current = approvals }, [approvals])
-  useEffect(() => { setActivity([]); setApprovals([]) }, [projectId])
+
+  // Ao abrir o painel (ou trocar de projeto), reconecta ao que o main sabe que está em andamento:
+  // a execução da sessão do projeto (vira "mensagem em andamento", com saída ao vivo e Cancelar,
+  // e trava os botões) e os cartões Autorizar/Negar pendentes. Sem isso, Voltar → reabrir
+  // liberava "Próxima" no meio de uma execução e o Hermes recusava a segunda na mesma sessão.
+  useEffect(() => {
+    setActivity([]); setApprovals([])
+    if (!projectId) return
+    let cancelled = false
+    ipc.hermes.agent.active(projectId).then(({ streamId: activeId, approvals: pending }) => {
+      if (cancelled) return
+      if (activeId) {
+        setStreamId(activeId)
+        setSending(true)
+        setOutput('(reconectado a uma execução do Hermes em andamento — a saída anterior não é reexibida)\n\n')
+      }
+      if (pending.length > 0) setApprovals(pending.map(a => ({ ...a, taskId: null })))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [projectId])
 
   // Listener global (não depende de `sending`): captura atividade e bloqueios de qualquer
   // stream deste painel — mensagem livre, loop sequencial ou tarefa paralela.

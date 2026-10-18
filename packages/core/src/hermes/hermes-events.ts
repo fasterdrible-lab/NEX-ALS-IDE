@@ -38,6 +38,9 @@ export class HermesEventStream extends EventEmitter {
   /** tool_use pendente por nome de tool, para recuperar o comando de um tool_result BLOCKED. */
   private lastInput = new Map<string, Record<string, unknown>>()
   private resultSeen: Extract<HermesEvent, { kind: 'result' }> | null = null
+  /** Últimas linhas que não são JSON — quando o Hermes aborta antes de emitir `result`
+   *  (ex.: "Refused active session … already held"), o motivo só aparece aqui. */
+  private strayLines: string[] = []
 
   constructor(private readonly inner: ExecStream) {
     super()
@@ -53,6 +56,11 @@ export class HermesEventStream extends EventEmitter {
   /** Último evento `result` recebido (null se o Hermes morreu antes de emitir). */
   get result(): Extract<HermesEvent, { kind: 'result' }> | null {
     return this.resultSeen
+  }
+
+  /** Saída não-JSON recente (até 5 linhas), para compor a mensagem de erro sem `result`. */
+  get strayOutput(): string {
+    return this.strayLines.join(' · ')
   }
 
   kill(): void {
@@ -71,7 +79,10 @@ export class HermesEventStream extends EventEmitter {
 
   private flushLine(raw: string): void {
     const line = raw.trim()
-    if (!line.startsWith('{')) return
+    if (!line.startsWith('{')) {
+      if (line && !/^session_id:/i.test(line)) this.strayLines = [...this.strayLines.slice(-4), short(line, 240)]
+      return
+    }
     let ev: Record<string, unknown>
     try { ev = JSON.parse(line) as Record<string, unknown> } catch { return }
 

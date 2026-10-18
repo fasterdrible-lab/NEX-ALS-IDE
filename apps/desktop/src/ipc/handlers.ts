@@ -114,7 +114,9 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const hermesStreams = new Map<string, HermesEventStream>()
   // Comandos que o Hermes teve bloqueados (dangerous em headless), aguardando Autorizar/Negar.
   // O renderer só referencia pelo id — o comando em si nunca vem da UI.
-  const hermesApprovals = new Map<string, { projectId: string; workspace?: string; command: string; tool: string }>()
+  const hermesApprovals = new Map<string, { projectId: string; workspace?: string; command: string; tool: string; reason: string }>()
+  // projectId → streamId da execução principal (sessão --resume) em andamento.
+  const hermesActiveByProject = new Map<string, string>()
   const jobExecutor = new JobExecutor(hermesSvc)
   // Claude Code subprocess streams (account-based, sem API key)
   const claudeProcs = new Map<string, { kill: () => void }>()
@@ -533,14 +535,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         const approvalId = crypto.randomUUID()
         // execute_code (Python arbitrário) não é reexecutável com segurança pelo NEX — só informa.
         const executable = e.tool === 'terminal' && e.command.length > 0
-        if (executable) hermesApprovals.set(approvalId, { projectId: ctx.projectId, workspace: ctx.workspace, command: e.command, tool: e.tool })
+        if (executable) hermesApprovals.set(approvalId, { projectId: ctx.projectId, workspace: ctx.workspace, command: e.command, tool: e.tool, reason: e.reason })
         send({ type: 'approval_request', approval: { id: approvalId, tool: e.tool, command: e.command, reason: e.reason, executable } })
       }
     })
     stream.on('close', (code: number | null) => {
       const r = stream.result
       const ok = r ? r.ok : (code === 0 && hasData)
-      const lastError = ok ? undefined : (r?.error || `hermes encerrou sem resultado (código ${code})`)
+      const stray = stream.strayOutput
+      const lastError = ok ? undefined : (r?.error || `hermes encerrou sem resultado (código ${code})${stray ? `: ${stray}` : ''}`)
       finish(ok, lastError)
       // Erro reportado pelo próprio Hermes (ex.: créditos esgotados) — antes se perdia em silêncio.
       if (!ok && lastError) {
@@ -571,10 +574,25 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('hermes:agent:send', (event, { projectId, objective }: { projectId: string; objective: string }) =>
     wrapHandler(async () => {
       requireAdmin()
+      // Uma execução por projeto: todas usam a mesma sessão (--resume latest) e o Hermes recusa a
+      // segunda ("Refused active session … already held"). A UI esquece o que está rodando ao
+      // trocar de tela, então a trava fica aqui, no main, que sobrevive à navegação.
+      const running = hermesActiveByProject.get(projectId)
+      if (running && hermesStreams.has(running)) {
+        throw new Error('Já existe uma execução do Hermes em andamento neste projeto — aguarde terminar ou cancele antes de enviar outra.')
+      }
       const targetWin = BrowserWindow.fromWebContents(event.sender)
       const streamId = crypto.randomUUID()
-      const { stream } = await hermesSvc.streamObjective(projectId, objective)
+      hermesActiveByProject.set(projectId, streamId)
+      let stream: HermesEventStream
+      try {
+        ({ stream } = await hermesSvc.streamObjective(projectId, objective))
+      } catch (e) {
+        hermesActiveByProject.delete(projectId)
+        throw e
+      }
       wireHermesStream(targetWin, streamId, stream, { projectId }, (ok, lastError) => {
+        if (hermesActiveByProject.get(projectId) === streamId) hermesActiveByProject.delete(projectId)
         void hermesSvc.markAgentActivity(projectId, {
           status: ok ? 'idle' : 'error',
           sessionStarted: ok ? true : undefined,
@@ -582,6 +600,20 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         })
       })
       return { streamId }
+    })
+  )
+
+  // Estado que sobrevive à navegação: o painel reabre e se reconecta à execução em andamento
+  // e às aprovações pendentes do projeto, em vez de começar "em branco".
+  ipcMain.handle('hermes:agent:active', (_, { projectId }: { projectId: string }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const id = hermesActiveByProject.get(projectId)
+      const streamId = id && hermesStreams.has(id) ? id : null
+      const approvals = [...hermesApprovals.entries()]
+        .filter(([, a]) => a.projectId === projectId)
+        .map(([id, a]) => ({ id, tool: a.tool, command: a.command, reason: a.reason, executable: true, parallel: !!a.workspace }))
+      return { streamId, approvals }
     })
   )
 

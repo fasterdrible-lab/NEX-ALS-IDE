@@ -249,6 +249,9 @@ export const ipc = {
       },
       resolveApproval: (approvalId: string, approve: boolean) =>
         invoke<HermesApprovalResult>('hermes:approval:resolve', { approvalId, approve }),
+      /** Execução em andamento + aprovações pendentes do projeto — para o painel se reconectar ao reabrir. */
+      active: (projectId: string) =>
+        invoke<{ streamId: string | null; approvals: (HermesApprovalRequest & { parallel: boolean })[] }>('hermes:agent:active', { projectId }),
       setObjective: (projectId: string, objective: string) =>
         invoke<void>('hermes:agent:setObjective', { projectId, objective }),
       setAutonomy: (projectId: string, level: HermesAutonomyLevel) =>

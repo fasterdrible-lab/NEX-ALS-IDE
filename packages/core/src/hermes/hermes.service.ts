@@ -309,7 +309,7 @@ export class HermesService {
       stream.on('close', (code: number | null) => {
         const r = stream.result
         if (r) finish(r.ok, r.ok ? undefined : r.error || 'Hermes terminou com erro')
-        else finish(code === 0 && hasData, hasData ? undefined : `hermes encerrou sem resultado (código ${code})`)
+        else finish(code === 0 && hasData, hasData ? undefined : `hermes encerrou sem resultado (código ${code})${stream.strayOutput ? `: ${stream.strayOutput}` : ''}`)
       })
       stream.on('error', (err: Error) => finish(false, err.message))
     })

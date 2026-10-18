@@ -1,5 +1,18 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.59.5] — 2026-10-17
+
+### Corrigido — painel Agent "esquecia" a execução em andamento e disparava uma segunda na mesma sessão
+
+**Sintoma reportado:** status "Erro" no painel Agent (projeto MUSA AI), com `hermes encerrou sem resultado (código 0)`; Tarefas 01, 02 e 03 presas em "Em andamento".
+
+**O que aconteceu (logs do Hermes na VPS-1):** (1) na Tarefa 01 o Hermes bloqueou `python -e …` (dangerous) → o painel pausou a tarefa aguardando Autorizar/Negar; (2) "Próxima" iniciou a Tarefa 02; (3) o usuário usou Voltar e reabriu o painel — o estado (`sending`/`looping`/aprovações) é do componente React e foi zerado, então "Próxima" ficou liberado no meio da execução; (4) a Tarefa 03 foi enviada na mesma sessão e o Hermes recusou: `Refused active session 20261018_012126_a4e8f8: already held by pid=1652854`. Sem evento `result`, o NEX só dizia "sem resultado". Os cartões Autorizar/Negar da Tarefa 01 também sumiram ao reabrir.
+
+**Fix:**
+- **Trava por projeto no main (`hermes:agent:send`):** `hermesActiveByProject` rejeita uma segunda execução da sessão do projeto enquanto houver uma em andamento — o main sobrevive à navegação, o componente não.
+- **Reconexão (`hermes:agent:active`):** ao abrir o painel/trocar de projeto, ele retoma a execução em andamento (saída ao vivo a partir dali, botão Cancelar, botões travados) e os cartões de aprovação pendentes.
+- **Motivo real do erro:** `HermesEventStream.strayOutput` guarda as últimas linhas não-JSON; quando o Hermes aborta sem `result`, a mensagem de erro (painel e cron) inclui o motivo dele.
+
 ## [3.59.4] — 2026-10-17
 
 ### Melhorado — loop autônomo do Hermes commita ao fim de cada tarefa
