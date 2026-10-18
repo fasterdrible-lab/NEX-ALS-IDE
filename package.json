@@ -8,6 +8,8 @@
     "build:pkgs": "pnpm --filter @cwm/config build && pnpm --filter @cwm/db build && pnpm --filter @cwm/core build",
     "build": "pnpm run build:pkgs && pnpm --filter web build && pnpm --filter desktop build",
     "package:win": "pnpm build && pnpm --filter @cwm/desktop package:win",
+    "install:local": "node scripts/install-local.js",
+    "release:local": "pnpm package:win && pnpm install:local",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",

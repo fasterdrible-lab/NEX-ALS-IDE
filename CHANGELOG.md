@@ -15,6 +15,10 @@
 - `hermes:agent:active` informa `orphanRunning`; o painel mostra um aviso, trava os botões, confere a cada 20s e libera sozinho quando ela termina — ou o usuário clica **Encerrar execução na VPS** (novo IPC `hermes:agent:stopRemote`).
 - Verificado na VPS-1: detecção acha exatamente `bash`+`hermes` da execução órfã real; encerramento testado num processo isolado (pai + filho encerrados, execução real intacta).
 
+### Ferramentas — `pnpm install:local` / `pnpm release:local`
+
+Novo `scripts/install-local.js`: fecha o NEX-ALS IDE aberto, roda o instalador da versão atual em modo silencioso (`/S`, NSIS por usuário, sem UAC), confere a versão instalada e reabre o app. `release:local` = `package:win` + `install:local`. Reabre **sem `ELECTRON_RUN_AS_NODE`** — terminais dentro do VS Code herdam essa variável e, com ela, o executável do Electron roda como Node puro e fecha na hora (`bad option: …`), o mesmo motivo de `scripts/dev.js` já apagá-la. Atenção: fechar o app interrompe o loop autônomo do painel Agent.
+
 ## [3.59.6] — 2026-10-17
 
 ### Corrigido — loop autônomo rodava tarefas paralelas fora de ordem e sobre a base errada
