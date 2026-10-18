@@ -1,5 +1,20 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.59.7] — 2026-10-17
+
+### Corrigido — execução do Hermes "órfã" segurava a sessão; Cancelar não parava o Hermes na VPS
+
+**Sintoma reportado:** "Erro" no painel Agent com `hermes-refusal-reason: SESSION_NOT_OWNED · This chat is open in another Hermes window/terminal … session opened by cli 16m ago`. A API (Nous) estava ok — respondeu em 3s; houve só um 429 *fair-share rate limit* temporário do modelo gratuito, com retry automático.
+
+**Causa:** uma execução enviada às 02:10 UTC (resposta a uma aprovação) seguiu rodando na VPS depois que o NEX foi fechado e reaberto — sem pty, fechar o canal SSH não manda SIGHUP; o processo ficou sob o systemd (PPID 1) segurando a sessão. O app novo não sabia dela (a trava da 3.59.5 é em memória) e mandou outra execução, recusada pelo Hermes. O mesmo mecanismo fazia o botão **Cancelar** só cortar o SSH, sem parar o Hermes.
+
+**Fix:**
+- `HermesClient.findRunsInWorkspace()` acha execuções do Hermes **na VPS** pelo diretório atual do processo (`/proc/<pid>/cwd` = pasta do projeto; `pgrep -f "[q]uery-file"`), inclusive órfãs; worktrees paralelos não são atingidos. `killRunsInWorkspace()` encerra a árvore inteira (inclui `claude -p`).
+- `hermes:agent:send` recusa com mensagem clara se houver execução rodando na VPS no projeto.
+- `hermes:agent:cancel` encerra de fato a execução na VPS.
+- `hermes:agent:active` informa `orphanRunning`; o painel mostra um aviso, trava os botões, confere a cada 20s e libera sozinho quando ela termina — ou o usuário clica **Encerrar execução na VPS** (novo IPC `hermes:agent:stopRemote`).
+- Verificado na VPS-1: detecção acha exatamente `bash`+`hermes` da execução órfã real; encerramento testado num processo isolado (pai + filho encerrados, execução real intacta).
+
 ## [3.59.6] — 2026-10-17
 
 ### Corrigido — loop autônomo rodava tarefas paralelas fora de ordem e sobre a base errada

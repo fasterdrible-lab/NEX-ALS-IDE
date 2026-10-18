@@ -251,7 +251,10 @@ export const ipc = {
         invoke<HermesApprovalResult>('hermes:approval:resolve', { approvalId, approve }),
       /** Execução em andamento + aprovações pendentes do projeto — para o painel se reconectar ao reabrir. */
       active: (projectId: string) =>
-        invoke<{ streamId: string | null; approvals: (HermesApprovalRequest & { parallel: boolean })[] }>('hermes:agent:active', { projectId }),
+        invoke<{ streamId: string | null; approvals: (HermesApprovalRequest & { parallel: boolean })[]; orphanRunning: boolean }>('hermes:agent:active', { projectId }),
+      /** Encerra na VPS uma execução órfã (de antes de o app ser reaberto) que segura a sessão. */
+      stopRemote: (projectId: string) =>
+        invoke<{ stopped: number }>('hermes:agent:stopRemote', { projectId }),
       setObjective: (projectId: string, objective: string) =>
         invoke<void>('hermes:agent:setObjective', { projectId, objective }),
       setAutonomy: (projectId: string, level: HermesAutonomyLevel) =>

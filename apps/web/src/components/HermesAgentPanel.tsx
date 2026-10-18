@@ -168,6 +168,9 @@ export default function HermesAgentPanel() {
   const [activity, setActivity] = useState<ActivityEntry[]>([])
   const [approvals, setApprovals] = useState<PendingApproval[]>([])
   const [resolvingApproval, setResolvingApproval] = useState<string | null>(null)
+  // Execução do Hermes rodando na VPS sem stream deste app (órfã de antes de reabrir o NEX).
+  const [orphanRunning, setOrphanRunning] = useState(false)
+  const [stoppingOrphan, setStoppingOrphan] = useState(false)
   const approvalsRef = useRef<PendingApproval[]>([])
   const currentTaskRef = useRef<string | null>(null)
   const parallelStreamsRef = useRef<Set<string>>(new Set())
@@ -178,11 +181,12 @@ export default function HermesAgentPanel() {
   // e trava os botões) e os cartões Autorizar/Negar pendentes. Sem isso, Voltar → reabrir
   // liberava "Próxima" no meio de uma execução e o Hermes recusava a segunda na mesma sessão.
   useEffect(() => {
-    setActivity([]); setApprovals([])
+    setActivity([]); setApprovals([]); setOrphanRunning(false)
     if (!projectId) return
     let cancelled = false
-    ipc.hermes.agent.active(projectId).then(({ streamId: activeId, approvals: pending }) => {
+    ipc.hermes.agent.active(projectId).then(({ streamId: activeId, approvals: pending, orphanRunning: orphan }) => {
       if (cancelled) return
+      setOrphanRunning(orphan)
       if (activeId) {
         setStreamId(activeId)
         setSending(true)
@@ -226,6 +230,32 @@ export default function HermesAgentPanel() {
     } catch (e) { setAgentInfo(null); setOutput(`Erro ao consultar status: ${String(e)}`) }
     setLoadingStatus(false)
   }, [])
+
+  // Enquanto houver órfã, confere a cada 20s — libera o painel sozinho quando ela terminar.
+  // (Depois de loadStatus: arrays de dependência são avaliados no render — antes da declaração daria ReferenceError.)
+  useEffect(() => {
+    if (!orphanRunning || !projectId) return
+    const t = setInterval(() => {
+      ipc.hermes.agent.active(projectId)
+        .then(r => { if (!r.orphanRunning) { setOrphanRunning(false); void loadStatus(projectId) } })
+        .catch(() => {})
+    }, 20_000)
+    return () => clearInterval(t)
+  }, [orphanRunning, projectId, loadStatus])
+
+  const stopOrphan = useCallback(async () => {
+    if (!projectId) return
+    setStoppingOrphan(true)
+    try {
+      const { stopped } = await ipc.hermes.agent.stopRemote(projectId)
+      setOutput(prev => `${prev}\n[governança] ${stopped} execução(ões) do Hermes encerrada(s) na VPS.\n`)
+      setOrphanRunning(false)
+      void loadStatus(projectId)
+    } catch (e) {
+      setOutput(prev => `${prev}\n[erro ao encerrar] ${String(e)}\n`)
+    }
+    setStoppingOrphan(false)
+  }, [projectId, loadStatus])
 
   useEffect(() => { void loadStatus(projectId) }, [projectId, loadStatus])
 
@@ -637,7 +667,7 @@ export default function HermesAgentPanel() {
 
   const selectedProject = projects.find(p => p.id === projectId)
   const hermesReady = agentInfo?.hermesStatus === 'running'
-  const busy = sending || planning || looping
+  const busy = sending || planning || looping || orphanRunning
   const canSendChat = hermesReady && !busy && chatInput.trim().length > 0
   const canStartGoal = hermesReady && !busy && goalInput.trim().length > 0
   const doneCount = tasks.filter(t => t.status === 'DONE').length
@@ -679,6 +709,23 @@ export default function HermesAgentPanel() {
                   Iniciar Hermes <ExternalLink size={10} />
                 </Link>
               )}
+            </div>
+          )}
+
+          {orphanRunning && (
+            <div className="border border-sky-700/50 bg-sky-950/30 rounded-lg p-2.5 space-y-1.5">
+              <p className="text-[10px] text-sky-300 leading-relaxed">
+                O Hermes ainda está trabalhando na VPS numa execução iniciada antes de o app ser reaberto.
+                O trabalho dela continua sendo salvo na pasta do projeto, mas este painel não recebe a saída.
+                Aguarde ela terminar (o painel libera sozinho) ou encerre agora.
+              </p>
+              <button
+                onClick={() => void stopOrphan()}
+                disabled={stoppingOrphan}
+                className="text-[10px] text-red-400 hover:text-red-300 disabled:opacity-40 flex items-center gap-1"
+              >
+                {stoppingOrphan ? <Loader2 size={10} className="animate-spin" /> : <Square size={10} />} Encerrar execução na VPS
+              </button>
             </div>
           )}
 

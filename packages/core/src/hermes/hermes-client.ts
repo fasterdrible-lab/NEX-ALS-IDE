@@ -134,6 +134,32 @@ export class HermesClient {
     await this.run(vpsId, `rm -f ${NEX_PID_FILE}`)
   }
 
+  /**
+   * PIDs de execuções `hermes chat --query-file` cujo diretório atual é `workspace` — olhando a
+   * VPS, não a memória do app. Pega também execuções órfãs: fechar o NEX derruba o canal SSH,
+   * mas o Hermes (sem pty, não recebe SIGHUP) segue rodando sob o systemd e segurando a sessão.
+   * `[q]uery-file` evita casar com a própria linha deste comando.
+   */
+  async findRunsInWorkspace(vpsId: string, workspace: string): Promise<number[]> {
+    const ws = workspace.replace(/\/+$/, '')
+    const out = await this.run(
+      vpsId,
+      `for p in $(pgrep -f "[q]uery-file"); do [ "$(readlink /proc/$p/cwd 2>/dev/null)" = "${ws}" ] && echo $p; done; true`
+    )
+    return out.split('\n').map(l => parseInt(l.trim(), 10)).filter(Number.isFinite)
+  }
+
+  /** Encerra as execuções do Hermes no workspace e toda a árvore de processos (inclui `claude -p`). */
+  async killRunsInWorkspace(vpsId: string, workspace: string): Promise<number> {
+    const pids = await this.findRunsInWorkspace(vpsId, workspace)
+    if (pids.length === 0) return 0
+    await this.run(
+      vpsId,
+      `desc() { for c in $(pgrep -P $1); do desc $c; echo $c; done; }; for r in ${pids.join(' ')}; do kill -TERM $(desc $r) $r 2>/dev/null; done; sleep 2; true`
+    )
+    return pids.length
+  }
+
   async execCommand(vpsId: string, args: string): Promise<string> {
     const safeArgs = args.replace(/[\r\n]/g, ' ').trim()
     return this.run(vpsId, `hermes ${safeArgs} 2>&1`, 60000)

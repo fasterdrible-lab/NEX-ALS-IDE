@@ -581,6 +581,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       if (running && hermesStreams.has(running)) {
         throw new Error('Já existe uma execução do Hermes em andamento neste projeto — aguarde terminar ou cancele antes de enviar outra.')
       }
+      // A memória do app não basta: uma execução iniciada antes de o NEX ser fechado continua
+      // rodando na VPS (órfã) e segurando a sessão — o Hermes recusaria com SESSION_NOT_OWNED.
+      if (await hermesSvc.isRunningOnVps(projectId)) {
+        throw new Error('Há uma execução do Hermes ainda rodando na VPS neste projeto (iniciada antes de o app ser reaberto). Aguarde ela terminar ou use "Encerrar execução na VPS".')
+      }
       const targetWin = BrowserWindow.fromWebContents(event.sender)
       const streamId = crypto.randomUUID()
       hermesActiveByProject.set(projectId, streamId)
@@ -613,15 +618,35 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       const approvals = [...hermesApprovals.entries()]
         .filter(([, a]) => a.projectId === projectId)
         .map(([id, a]) => ({ id, tool: a.tool, command: a.command, reason: a.reason, executable: true, parallel: !!a.workspace }))
-      return { streamId, approvals }
+      // Rodando na VPS sem stream deste app = órfã (o app foi fechado/reaberto no meio).
+      const orphanRunning = streamId ? false : await hermesSvc.isRunningOnVps(projectId).catch(() => false)
+      return { streamId, approvals, orphanRunning }
     })
   )
 
-  ipcMain.handle('hermes:agent:cancel', (_, streamId: string) => {
-    const stream = hermesStreams.get(streamId)
-    if (stream) { stream.kill(); hermesStreams.delete(streamId) }
-    return { success: true }
-  })
+  ipcMain.handle('hermes:agent:cancel', (_, streamId: string) =>
+    wrapHandler(async () => {
+      const stream = hermesStreams.get(streamId)
+      if (stream) { stream.kill(); hermesStreams.delete(streamId) }
+      // Fechar o canal SSH não mata o Hermes na VPS (sem pty, sem SIGHUP) — encerra de fato
+      // a execução da sessão do projeto. Paralelas rodam em worktree e não são atingidas.
+      const projectId = [...hermesActiveByProject.entries()].find(([, id]) => id === streamId)?.[0]
+      if (projectId) {
+        hermesActiveByProject.delete(projectId)
+        await hermesSvc.stopRunsOnVps(projectId).catch((e: unknown) => console.error('[Hermes] cancel remoto falhou:', e))
+      }
+      return { success: true }
+    })
+  )
+
+  // Execução órfã (de um app anterior) segurando a sessão: o usuário encerra pelo painel.
+  ipcMain.handle('hermes:agent:stopRemote', (_, { projectId }: { projectId: string }) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      if (hermesActiveByProject.has(projectId)) throw new Error('Há uma execução deste app em andamento — use Cancelar.')
+      return { stopped: await hermesSvc.stopRunsOnVps(projectId) }
+    })
+  )
 
   // Governança — resolve um comando que o Hermes teve bloqueado. Aprovar = o NEX executa o
   // comando (registrado em tool_execution_log como exec_dangerous); negar só descarta. O

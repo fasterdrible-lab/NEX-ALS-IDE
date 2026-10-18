@@ -410,6 +410,22 @@ export class HermesService {
     return next
   }
 
+  /** Há execução do Hermes rodando na pasta do projeto, na VPS (inclusive órfã de um app anterior)? */
+  async isRunningOnVps(projectId: string): Promise<boolean> {
+    const project = await this.db.project.findUnique({ where: { id: projectId } })
+    if (!project) return false
+    return (await this.client.findRunsInWorkspace(project.vpsServerId, project.remotePath)).length > 0
+  }
+
+  /** Encerra de fato, na VPS, as execuções do Hermes na pasta do projeto. */
+  async stopRunsOnVps(projectId: string): Promise<number> {
+    const project = await this.db.project.findUnique({ where: { id: projectId } })
+    if (!project) throw new Error(`Projeto não encontrado: ${projectId}`)
+    const n = await this.client.killRunsInWorkspace(project.vpsServerId, project.remotePath)
+    if (n > 0) await this.markAgentActivity(projectId, { status: 'idle', lastError: '' })
+    return n
+  }
+
   /**
    * Governança — executa um comando que o Hermes teve bloqueado em modo headless e que o
    * usuário autorizou na UI. O NEX executa (não o Hermes com --yolo), no workspace do projeto,
