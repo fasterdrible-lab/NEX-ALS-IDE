@@ -1,5 +1,13 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.59.4] — 2026-10-17
+
+### Melhorado — loop autônomo do Hermes commita ao fim de cada tarefa
+
+Primeiro projeto real pela UI (MUSA AI, VPS-1): após a Tarefa 01 concluída, 22 arquivos e 58 testes passando, mas **nenhum commit** — todo o trabalho fora do histórico git. O prompt de tarefa sequencial (`buildTaskPrompt` em `HermesAgentPanel.tsx`) não pedia commit; só o de tarefa paralela pedia.
+
+Agora toda tarefa (sequencial e paralela) instrui: antes de `[TAREFA_CONCLUIDA]`, `git add -A && git commit -m "<tipo>(<escopo>): <descrição>"` (Conventional Commits, ETAPA 25 do brief), `git init` se ainda não houver repositório, e nunca push/reset --hard/force — só commits locais. O prompt paralelo passou a reaproveitar a instrução comum (antes duplicava).
+
 ## [3.59.3] — 2026-10-17
 
 ### Corrigido — "Iniciar" do Hermes falhava com gateway já rodando; versão e conta Claude erradas; cards do Lançador

@@ -92,6 +92,10 @@ function buildTaskPrompt(task: { title: string; description: string }): string {
     task.description,
     '',
     'Instruções de finalização (obrigatório):',
+    // ETAPA 25 do brief — commits frequentes, um por tarefa, para cada entrega ficar no histórico.
+    '- Antes de marcar como concluída, faça um commit git com tudo desta tarefa: git add -A && git commit -m "<tipo>(<escopo>): <descrição>"',
+    '  (tipo: feat, fix, refactor, test, docs, chore). Se o diretório ainda não for um repositório, rode git init antes.',
+    '  Nunca faça push, reset --hard nem force — só commits locais.',
     '- Sucesso → termine sua resposta com a tag: [TAREFA_CONCLUIDA]',
     '- Bloqueio técnico real → termine com: [TAREFA_BLOQUEADA: <motivo>]',
     '- Decisão de negócio que você não pode inferir sozinho → termine com: [DECISAO_NECESSARIA pergunta="..." opcoes="A|B|C"]',
@@ -101,8 +105,8 @@ function buildTaskPrompt(task: { title: string; description: string }): string {
 
 function buildParallelTaskPrompt(task: { title: string; description: string }): string {
   return buildTaskPrompt(task)
-    + '\n\nVocê está trabalhando num git worktree isolado desta tarefa. Ao concluir, garanta que TODAS as '
-    + 'alterações estejam commitadas (git add -A && git commit) antes de finalizar com a tag.'
+    + '\n\nVocê está trabalhando num git worktree isolado desta tarefa — o commit é o que o NEX mergeia de volta, '
+    + 'então nenhuma alteração pode ficar fora dele.'
 }
 
 const PARALLEL_CAP = 3
