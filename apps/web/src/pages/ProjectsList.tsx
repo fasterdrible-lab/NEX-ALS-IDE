@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { FolderOpen, Plus, Trash2, Pencil, X, Loader2, GitBranch, Server, FolderPlus, CheckCircle, AlertCircle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { FolderOpen, Plus, Trash2, Pencil, X, Loader2, GitBranch, Server, FolderPlus, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import type { Project, ProjectInput, VpsServer, ClaudeAccount } from '@cwm/config'
 
@@ -8,6 +9,7 @@ const emptyForm = (): ProjectInput => ({
 })
 
 export default function ProjectsList() {
+  const navigate = useNavigate()
   const [list, setList] = useState<Project[]>([])
   const [vpsList, setVpsList] = useState<VpsServer[]>([])
   const [accounts, setAccounts] = useState<ClaudeAccount[]>([])
@@ -91,7 +93,15 @@ export default function ProjectsList() {
       ) : (
         <div className="grid gap-4">
           {list.map(p => (
-            <div key={p.id} className="card flex items-center gap-4">
+            <div
+              key={p.id}
+              onClick={() => navigate(`/projects/${p.id}`)}
+              onKeyDown={e => { if (e.key === 'Enter') navigate(`/projects/${p.id}`) }}
+              role="button"
+              tabIndex={0}
+              title="Abrir o projeto"
+              className="card flex items-center gap-4 cursor-pointer hover:border-slate-600 transition-colors"
+            >
               <div className="p-3 bg-slate-800 rounded-lg shrink-0">
                 <FolderOpen size={20} className="text-slate-300" />
               </div>
@@ -112,11 +122,13 @@ export default function ProjectsList() {
                   </p>
                 )}
               </div>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => openEdit(p)} className="btn-ghost p-2"><Pencil size={14} /></button>
-                <button onClick={() => handleDelete(p.id, p.name)} className="btn-ghost p-2 text-red-400 hover:text-red-300">
+              {/* stopPropagation: editar/excluir não podem abrir a página do projeto. */}
+              <div className="flex gap-2 shrink-0 items-center" onClick={e => e.stopPropagation()}>
+                <button onClick={() => openEdit(p)} className="btn-ghost p-2" title="Editar"><Pencil size={14} /></button>
+                <button onClick={() => handleDelete(p.id, p.name)} className="btn-ghost p-2 text-red-400 hover:text-red-300" title="Excluir">
                   <Trash2 size={14} />
                 </button>
+                <ChevronRight size={16} className="text-slate-600" />
               </div>
             </div>
           ))}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import Editor, { type OnMount } from '@monaco-editor/react'
+import { safeRemotePath } from '../lib/remote-path'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import {
   ArrowLeft, Folder, FolderOpen, File, FileCode, FileText, FileJson,
@@ -134,11 +135,14 @@ function Breadcrumb({ path, onNav }: { path: string; onNav: (p: string) => void 
 export default function FileExplorerPage() {
   const { vpsId, vpsName } = useParams<{ vpsId: string; vpsName: string }>()
   const navigate = useNavigate()
+  // `?path=` quando aberto a partir de um projeto; senão /root.
+  const [searchParams] = useSearchParams()
+  const startPath = useRef(safeRemotePath(searchParams.get('path')) ?? '/root').current
 
   const sessionRef = useRef<string | null>(null)
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
 
-  const [currentPath, setCurrentPath] = useState('/root')
+  const [currentPath, setCurrentPath] = useState(startPath)
   const [entries, setEntries] = useState<FileEntry[]>([])
   const [treeStatus, setTreeStatus] = useState<'connecting' | 'ready' | 'loading' | 'error'>('connecting')
   const [treeError, setTreeError] = useState('')
@@ -186,7 +190,7 @@ export default function FileExplorerPage() {
       }
       sid = r.sessionId
       sessionRef.current = sid
-      await loadDir('/root', sid)
+      await loadDir(startPath, sid)
     })
     return () => { if (sid) ipc.sftp.close(sid) }
   // eslint-disable-next-line react-hooks/exhaustive-deps

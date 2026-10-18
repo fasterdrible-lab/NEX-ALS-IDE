@@ -1,5 +1,18 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.61.0] — 2026-10-18
+
+### Adicionado — página do projeto: clicar num projeto abre tudo dele já na pasta certa
+
+Pedido do usuário: ao clicar num projeto em **Projetos**, ir direto para o projeto. Escolhido "escolher na hora": o card agora é clicável e abre `/projects/:projectId` (`ProjectHubPage.tsx`), com:
+- **Atalhos:** **Agent** (AI HUB já na aba Agent com o projeto selecionado), **IDE** e **Explorer** (abrem na pasta do projeto — antes sempre em `/root`), **Terminal** (SSH já com `cd` na pasta) e **Abrir no VS Code** (Remote SSH, o mesmo do Lançador).
+- **Resumo:** status do Hermes e do agente, progresso das tarefas (barra + tarefa em andamento), branch, alterações sem commit e os últimos 5 commits.
+- Editar/excluir no card continuam funcionando (não abrem a página).
+
+**Suporte nas telas de destino:** `IDEPage` aceita `?path=` como raiz da árvore (os 12 usos de `'/root'` passaram a `remoteRoot`); `FileExplorerPage` aceita `?path=`; `TerminalPage` aceita `?cwd=` (envia `cd '<cwd>' && clear` ao conectar); `AIHubPage` aceita `?mode=agent&project=<id>` e repassa `initialProjectId` ao `HermesAgentPanel`.
+
+**Segurança:** todo caminho vindo da URL passa por `safeRemotePath()` (`apps/web/src/lib/remote-path.ts`) — só absoluto, sem `..`, aspas, `$()`, crases ou quebra de linha (testado com essas injeções; todas recusadas, caem no padrão `/root`).
+
 ## [3.60.1] — 2026-10-18
 
 ### Corrigido — loop autônomo continuava "invisível" depois de Voltar, sem botão Parar

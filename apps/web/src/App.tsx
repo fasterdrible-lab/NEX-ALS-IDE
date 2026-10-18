@@ -30,6 +30,7 @@ import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import VpsList from './pages/VpsList'
 import ProjectsList from './pages/ProjectsList'
+import ProjectHubPage from './pages/ProjectHubPage'
 import Launcher from './pages/Launcher'
 import SettingsPage from './pages/SettingsPage'
 import Diagnostics from './pages/Diagnostics'
@@ -77,6 +78,7 @@ function AppRoutes() {
         <Route index element={<Dashboard />} />
         <Route path="vps" element={<VpsList />} />
         <Route path="projects" element={<ProjectsList />} />
+        <Route path="projects/:projectId" element={<ProjectHubPage />} />
         <Route path="launcher" element={<Launcher />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="diagnostics" element={<Diagnostics />} />

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import Editor, { type OnMount, type Monaco } from '@monaco-editor/react'
+import { safeRemotePath } from '../lib/remote-path'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -197,6 +198,9 @@ function analyzeManifest(name: string, content: string): KbSuggestion | null {
 export default function IDEPage() {
   const { vpsId, vpsName } = useParams<{ vpsId:string; vpsName:string }>()
   const navigate = useNavigate()
+  // Raiz remota da árvore: `?path=` (aberto a partir de um projeto) ou /root. Fixa por montagem.
+  const [searchParams] = useSearchParams()
+  const remoteRoot = useMemo(() => safeRemotePath(searchParams.get('path')) ?? '/root', []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // IDE-20: modo local (sem VPS) quando rota é /ide/local
   const isLocal = !vpsId
@@ -361,7 +365,7 @@ export default function IDEPage() {
   const [loadingFolders, setLoadingFolders]  = useState<Set<string>>(new Set())
   const [treeConnecting, setTreeConnecting]  = useState(true)
   const [treeError,    setTreeError]    = useState('')
-  const [activeDir,    setActiveDir]    = useState('/root')
+  const [activeDir,    setActiveDir]    = useState(remoteRoot)
 
   // new file/folder inline
   const [newFileMode, setNewFileMode] = useState(false)
@@ -514,7 +518,7 @@ export default function IDEPage() {
     ipc.sftp.open(vpsId).then(async r => {
       if (!r.success || !r.sessionId) { setTreeError(r.error ?? 'Falha SFTP'); setTreeConnecting(false); return }
       sid = r.sessionId; sftpSession.current = sid
-      const r2 = await ipc.sftp.readdir(sid, '/root')
+      const r2 = await ipc.sftp.readdir(sid, remoteRoot)
       if (r2.success) { setRootEntries(r2.entries); setTreeConnecting(false) }
       else { setTreeError(r2.error ?? 'Erro SFTP'); setTreeConnecting(false) }
     })
@@ -528,7 +532,7 @@ export default function IDEPage() {
   // IDE-14: auto-refresh da tree a cada 30s
   useEffect(() => {
     const id = setInterval(async () => {
-      const root = isLocal ? localRootRef.current : '/root'
+      const root = isLocal ? localRootRef.current : remoteRoot
       if (!root) return
       const r = await fsReaddir(root)
       if (r.success) setRootEntries(r.entries)
@@ -546,7 +550,7 @@ export default function IDEPage() {
   const reloadDir = useCallback(async (dirPath:string) => {
     const r = await fsReaddir(dirPath)
     if (!r.success) return
-    const root = isLocal ? localRootRef.current : '/root'
+    const root = isLocal ? localRootRef.current : remoteRoot
     if (dirPath === root) setRootEntries(r.entries)
     else setFolderChildren(m => new Map([...m, [dirPath, r.entries]]))
   }, [fsReaddir, isLocal])
@@ -868,7 +872,7 @@ export default function IDEPage() {
       showToast(true, `${file.name} salvo`)
       // IDE-14: refresh da pasta após salvar
       const parentDir = filePath.split('/').slice(0,-1).join('/')
-      reloadDir(parentDir || (isLocal ? localRootRef.current : '/root')).catch(() => {})
+      reloadDir(parentDir || (isLocal ? localRootRef.current : remoteRoot)).catch(() => {})
     } else showToast(false, r.error??'Erro ao salvar')
   }
 
@@ -911,14 +915,14 @@ export default function IDEPage() {
       showToast(true, `"${e.name}" excluído`)
       setOpenFiles(f=>f.filter(fl=>fl.path!==e.path))
       if (activeTab===e.path) setActiveTab(null)
-      const parentDir = e.path.split('/').slice(0,-1).join('/') || (isLocal ? localRootRef.current : '/root')
+      const parentDir = e.path.split('/').slice(0,-1).join('/') || (isLocal ? localRootRef.current : remoteRoot)
       await reloadDir(parentDir)
     } else showToast(false, r.error??'Erro ao excluir')
   }
 
   const handleRename = async () => {
     if (!renaming||!renameVal.trim()) return
-    const parentDir = renaming.path.split('/').slice(0,-1).join('/') || (isLocal ? localRootRef.current : '/root')
+    const parentDir = renaming.path.split('/').slice(0,-1).join('/') || (isLocal ? localRootRef.current : remoteRoot)
     const newPath = parentDir + '/' + renameVal.trim()
     const r = await fsRename(renaming.path, newPath)
     if (r.success) {
@@ -960,7 +964,7 @@ export default function IDEPage() {
 
   const handleDuplicate = async (entry:FileEntry) => {
     if (!vpsId) return
-    const dir = entry.path.split('/').slice(0,-1).join('/') || '/root'
+    const dir = entry.path.split('/').slice(0,-1).join('/') || remoteRoot
     const ext = entry.name.includes('.') ? '.' + entry.name.split('.').pop() : ''
     const base = entry.name.replace(/\.[^.]+$/, '')
     const newName = `${base}_copia${ext}`
@@ -1358,7 +1362,7 @@ export default function IDEPage() {
   // Aplica todos os arquivos do modal de revisão de alterações
   const handleApplyAll = async () => {
     if (!applyAllModal) return
-    const root = isLocal ? localRootRef.current : (activeDir || (vpsId ? '/root' : null))
+    const root = isLocal ? localRootRef.current : (activeDir || (vpsId ? remoteRoot : null))
     if (!root) { showToast(false, 'Abra uma pasta ou arquivo antes de aplicar alterações'); return }
     setApplyAllLoading(true)
     let ok = 0
@@ -1501,7 +1505,7 @@ export default function IDEPage() {
     resumeMessages?: Array<{role: string; content: unknown}>
   ) => {
     if (!aiProviderName) throw new Error('Configure um provedor de IA nas Configurações.')
-    const root = isLocal ? (localRootRef.current ?? '') : (activeDir ?? (vpsId ? '/root' : ''))
+    const root = isLocal ? (localRootRef.current ?? '') : (activeDir ?? (vpsId ? remoteRoot : ''))
 
     // Abre sessão SFTP uma vez para todo o loop (modo VPS)
     let sftpSid: string | null = null
@@ -1944,7 +1948,7 @@ export default function IDEPage() {
                     className="p-1 rounded text-slate-700 hover:text-slate-300 hover:bg-slate-700"><FilePlus size={11}/></button>
                   <button title="Nova pasta" onClick={()=>{setNewDirMode(true);setNewDirName('');setNewFileMode(false)}}
                     className="p-1 rounded text-slate-700 hover:text-slate-300 hover:bg-slate-700"><FolderPlus size={11}/></button>
-                  <button title="Atualizar" onClick={()=>reloadDir('/root')}
+                  <button title="Atualizar" onClick={()=>reloadDir(remoteRoot)}
                     className="p-1 rounded text-slate-700 hover:text-slate-300 hover:bg-slate-700"><RefreshCw size={11}/></button>
                 </div>
               </div>
@@ -3209,7 +3213,7 @@ export default function IDEPage() {
           {!isLocal && vpsId && (
             <button
               onClick={() => {
-                const path = encodeURIComponent(activeDir || '/root')
+                const path = encodeURIComponent(activeDir || remoteRoot)
                 const name = encodeURIComponent(vpsName ?? '')
                 navigate(`/workspace?vpsId=${encodeURIComponent(vpsId)}&path=${path}&name=${name}`)
               }}

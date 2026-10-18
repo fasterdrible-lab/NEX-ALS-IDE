@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { safeRemotePath } from '../lib/remote-path'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -12,6 +13,9 @@ export default function TerminalPage() {
   const { vpsId } = useParams<{ vpsId: string }>()
   const { vpsName } = useParams<{ vpsName: string }>()
   const navigate = useNavigate()
+  // `?cwd=` quando aberto a partir de um projeto — vira `cd '<cwd>'` logo após conectar.
+  const [searchParams] = useSearchParams()
+  const cwd = safeRemotePath(searchParams.get('cwd'))
 
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -73,6 +77,8 @@ export default function TerminalPage() {
 
       fitAddon.fit()
       ipc.terminal.resize(result.sessionId, term.cols, term.rows)
+      // safeRemotePath não deixa passar aspas simples, então a citação não quebra.
+      if (cwd) ipc.terminal.input(result.sessionId, `cd '${cwd}' && clear\n`)
 
       // recebe dados do SSH → escreve no terminal
       unsubData = window.electron.on('terminal:data', (payload: unknown) => {

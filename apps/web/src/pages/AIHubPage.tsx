@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, Plus, MessageSquare, Star, StarOff, Trash2, Send,
   Loader2, Bot, ChevronRight, Pencil, Check, X,
@@ -38,7 +38,10 @@ type RightTab = 'context' | 'memory'
 
 export default function AIHubPage() {
   const navigate = useNavigate()
-  const [mode, setMode] = useState<'chat' | 'agent'>('chat')
+  // `?mode=agent&project=<id>`: aberto a partir da página de um projeto.
+  const [searchParams] = useSearchParams()
+  const initialProjectId = searchParams.get('project') ?? undefined
+  const [mode, setMode] = useState<'chat' | 'agent'>(searchParams.get('mode') === 'agent' ? 'agent' : 'chat')
   const [convList, setConvList] = useState<Conversation[]>([])
   const [activeConv, setActiveConv] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -261,7 +264,7 @@ export default function AIHubPage() {
       </div>
 
       {mode === 'agent' ? (
-        <HermesAgentPanel />
+        <HermesAgentPanel initialProjectId={initialProjectId} />
       ) : (
       <div className="flex flex-1 overflow-hidden">
       {/* Sidebar esquerda */}

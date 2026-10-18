@@ -282,8 +282,13 @@ Ferramentas fullscreen (sem sidebar):
   /ide/local                   ← IDEPage (local)
   /incident/:vpsId/:vpsName    ← IncidentModePage
   /deploy/:vpsId/:vpsName      ← DeployAssistantPage
-  /terminal/:vpsId/:vpsName    ← TerminalPage
-  /explorer/:vpsId/:vpsName    ← FileExplorerPage
+  /terminal/:vpsId/:vpsName    ← TerminalPage        (?cwd=<pasta> → cd na pasta ao conectar)
+  /explorer/:vpsId/:vpsName    ← FileExplorerPage    (?path=<pasta> → abre nela em vez de /root)
+  (IDEPage aceita ?path=<pasta> como raiz da árvore; AIHubPage aceita ?mode=agent&project=<id>)
+  /projects/:projectId         ← ProjectHubPage (dentro do Layout) — atalhos Agent/IDE/Explorer/
+                                 Terminal/VS Code já na pasta do projeto + resumo Hermes/tarefas/git.
+                                 Caminhos da URL passam por safeRemotePath() (lib/remote-path.ts):
+                                 absoluto, sem `..`, aspas ou caracteres de controle.
 ```
 
 ## Fingerprint SSH (v2.5.0+)

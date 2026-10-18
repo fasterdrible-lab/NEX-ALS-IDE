@@ -150,9 +150,9 @@ function buildApprovalFollowUp(a: PendingApproval, r: { executed: boolean; succe
     + `Resultado (${r.success ? 'sucesso' : 'falhou'}):\n${r.output.slice(-3000)}\n\nContinue a partir daqui.`
 }
 
-export default function HermesAgentPanel() {
+export default function HermesAgentPanel({ initialProjectId }: { initialProjectId?: string } = {}) {
   const [projects, setProjects] = useState<Project[]>([])
-  const [projectId, setProjectId] = useState('')
+  const [projectId, setProjectId] = useState(initialProjectId ?? '')
   const [agentInfo, setAgentInfo] = useState<HermesProjectAgentInfo | null>(null)
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [chatInput, setChatInput] = useState('')
