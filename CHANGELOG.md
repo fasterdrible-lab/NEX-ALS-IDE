@@ -1,5 +1,15 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.59.1] — 2026-10-17
+
+### Corrigido — app instalado mostrava 0 VPS / 0 projetos (abria o banco errado)
+
+**Sintoma reportado:** após instalar a 3.59.0, Dashboard com "0 VPS cadastradas". Dados do usuário intactos em `%APPDATA%\@cwm\desktop\cwm.db` (3 VPS) — o app simplesmente não abria esse arquivo.
+
+**Causa raiz (introduzida na 3.58.0):** `hermes.service.ts` passou a importar `toolExecutor` (auditoria do comando aprovado). Esse módulo instancia `new ToolExecutor()` no import, e a classe criava o PrismaClient num **campo** (`private db = getPrismaClient()`). Como `main.ts` importa `@cwm/core` antes de `setDatabasePath()`, o PrismaClient nascia sem `DATABASE_URL` e o Prisma caía no `.env` de desenvolvimento empacotado em `@cwm/db` → `resources/app/node_modules/@cwm/db/prisma/cwm-dev.db` (vazio). Nada era escrito no banco real.
+
+**Fix — `packages/core/src/ai/hub/tool-executor.ts`:** `db` virou getter (`private get db() { return getPrismaClient() }`), o mesmo padrão dos demais serviços. Era a única instância criada em nível de módulo no core. **Verificado:** importar `@cwm/core` sem `DATABASE_URL` → PrismaClient não é criado na versão corrigida; o mesmo teste contra o core da 3.59.0 instalada → criado (reproduz o bug).
+
 ## [3.59.0] — 2026-10-17
 
 ### Adicionado — Hermes coordena, Claude Code implementa (usa a conta Claude do usuário)

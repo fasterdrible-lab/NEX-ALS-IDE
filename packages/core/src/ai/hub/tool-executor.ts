@@ -34,7 +34,10 @@ export interface ExecutionContext {
 export type ConfirmationHandler = (toolName: string, inputSummary: string) => Promise<boolean>
 
 export class ToolExecutor {
-  private db = getPrismaClient()
+  // Getter (não campo): `toolExecutor` é instanciado no import do módulo, que acontece antes do
+  // main.ts definir DATABASE_URL. Um campo criaria o PrismaClient cedo demais, apontando para o
+  // .env de dev empacotado em @cwm/db (cwm-dev.db) em vez do banco do usuário — bug da v3.58.0/3.59.0.
+  private get db() { return getPrismaClient() }
   private confirmationHandler: ConfirmationHandler | null = null
 
   /** Injeta o handler de confirmação (chamado pelo IPC handler no main process). */
