@@ -1,5 +1,20 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.59.2] — 2026-10-17
+
+### Corrigido — tela Hermes: "Could not convert value … of the field `lastSeen` to type `DateTime`"
+
+**Sintoma reportado:** ao abrir Lançador → Hermes (VPS-1), status "Desconhecido" e `Invalid this.db.hermesInstance.findUnique() … Inconsistent column data: Could not convert value "1786651509353" of the field lastSeen to type DateTime`.
+
+**Causa raiz (desde a FASE 1, v3.52.0):** `hermes_instances` e `hermes_project_agents` são criadas por DDL raw em `handlers.ts` com as colunas de data como `TEXT`. O Prisma grava `DateTime` no SQLite como inteiro (ms); numa coluna de afinidade TEXT o SQLite converte para o texto `'1786651509353'`, que o Prisma não consegue ler de volta. A primeira escrita funcionava; toda leitura posterior falhava. Nunca tinha aparecido porque a tela nunca foi usada contra uma VPS real com o banco já populado. As demais tabelas usam `DATETIME` (afinidade NUMERIC) e guardam inteiro.
+
+**Fix — `apps/desktop/src/ipc/handlers.ts`:**
+- DDL das duas tabelas com `DATETIME … DEFAULT CURRENT_TIMESTAMP`, igual ao resto do schema.
+- `migrateHermesDateColumns()`: em instalações existentes, se alguma coluna de data ainda for `TEXT` (via `PRAGMA table_info`), reconstrói a tabela numa transação (rename → create → `INSERT … SELECT` convertendo texto numérico para inteiro e `datetime('now')` para ms → drop), preservando os dados.
+- Criação, `ALTER`s incrementais, migração e o recovery de sessões do boot agora rodam **em sequência** (antes eram `void` paralelos sem ordem garantida — o recovery podia ler a tabela no meio da migração).
+
+**Verificado numa cópia do banco real do usuário, com o Prisma:** antes → exatamente o erro reportado; depois → leitura ok com as datas originais preservadas (13/08), escrita/leitura nova ok, `typeof(lastSeen)` = `integer`.
+
 ## [3.59.1] — 2026-10-17
 
 ### Corrigido — app instalado mostrava 0 VPS / 0 projetos (abria o banco errado)
