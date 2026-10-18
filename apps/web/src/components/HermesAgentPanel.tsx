@@ -347,7 +347,12 @@ export default function HermesAgentPanel() {
     currentTaskRef.current = task.id
     for (let attempt = 0; attempt < 2; attempt++) {
       const { text, ok } = await sendAndWait(prompt)
-      if (!ok) return 'error'
+      if (!ok) {
+        // Execução não aconteceu ou caiu (ex.: barrada por já haver outra na sessão): a tarefa
+        // volta para Pendente em vez de ficar "Em andamento" sem nada rodando.
+        await ipc.tasks.update(task.id, { status: 'TODO' }).catch(() => {})
+        return 'error'
+      }
       // Comando bloqueado aguardando o usuário: a tarefa espera a decisão (resolveApproval
       // reenvia a tarefa com o desfecho e lê a tag dali) em vez de gastar o lembrete.
       if (approvalsRef.current.some(a => a.taskId === task.id)) return 'decision'
@@ -439,11 +444,23 @@ export default function HermesAgentPanel() {
         guard++
         if (guard > Math.max(cap, todo.length * 3)) break
 
-        const parallelizable = todo.filter(t => t.parallelizable)
-        if (parallelizable.length > 0) {
-          await Promise.all(parallelizable.slice(0, PARALLEL_CAP).map(t => ipc.tasks.update(t.id, { status: 'IN_PROGRESS' }).catch(() => {})))
+        // Paralelo só para tarefas paralelizáveis CONSECUTIVAS no início da fila, na ordem do plano.
+        // Antes pegava todas as paralelizáveis da lista inteira — rodava a 05/06/07/21 antes da
+        // 03/04, sem a fundação que elas pressupõem.
+        const leading: AgentTask[] = []
+        for (const t of todo) { if (!t.parallelizable) break; leading.push(t) }
+        // Worktree nasce do último commit: com trabalho não commitado na pasta principal, as cópias
+        // paralelas não teriam esse trabalho. Nesse caso roda em sequência (que vê o diretório real).
+        const clean = leading.length > 1 && agentInfo
+          ? await ipc.git.status(agentInfo.vpsId, agentInfo.workspace)
+              .then(s => s.isRepo && s.staged.length === 0 && s.unstaged.length === 0 && s.untracked.length === 0)
+              .catch(() => false)
+          : false
+        if (leading.length > 1 && clean) {
+          const batch = leading.slice(0, PARALLEL_CAP)
+          await Promise.all(batch.map(t => ipc.tasks.update(t.id, { status: 'IN_PROGRESS' }).catch(() => {})))
           await loadTasks()
-          await runParallelBatch(parallelizable)
+          await runParallelBatch(batch)
           await loadTasks()
           continue
         }
@@ -459,7 +476,7 @@ export default function HermesAgentPanel() {
       setLooping(false)
       void loadStatus(projectId)
     }
-  }, [looping, projectId, executeTask, runParallelBatch, loadTasks, loadStatus])
+  }, [looping, projectId, agentInfo, executeTask, runParallelBatch, loadTasks, loadStatus])
 
   const runNextTaskOnce = useCallback(async () => {
     if (looping) return

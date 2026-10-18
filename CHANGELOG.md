@@ -1,5 +1,17 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.59.6] — 2026-10-17
+
+### Corrigido — loop autônomo rodava tarefas paralelas fora de ordem e sobre a base errada
+
+**Observado no MUSA AI (VPS-1):** com as Tarefas 01–04 por concluir, o loop disparou 05, 06, 07 e 21 em paralelo. Os worktrees nasceram do último commit (`1075b86`, teste `hello.py`) — o trabalho das Tarefas 01/02 (fundação do monorepo) não estava commitado, então as 4 execuções trabalhavam sem a base que pressupõem e gastavam cota do Claude Code num trabalho que daria conflito no merge. As 4 foram encerradas na VPS (worktrees preservados) e as tarefas devolvidas a Pendente.
+
+**Causa 1 — ordem:** `runLoop` pegava **todas** as tarefas `parallelizable` da fila inteira, à frente das sequenciais anteriores. Agora só agrupa paralelizáveis **consecutivas no início da fila**, na ordem do plano; a primeira não paralelizável é sempre feita antes.
+
+**Causa 2 — base:** `git worktree add` parte do HEAD. Agora o loop checa `git status` da pasta principal antes do lote: com qualquer alteração não commitada, roda em sequência (que vê o diretório real) em vez de criar worktrees.
+
+**Causa 3 — tarefa "Em andamento" fantasma:** quando a execução da tarefa não acontece (ex.: barrada pela trava de sessão da 3.59.5 — que funcionou e impediu uma segunda execução simultânea), a tarefa volta para Pendente em vez de ficar "Em andamento" sem nada rodando.
+
 ## [3.59.5] — 2026-10-17
 
 ### Corrigido — painel Agent "esquecia" a execução em andamento e disparava uma segunda na mesma sessão

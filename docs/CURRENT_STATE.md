@@ -1,7 +1,7 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-17
-**Versão:** 3.59.5
+**Versão:** 3.59.6
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
 
 ## Hermes delega a implementação ao Claude Code (v3.59.0)
