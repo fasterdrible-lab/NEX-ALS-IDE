@@ -226,6 +226,22 @@ Ver seção "Hermes Automação (FASE 6)" em `docs/ARCHITECTURE.md` para o detal
 | Execução não-assistida sempre bate no teto de 20min | Objetivo complexo demais para rodar sem supervisão, ou o Hermes está preso num loop interno | Reduzir o escopo do objetivo agendado, ou rodar manualmente via AI Hub (Agent Mode) primeiro para calibrar o tempo esperado |
 | Job Hermes falha com "sem projeto associado" | Job criado/editado sem `projectId` (ex.: via `jobs:update` direto, fora da UI) | Recriar o job pela tela de Automações, que valida o projeto obrigatório para `agentName: 'hermes'` |
 
+## Delegação ao Claude Code (v3.59.0)
+
+**Por quê:** o modelo do Hermes pode ser gratuito/barato (ex.: `poolside/laguna-s-2.1:free`) e o código sai do **Claude Code CLI**, logado com a conta Claude do usuário **dentro da VPS** (`claude auth login` no Terminal SSH — o NEX nunca vê token). Usar a assinatura Claude diretamente como modelo do Hermes não é uma opção: exigiria plugar credencial de assinatura numa ferramenta de terceiros; para Claude como modelo do Hermes, só com **API key** da Anthropic (cobrança por uso).
+
+**Como:** se `claude` existe no PATH da VPS, o NEX passa `-s claude-code` (skill nativa do Hermes) e anexa ao objetivo uma instrução fixa de delegação (ver `CLAUDE_DELEGATION_NOTE` em `hermes-client.ts`). Fluxo real observado: Hermes confere `which claude` → `claude -p "<tarefa>" --allowedTools … --max-turns 30` → revisa `git diff` → roda os testes ele mesmo → resposta.
+
+**Governança:** comandos que o Claude Code roda **por dentro** não passam pelo bloqueio do Hermes (ele só vê o `claude -p`). Por isso a VPS precisa de `/etc/claude-code/managed-settings.json` com lista `deny` + `disableBypassPermissionsMode: "disable"` — precedência máxima, não sobrescrevível por flag. Configurado na VPS-1 (44 regras). Lista de bloqueio é sempre incompleta por natureza (ex.: `find -delete` passava até ser adicionado) — é uma camada a mais, não garantia absoluta. **Vale para todo uso do Claude Code naquela VPS**, inclusive manual; para remover: `rm /etc/claude-code/managed-settings.json`.
+
+**Limites:** o uso conta na cota da assinatura (Pro: janelas de 5h) — projeto autônomo grande pode bater o limite; a instrução manda o Hermes fazer sozinho nesse caso. Cada `claude -p` precisa caber em 600s (teto foreground do terminal do Hermes, `TERMINAL_MAX_FOREGROUND_TIMEOUT`).
+
+| Sintoma | Causa provável | Verificação |
+|---|---|---|
+| Hermes diz que o Claude Code falhou com `401 OAuth access token has expired` | Login do Claude Code na VPS expirou (`claude auth status` ainda mostra a conta) | `claude auth login` no Terminal SSH da VPS |
+| Hermes não delega, programa sozinho | `claude` fora do PATH usado pelo NEX (`PATH_PREFIX`), ou o modelo ignorou a instrução | `command -v claude` via SSH não-interativo; conferir na faixa Atividade se houve `terminal — claude -p …` |
+| Claude Code recusa comando legítimo | Caiu numa regra `deny` do managed-settings | Ajustar `/etc/claude-code/managed-settings.json` na VPS |
+
 ## FASE A — o que foi entregue (v3.58.0)
 
 Ver "Hermes Governança + Eventos estruturados" em `docs/ARCHITECTURE.md`. Resumo funcional:

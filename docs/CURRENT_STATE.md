@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-17
-**Versão:** 3.58.0
+**Versão:** 3.59.0
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Hermes delega a implementação ao Claude Code (v3.59.0)
+
+Com Claude Code instalado e logado na VPS, o Hermes (modelo gratuito) coordena e delega o código a `claude -p` — usa a conta Claude do usuário. Governança dupla: Autorizar/Negar para o Hermes + `/etc/claude-code/managed-settings.json` (44 regras deny, bypass desativado) para o Claude Code. Validado ponta a ponta na VPS-1 (`/root/teste-hermes`, 108s, testes passando, commit criado).
 
 ## Hermes FASE A — governança + activity feed (v3.58.0)
 

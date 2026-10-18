@@ -1202,3 +1202,16 @@ Usuário clica Autorizar/Negar (HermesAgentPanel)
 | `hermes:approval:resolve` | admin | `{ approvalId, approve }` → `{ executed, success, output, command }` |
 
 Chunks novos em `hermes:agent:chunk`: `activity` (`{kind:'init'|'tool'|'tool_error', tool, summary}`) e `approval_request` (`{id, tool, command, reason, executable}`).
+
+## Hermes → Claude Code (v3.59.0+)
+
+```
+HermesClient.streamObjective()
+  probe (mesmo exec SSH de antes): echo $HOME; mkdir -p ~/.hermes-nex; command -v claude && echo __NEX_HAS_CLAUDE__
+  hasClaude → arquivo do objetivo = objetivo + CLAUDE_DELEGATION_NOTE
+            → hermes chat … -s claude-code …
+  Hermes (modelo barato) ──terminal──▶ claude -p "<tarefa>" --allowedTools … --max-turns 30   (timeout 600s)
+                                          └─ /etc/claude-code/managed-settings.json (deny list, bypass off)
+```
+
+Duas camadas de governança: o bloqueio de dangerous do próprio Hermes (→ Autorizar/Negar no NEX, FASE A) para o que **o Hermes** executa, e o managed-settings para o que **o Claude Code** executa por dentro. Watchdog de inatividade do NEX: 900s.

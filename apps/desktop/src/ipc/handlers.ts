@@ -454,7 +454,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   /**
    * Fiação comum de streaming Hermes (usada por hermes:agent:send e hermes:parallel:start):
    * registra em hermesStreams, repassa data/close/error como hermes:agent:chunk, aplica watchdog
-   * de inatividade (300s — execuções agenticas podem ser bem mais lentas que uma resposta simples).
+   * de inatividade (900s — com delegação ao Claude Code, um `claude -p` pode trabalhar vários minutos sem emitir evento).
    * Eventos estruturados do stream-json viram chunks `activity` (feed) e `approval_request`
    * (comando bloqueado → Autorizar/Negar); o `result` final decide sucesso/erro.
    */
@@ -519,13 +519,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
     watchdog = setInterval(() => {
       if (doneSent) { clearInterval(watchdog); return }
-      if (Date.now() - lastChunkAt > 300_000) {
+      if (Date.now() - lastChunkAt > 900_000) {
         clearInterval(watchdog)
         stream.kill()
-        finish(false, 'Timeout: Hermes não respondeu em 300s.')
+        finish(false, 'Timeout: Hermes não respondeu em 900s.')
         try {
           targetWin?.webContents.send('hermes:agent:chunk', {
-            streamId, type: 'error', error: '⏱ Timeout: Hermes não respondeu em 300s. Execução encerrada.',
+            streamId, type: 'error', error: '⏱ Timeout: Hermes não respondeu em 900s. Execução encerrada.',
           })
         } catch { /* janela fechada */ }
       }

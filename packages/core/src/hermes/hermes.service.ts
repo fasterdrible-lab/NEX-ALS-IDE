@@ -260,14 +260,14 @@ export class HermesService {
    * FASE 6 — execução não-assistida: roda um objetivo até o fim sem depender de uma janela do
    * renderer consumindo o stream (usado pelo cron/JobExecutor). Reaproveita `streamObjective`
    * (mesma marcação de status/resume da FASE 2) e bufferiza a saída completa aqui mesmo, com o
-   * mesmo watchdog de inatividade (300s) do `wireHermesStream` do handlers.ts, mais um teto duro
-   * (padrão 20min) — sem UI para cancelar manualmente, um cron travado não pode rodar pra sempre.
+   * mesmo watchdog de inatividade (900s) do `wireHermesStream` do handlers.ts, mais um teto duro
+   * (padrão 45min) — sem UI para cancelar manualmente, um cron travado não pode rodar pra sempre.
    */
   async runObjectiveUnattended(
     projectId: string, objective: string, opts?: { hardCapMs?: number }
   ): Promise<{ success: boolean; output: string }> {
     const { stream } = await this.streamObjective(projectId, objective)
-    const hardCapMs = opts?.hardCapMs ?? 20 * 60_000
+    const hardCapMs = opts?.hardCapMs ?? 45 * 60_000
 
     return new Promise((resolve) => {
       let buf = ''
@@ -289,9 +289,9 @@ export class HermesService {
       }
 
       const watchdog = setInterval(() => {
-        if (Date.now() - lastChunkAt > 300_000) {
+        if (Date.now() - lastChunkAt > 900_000) {
           stream.kill()
-          finish(false, 'Timeout: Hermes não respondeu em 300s (execução não-assistida).')
+          finish(false, 'Timeout: Hermes não respondeu em 900s (execução não-assistida).')
         }
       }, 15_000)
       const hardCap = setTimeout(() => {

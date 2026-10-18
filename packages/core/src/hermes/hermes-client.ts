@@ -22,6 +22,26 @@ const NEX_PID_FILE = `${NEX_LOG_DIR}/gateway.pid`
 
 const INSTALL_URL = 'https://hermes-agent.nousresearch.com/install.sh'
 
+const HAS_CLAUDE_MARK = '__NEX_HAS_CLAUDE__'
+
+/**
+ * Quando o Claude Code CLI existe na VPS (logado na conta do usuário, dentro da própria VPS),
+ * o Hermes vira coordenador e delega a implementação a `claude -p` — o modelo do Hermes pode
+ * ser um gratuito/barato, e o código sai do Claude Code com a assinatura do usuário. A
+ * governança do lado do Claude Code fica em /etc/claude-code/managed-settings.json (deny list +
+ * bypass desativado), que o Hermes não consegue sobrescrever.
+ */
+const CLAUDE_DELEGATION_NOTE = [
+  '[Instrução do NEX — delegação de código]',
+  'O Claude Code CLI está disponível nesta VPS. Você COORDENA; o Claude Code IMPLEMENTA.',
+  'Para escrever, alterar ou corrigir código, use a skill claude-code em print mode, no diretório do projeto:',
+  '  claude -p "<tarefa clara e completa>" --allowedTools "Read,Edit,Write,Bash" --max-turns 30',
+  'com timeout=600 na chamada do terminal (teto do modo foreground). Divida trabalho grande em várias chamadas menores,',
+  'cada uma cabendo em 10 minutos. Depois revise o resultado (git diff) e rode os testes/build você mesmo.',
+  'Nunca use --dangerously-skip-permissions (está desativado). Se o Claude Code recusar um comando por política,',
+  'não contorne. Se ele falhar por autenticação ou limite de uso, faça a alteração você mesmo e avise no final.',
+].join('\n')
+
 export class HermesClient {
   constructor(private readonly terminal: TerminalService, private readonly sftp: SftpService) {}
 
@@ -125,25 +145,28 @@ export class HermesClient {
     vpsId: string,
     opts: { workspace: string; objective: string; resume: boolean }
   ): Promise<HermesEventStream> {
-    const homeOut = await this.run(vpsId, 'echo $HOME')
-    const home = homeOut.trim() || '~'
+    // Mesmo round-trip: $HOME, cria o diretório e detecta o Claude Code CLI na VPS.
+    const probe = (await this.run(
+      vpsId, `echo $HOME; mkdir -p "$HOME/.hermes-nex"; command -v claude >/dev/null 2>&1 && echo ${HAS_CLAUDE_MARK}`
+    )).split('\n').map(l => l.trim())
+    const home = probe[0] || '~'
+    const hasClaude = probe.includes(HAS_CLAUDE_MARK)
     const remoteDir = `${home}/.hermes-nex`
     const remoteFile = `${remoteDir}/objective_${crypto.randomUUID()}.txt`
 
-    await this.run(vpsId, `mkdir -p ${remoteDir}`)
-
     const session = await this.sftp.openSession(vpsId)
     try {
-      await session.writeFile(remoteFile, opts.objective)
+      await session.writeFile(remoteFile, hasClaude ? `${opts.objective}\n\n${CLAUDE_DELEGATION_NOTE}` : opts.objective)
     } finally {
       session.destroy()
     }
 
     const resumeFlag = opts.resume ? `--resume latest --in "${opts.workspace}"` : ''
+    const skillFlag = hasClaude ? '-s claude-code' : ''
     const cmd = [
       PATH_PREFIX,
       `cd "${opts.workspace}" &&`,
-      `hermes chat -Q --format stream-json --query-file "${remoteFile}" ${resumeFlag} </dev/null;`,
+      `hermes chat -Q --format stream-json ${skillFlag} --query-file "${remoteFile}" ${resumeFlag} </dev/null;`,
       `rm -f "${remoteFile}"`,
     ].join(' ')
 

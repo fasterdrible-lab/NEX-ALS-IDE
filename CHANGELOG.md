@@ -1,5 +1,21 @@
 # CHANGELOG — NEX-ALS IDE
 
+## [3.59.0] — 2026-10-17
+
+### Adicionado — Hermes coordena, Claude Code implementa (usa a conta Claude do usuário)
+
+Pedido do usuário: usar a conta Claude em vez do modelo gratuito do Hermes. Plugar a assinatura Pro como "cérebro" do Hermes não é permitido (credencial de assinatura em ferramenta de terceiros; e a regra do projeto proíbe o NEX de tocar em token Claude). Solução: o Hermes (modelo gratuito) só coordena e **delega a implementação ao Claude Code CLI** já instalado e logado na própria VPS — o código sai do Claude Code, com a assinatura do usuário, do jeito previsto pelo produto.
+
+**`packages/core/src/hermes/hermes-client.ts` (`streamObjective`):** o round-trip SSH que já existia (`echo $HOME` + `mkdir`) agora também detecta `command -v claude`. Se existir: pré-carrega a skill nativa do Hermes `-s claude-code` e anexa ao objetivo uma instrução fixa (`CLAUDE_DELEGATION_NOTE`): coordenar e delegar via `claude -p … --allowedTools "Read,Edit,Write,Bash" --max-turns 30`, `timeout=600` (teto foreground do terminal do Hermes — acima disso vira background e não volta num one-shot), dividir trabalho grande, revisar `git diff` e rodar testes por conta própria, nunca `--dangerously-skip-permissions`, e fazer sozinho se o Claude Code falhar por autenticação/limite. Sem `claude` na VPS, nada muda.
+
+**Watchdogs:** inatividade 300s → 900s (`wireHermesStream` e `runObjectiveUnattended`) — um `claude -p` pode trabalhar vários minutos sem o Hermes emitir evento. Teto da execução não-assistida 20 → 45min.
+
+**Governança no lado do Claude Code (VPS-1, operacional):** `/etc/claude-code/managed-settings.json` (precedência máxima — nem o Hermes nem flags sobrescrevem) com 44 regras `deny` (rm -rf/-r, find -delete/-exec rm, xargs rm, git reset --hard/push --force/clean -f, docker rm/prune/volume rm/compose down -v, dropdb, mkfs, dd, shutdown/reboot, systemctl stop, iptables/ufw/nft, chmod -R 777, kill -9/pkill…) e `disableBypassPermissionsMode: "disable"`. Verificado: `rm -rf` negado com `--allowedTools Bash` **e** com `--dangerously-skip-permissions`; `cd x && rm -rf y` negado (o Claude Code analisa cada parte); `find -delete` passava → adicionado à lista e retestado; comandos seguros funcionam.
+
+**Teste ponta a ponta (VPS-1):** objetivo "hello.py + teste unittest + commit", enviado exatamente como o NEX monta → Hermes conferiu o `claude`, delegou com `claude -p`, revisou `git log/diff`, rodou os testes ele mesmo (3 passaram) e entregou o commit. 108s.
+
+`pnpm typecheck` limpo.
+
 ## [3.58.0] — 2026-10-17
 
 ### Adicionado — Hermes FASE A: governança (Autorizar/Negar) + activity feed estruturado
