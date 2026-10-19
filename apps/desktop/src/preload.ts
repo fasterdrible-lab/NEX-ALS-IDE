@@ -31,6 +31,7 @@ const ALLOWED_CHANNELS = new Set([
   'ai:conv:pin', 'ai:conv:delete', 'ai:conv:messages', 'ai:conv:addMsg',
   'window:openIde', 'window:openIncident', 'window:openDeploy',
   'window:info', 'window:closeSelf', 'window:focusMain',
+  'local:openFolderWindow', 'local:recent:list', 'local:recent:open', 'local:recent:remove',
   'memory:list', 'memory:save', 'memory:delete', 'memory:build',
   'tool:confirmRequest', 'tool:confirmResponse',
   'notifications:getEnabled', 'notifications:setEnabled',

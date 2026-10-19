@@ -81,6 +81,13 @@ Usar **só a VPS-1** — a VPS-2 é produção. Marcar cada item ao passar; se a
 - [ ] Na IDE independente, ir para outra tela (ex.: Workspace) e voltar → volta para a IDE, não fecha a janela
 - [ ] "Abrir pasta local" a partir de uma janela independente → o seletor abre nela
 
+**9. Projetos locais em janelas próprias (v3.71.0)**
+- [ ] Dashboard → **Abrir pasta…** → pasta A: abre numa janela nova com o título `A — Zeus IDE`; repetir com a pasta B → segunda janela; as duas aparecem separadas na barra de tarefas
+- [ ] Abrir de novo a pasta A (recente ou Ctrl+O) → só traz a janela de A para frente, sem duplicar
+- [ ] Projetos locais mostra A e B com "aberta"; fechar a janela de B → B perde "aberta" ao voltar ao Dashboard
+- [ ] Com A aberta, **Arquivo → Sair** e reabrir o Zeus → A volta aberta; fechar todas as janelas no X (A por último) e reabrir → A volta
+- [ ] Dentro da IDE de A: **Abrir pasta…** no topo abre outra pasta em outra janela
+
 ## Concluídas recentemente (v3.56.0 → v3.57.0)
 
 - [x] **Hermes Automação — FASE 6 (v3.57.0)** — cron: `scheduled_jobs` ganha `projectId`, `agentName: 'hermes'` roteia uma automação para um projeto Hermes em vez de um agente do Squad; execução não-assistida: `HermesService.runObjectiveUnattended()` bufferiza o `ExecStream` inteiro sem depender de uma `BrowserWindow` (watchdog 300s + teto duro 20min); recovery de sessão interrompida: `HermesService.recoverInterruptedSessions()` roda no boot, marca `HermesProjectAgent` órfãos (`status:'running'` sobrevivente a um restart do Electron) como erro recuperável e devolve tarefas `IN_PROGRESS` para `TODO`; banner "Retomar sessão" em `HermesAgentPanel.tsx` usa o `--resume` automático (sessionStarted preservado); seletor de projeto em `AutomationsPage.tsx` quando o agente Hermes é escolhido — `pnpm typecheck && pnpm build` limpos — 2026-08-13. Com esta fase, as 6 fases da integração Hermes planejadas em `docs/HERMES_INTEGRATION.md` estão entregues.

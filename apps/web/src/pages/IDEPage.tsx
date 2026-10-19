@@ -1876,11 +1876,11 @@ export default function IDEPage() {
             <Home size={11}/>
           </button>
         )}
-        {isLocal && localRoot && (
-          <button onClick={() => { void ipc.window.openIdeLocal(localRoot).catch(e => showToast(false, String(e instanceof Error ? e.message : e))) }}
+        {isLocal && (
+          <button onClick={() => { void ipc.local.openFolderWindow().catch(e => showToast(false, String(e instanceof Error ? e.message : e))) }}
             className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200 shrink-0"
-            title="Abrir esta pasta em nova janela independente">
-            <ExternalLink size={11}/>
+            title="Abrir outra pasta numa janela própria (Ctrl+O)">
+            <FolderPlus size={12}/> Abrir pasta…
           </button>
         )}
         {!isLocal && vpsId && (

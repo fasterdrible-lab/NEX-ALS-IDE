@@ -1,5 +1,22 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.71.0] — 2026-10-19
+
+### Adicionado — projetos locais em janelas próprias, como no VS Code
+
+Pedido do usuário: projetos não começam na VPS (produção) — começam numa pasta local e cada um deve ficar aberto na sua janela, como no VS Code; as janelas novas iam todas para a VPS e "Abrir pasta local" trocava a tela da janela principal.
+
+- **Uma janela por pasta.** "Abrir pasta…" (Dashboard, Lançador, menu **Arquivo → Abrir pasta…** / **Ctrl+O**, e dentro da IDE local) abre a pasta numa janela nova; abrir de novo uma pasta já aberta só traz a janela dela para frente.
+- **Projetos locais** no topo do Dashboard e do Lançador: recentes (até 20) com "aberta" / "não encontrada", um clique para abrir e × para tirar da lista. Menu **Arquivo → Abrir recente**.
+- **Reabre ao iniciar** as pastas que estavam abertas quando o Zeus fechou (pelo menu Sair ou fechando a última janela).
+- **Título da janela = nome do projeto** (`acessibilidade — Zeus IDE`, `VPS-1 (VPS) — Zeus IDE`). Antes o `<title>` da página sobrescrevia o título e todas as janelas apareciam como "Zeus IDE" na barra de tarefas.
+- Menu do app em português: Arquivo (Abrir pasta, Abrir recente, Janela principal, Fechar janela, Sair), Editar, Exibir, Janela. "Fechar janela" sem Ctrl+W de propósito — no VS Code ele fecha a aba.
+- Lançador: "Terminais SSH" → **VPS**; "Projetos" → **Projetos na VPS**.
+
+**Verificado no app instalado:** com duas pastas registradas como abertas, o Zeus reabriu as duas em janelas próprias (`projeto-alfa — Zeus IDE`, `projeto-beta — Zeus IDE`) além da principal; `pnpm typecheck` (5 pacotes).
+
+**Como funciona:** `apps/desktop/src/local-folders.ts` (`LocalFolderStore`, JSON em `%APPDATA%\@cwm\desktop\local-folders.json` — recentes + pastas abertas na saída); `main.ts` mantém `localWindows` (chave = caminho normalizado) e `openLocalFolderWindow`; IPC `local:openFolderWindow`, `local:recent:list|open|remove`. Componente `LocalProjects.tsx`.
+
 ## [3.70.2] — 2026-10-19
 
 ### Alterado — Lançador: nova janela visível e projetos abrem na IDE

@@ -117,7 +117,7 @@ const sections: Section[] = [
         <Step n={3}><strong className="text-slate-100">Abra o IDE</strong> — vá em <em>Lançador</em> → clique em <strong>IDE</strong> na VPS desejada. O Zeus IDE abre em tela cheia com explorer, editor e terminal SSH.</Step>
         <Step n={4}><strong className="text-slate-100">Converse com a IA</strong> — no IDE, clique no botão roxo <strong>Claude</strong> (canto superior direito). Para o agente autônomo (lê e escreve arquivos), ative o botão 🤖.</Step>
         <Step n={5}><strong className="text-slate-100">Explore o AI HUB</strong> — clique em <strong className="text-slate-100">AI HUB</strong> (botão roxo na sidebar) para um chat avançado com histórico de conversas, streaming e múltiplos provedores.</Step>
-        <Tip>Para editar arquivos locais (sem VPS), clique em "Abrir pasta local no IDE" no Lançador — sem risco de afetar produção.</Tip>
+        <Tip>Projetos começam no PC: <strong>Abrir pasta…</strong> (Dashboard, Lançador ou Ctrl+O) abre cada pasta na sua própria janela, como no VS Code — sem tocar na VPS. As pastas abertas voltam abertas quando você reabre o Zeus.</Tip>
       </div>
     ),
   },
@@ -173,7 +173,7 @@ const sections: Section[] = [
           <KV items={[
             ['Modo Remoto', 'Lançador → botão IDE (ícone Code2) em qualquer VPS'],
             ['Nova janela', 'Ícone ⎋ no Lançador ou na barra da IDE (remota ou local) — abre a mesma pasta numa janela independente; na página do projeto, IDE já abre em janela própria'],
-            ['Modo Local', 'Lançador → botão "Abrir pasta local no IDE" (canto inferior)'],
+            ['Modo Local', 'Projetos locais → Abrir pasta… (ou Ctrl+O, ou um recente): uma janela por pasta; abrir de novo uma pasta aberta só traz a janela dela'],
           ]}/>
         </div>
       </div>
@@ -1084,7 +1084,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Projeto que começa no OneDrive (IDE local)</p>
           <p className="text-xs">O Hermes só roda na VPS, mas você pode começar o projeto numa pasta do PC:</p>
-          <Step n={1}><span>Abra a pasta na IDE (<strong className="text-slate-100">Abrir pasta local</strong>) e clique <strong className="text-slate-100">Agent</strong> no topo.</span></Step>
+          <Step n={1}><span>Abra a pasta (<strong className="text-slate-100">Abrir pasta…</strong> ou Ctrl+O) e clique <strong className="text-slate-100">Agent</strong> no topo.</span></Step>
           <Step n={2}><span>Escolha a VPS e uma pasta <strong className="text-slate-100">nova ou vazia</strong> lá → <strong className="text-slate-100">Enviar e abrir o Hermes</strong>. A pasta é copiada (sem node_modules, .next, dist…), o projeto é cadastrado e o painel do Hermes abre. Sem .git, a VPS ganha um repositório com o primeiro commit.</span></Step>
           <Step n={3}><span>Quando o Hermes terminar, <strong className="text-slate-100">Trazer alterações</strong> lista o que mudou na VPS e copia para o OneDrive. Editou no PC? <strong className="text-slate-100">Enviar alterações</strong> manda para a VPS.</span></Step>
           <Warn>Arquivo que mudou nos dois lados aparece como <strong>conflito</strong> e começa desmarcado — marcar substitui a versão do outro lado. O .git do PC não é sincronizado: os commits do Hermes ficam na VPS.</Warn>
@@ -1168,7 +1168,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.70.2</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.71.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}

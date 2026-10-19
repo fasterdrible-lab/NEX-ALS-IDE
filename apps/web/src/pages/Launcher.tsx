@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import {
   Rocket, Terminal, FolderOpen, Server,
   Loader2, CheckCircle, XCircle, User,
-  BotMessageSquare, AlertTriangle, HelpCircle, HardDrive, Code2, FolderOpen as FolderOpenIcon,
+  BotMessageSquare, AlertTriangle, HelpCircle, HardDrive, Code2,
   ExternalLink, Siren, Rocket as RocketIcon, Bot,
 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
+import LocalProjects from '../components/LocalProjects'
 import type { Project, VpsServer, ClaudeCheckResult } from '@cwm/config'
 
 interface LaunchState {
@@ -109,21 +110,16 @@ export default function Launcher() {
     <div className="p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-100">Lançador</h1>
-        <p className="text-slate-400 mt-1">Abra ambientes VS Code remotos com um clique</p>
-        {/* IDE-20: botão para abrir pasta local no IDE */}
-        <button
-          onClick={() => navigate('/ide/local')}
-          className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-900/40 border border-emerald-700/50 text-emerald-300 hover:bg-emerald-900/70 text-sm font-medium transition-colors"
-          title="Abre uma pasta do seu PC (OneDrive, etc.) no Zeus IDE — sem risco de alterar produção"
-        >
-          <FolderOpenIcon size={15}/> Abrir pasta local no IDE
-        </button>
+        <p className="text-slate-400 mt-1">Projetos locais em janelas próprias; VPS quando precisar</p>
       </div>
+
+      {/* Local primeiro: cada pasta na sua janela (como o VS Code), sem tocar na VPS */}
+      <LocalProjects />
 
       {/* VPS Terminals */}
       {vps.length > 0 && (
         <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">Terminais SSH</h2>
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">VPS</h2>
           <div className="grid grid-cols-2 gap-3">
             {vps.map(v => {
               const claudeStatus = claudeStatuses[v.id]
@@ -201,7 +197,7 @@ export default function Launcher() {
 
       {/* Projects */}
       <section>
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">Projetos</h2>
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">Projetos na VPS</h2>
         {projects.length === 0 ? (
           <div className="card text-center py-12">
             <FolderOpen size={36} className="mx-auto text-slate-700 mb-3" />

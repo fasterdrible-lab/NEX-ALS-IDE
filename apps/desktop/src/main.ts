@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, shell, Notification, session } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, Notification, session, dialog, Menu } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { setupIpcHandlers, setIncidentWindowOpener } from './ipc/handlers'
+import { LocalFolderStore, folderKey } from './local-folders'
 
 // Ícone das janelas/barra de tarefas — instalado vai em resources/ (extraResources), em dev fica em build/
 const APP_ICON = app.isPackaged
@@ -170,7 +171,7 @@ function createIncidentWindow(vpsId: string, vpsName: string): void {
 /** IDE em janela própria. Remoto: `path` = pasta do projeto na VPS. Local: `folder` = pasta do PC (sem abrir o seletor). */
 interface IdeWindowTarget { vpsId?: string; vpsName: string; path?: string; folder?: string }
 
-function createIdeWindow({ vpsId, vpsName, path: remotePath, folder }: IdeWindowTarget): void {
+function createIdeWindow({ vpsId, vpsName, path: remotePath, folder }: IdeWindowTarget): BrowserWindow {
   const rendererUrl = process.env['ELECTRON_RENDERER_URL']
   const encodedName = encodeURIComponent(vpsName)
   const hashPath = folder
@@ -189,10 +190,13 @@ function createIdeWindow({ vpsId, vpsName, path: remotePath, folder }: IdeWindow
       nodeIntegration: false,
       sandbox: false,
     },
-    title: `Zeus IDE — ${folder ? path.basename(folder) : vpsName}`,
+    // Como no VS Code: o nome do projeto primeiro — é o que aparece na barra de tarefas
+    title: folder ? `${path.basename(folder)} — Zeus IDE` : `${vpsName} (VPS) — Zeus IDE`,
     show: false,
     backgroundColor: '#0f172a',
   })
+  // Sem isto o <title> da página ("Zeus IDE") substitui o título e todas as janelas ficam iguais
+  win.on('page-title-updated', e => e.preventDefault())
 
   win.once('ready-to-show', () => win.show())
   applyWindowDefaults(win)
@@ -204,6 +208,76 @@ function createIdeWindow({ vpsId, vpsName, path: remotePath, folder }: IdeWindow
   } else {
     win.loadFile(getRendererIndexPath(), { hash: hashPath })
   }
+  return win
+}
+
+// ── Pastas locais, uma janela por pasta (como o VS Code) ──
+let localFolders: LocalFolderStore | null = null
+const localWindows = new Map<string, { folder: string; win: BrowserWindow }>()
+let quitting = false
+
+function saveOpenFolders(): void {
+  if (!quitting) localFolders?.setOpen([...localWindows.values()].map(w => w.folder))
+}
+
+/** Abre a pasta numa janela própria; se já estiver aberta, só traz a janela dela para frente. */
+function openLocalFolderWindow(folder: string): { focused: boolean } {
+  const st = fs.statSync(folder, { throwIfNoEntry: false })
+  if (!path.isAbsolute(folder) || !st?.isDirectory()) throw new Error(`Pasta não encontrada: ${folder}`)
+  const resolved = path.resolve(folder)
+  const key = folderKey(resolved)
+  localFolders?.touch(resolved)
+  rebuildMenu()
+  const existing = localWindows.get(key)
+  if (existing && !existing.win.isDestroyed()) {
+    if (existing.win.isMinimized()) existing.win.restore()
+    existing.win.show(); existing.win.focus()
+    return { focused: true }
+  }
+  const win = createIdeWindow({ vpsName: '', folder: resolved })
+  localWindows.set(key, { folder: resolved, win })
+  win.on('closed', () => {
+    localWindows.delete(key)
+    // Última janela do app fechando = o app vai encerrar: mantém a pasta na lista para reabrir no próximo início
+    if (BrowserWindow.getAllWindows().length > 0) saveOpenFolders()
+  })
+  saveOpenFolders()
+  return { focused: false }
+}
+
+async function pickAndOpenLocalFolder(parent?: BrowserWindow | null): Promise<string | null> {
+  const opts = { properties: ['openDirectory' as const], title: 'Abrir pasta no Zeus IDE' }
+  const r = parent ? await dialog.showOpenDialog(parent, opts) : await dialog.showOpenDialog(opts)
+  if (r.canceled || !r.filePaths[0]) return null
+  openLocalFolderWindow(r.filePaths[0])
+  return r.filePaths[0]
+}
+
+function rebuildMenu(): void {
+  const recent = localFolders?.recent() ?? []
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    {
+      label: 'Arquivo',
+      submenu: [
+        { label: 'Abrir pasta…', accelerator: 'CmdOrCtrl+O', click: (_i, w) => { void pickAndOpenLocalFolder(w as BrowserWindow | undefined) } },
+        {
+          label: 'Abrir recente',
+          submenu: recent.length
+            ? recent.slice(0, 12).map(r => ({ label: r.path, click: () => { try { openLocalFolderWindow(r.path) } catch (e) { dialog.showErrorBox('Zeus IDE', String(e instanceof Error ? e.message : e)) } } }))
+            : [{ label: 'Nenhuma pasta recente', enabled: false }],
+        },
+        { type: 'separator' },
+        { label: 'Janela principal', click: () => focusMainWindow() },
+        // Sem Ctrl+W: no VS Code ele fecha a aba, aqui fecharia o projeto inteiro
+        { label: 'Fechar janela', click: (_i, w) => { (w as BrowserWindow | undefined)?.close() } },
+        { type: 'separator' },
+        { role: 'quit', label: 'Sair do Zeus IDE' },
+      ],
+    },
+    { role: 'editMenu', label: 'Editar' },
+    { role: 'viewMenu', label: 'Exibir' },
+    { role: 'windowMenu', label: 'Janela' },
+  ]))
 }
 
 /** Traz a janela principal para frente — ou a recria, se o usuário a fechou deixando outras janelas abertas. */
@@ -253,8 +327,14 @@ app.whenReady().then(async () => {
   if (app.isPackaged) setupCSP()
   setDatabasePath()
   await initializeDatabase()
+  localFolders = new LocalFolderStore(path.join(app.getPath('userData'), 'local-folders.json'))
+  rebuildMenu()
   createWindow()
   setupIpcHandlers(ipcMain, mainWindow ?? undefined, notifMonitor)
+  // Reabre as pastas que estavam abertas quando o app fechou
+  for (const folder of localFolders.openOnLastExit()) {
+    try { openLocalFolderWindow(folder) } catch (e) { console.error('[local-folders] não reabriu', folder, e) }
+  }
   setIncidentWindowOpener(createIncidentWindow)
 
   // FASE 7: o alerta também vira incidente + diagnóstico do Hermes (handlers.ts) — por isso o
@@ -269,7 +349,32 @@ app.whenReady().then(async () => {
   notifMonitor.start()
 
   ipcMain.handle('window:openIde', (_, data: unknown) => {
-    try { createIdeWindow(parseIdeTarget(data)) } catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
+    try {
+      const t = parseIdeTarget(data)
+      if (t.folder) openLocalFolderWindow(t.folder)
+      else createIdeWindow(t)
+    } catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
+    return { success: true }
+  })
+
+  // Pastas locais: seletor → janela própria; recentes (com "aberta" e "não existe mais")
+  ipcMain.handle('local:openFolderWindow', async (event) => {
+    try { return { folder: await pickAndOpenLocalFolder(BrowserWindow.fromWebContents(event.sender)) } }
+    catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
+  })
+  ipcMain.handle('local:recent:list', () => (localFolders?.recent() ?? []).map(r => ({
+    path: r.path,
+    name: path.basename(r.path),
+    lastOpened: r.lastOpened,
+    exists: !!fs.statSync(r.path, { throwIfNoEntry: false })?.isDirectory(),
+    open: localWindows.has(folderKey(r.path)),
+  })))
+  ipcMain.handle('local:recent:open', (_, data: { path?: unknown }) => {
+    if (typeof data?.path !== 'string') return { error: 'Pasta inválida' }
+    try { return openLocalFolderWindow(data.path) } catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
+  })
+  ipcMain.handle('local:recent:remove', (_, data: { path?: unknown }) => {
+    if (typeof data?.path === 'string') { localFolders?.remove(data.path); rebuildMenu() }
     return { success: true }
   })
 
@@ -297,6 +402,10 @@ app.whenReady().then(async () => {
     autoUpdater.checkForUpdatesAndNotify().catch(() => { /* sem servidor de update configurado */ })
   }
 })
+
+// Sair com janelas de pasta abertas (menu Sair, desligar): grava quais eram, antes de elas fecharem
+// (Fechou a última janela no X: as pastas já saíram do mapa e a lista certa ficou gravada — não sobrescreve.)
+app.on('before-quit', () => { if (localWindows.size > 0) saveOpenFolders(); quitting = true })
 
 app.on('window-all-closed', async () => {
   notifMonitor.stop()

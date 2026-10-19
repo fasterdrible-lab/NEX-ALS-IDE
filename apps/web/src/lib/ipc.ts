@@ -93,6 +93,8 @@ export interface HermesIncident {
   status: IncidentStatus; createdAt: number; updatedAt: number
   runId: string | null; failure: string; diagnosis: IncidentDiagnosis | null
 }
+/** Pasta local aberta recentemente (uma janela por pasta). `open` = janela aberta agora. */
+export interface LocalRecentFolder { path: string; name: string; lastOpened: number; exists: boolean; open: boolean }
 /** Pasta local (OneDrive) enviada à VPS para o Hermes. */
 export interface HermesLocalLink {
   localPath: string; projectId: string; projectName: string
@@ -536,6 +538,13 @@ export const ipc = {
   local: {
     openFolder: () =>
       invoke<string | null>('local:openFolder'),
+    /** Seletor de pasta → abre (ou traz para frente) a janela própria da pasta, como no VS Code. */
+    openFolderWindow: () => invoke<{ folder: string | null }>('local:openFolderWindow'),
+    recent: {
+      list: () => invoke<LocalRecentFolder[]>('local:recent:list'),
+      open: (path: string) => invoke<{ focused: boolean }>('local:recent:open', { path }),
+      remove: (path: string) => invoke<{ success: boolean }>('local:recent:remove', { path }),
+    },
     readdir: (dirPath: string) =>
       invoke<{ name: string; path: string; isDirectory: boolean }[]>('local:readdir', dirPath),
     readFile: (filePath: string) =>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { type LucideIcon, Server, FolderOpen, Rocket, ArrowRight, Plus } from 'lucide-react'
 import { ipc } from '../lib/ipc'
+import LocalProjects from '../components/LocalProjects'
 import type { VpsServer, Project } from '@cwm/config'
 
 export default function Dashboard() {
@@ -30,8 +31,10 @@ export default function Dashboard() {
     <div className="p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
-        <p className="text-slate-400 mt-1">Gerencie seus ambientes VPS</p>
+        <p className="text-slate-400 mt-1">Projetos locais em janelas próprias; VPS quando for publicar</p>
       </div>
+
+      <LocalProjects />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">

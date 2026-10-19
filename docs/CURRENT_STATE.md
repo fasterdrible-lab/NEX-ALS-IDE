@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-19
-**Versão:** 3.70.2 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.71.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Projetos locais em janelas próprias, como no VS Code (v3.71.0)
+
+Projetos começam numa pasta do PC: **Abrir pasta…** (Dashboard, Lançador, Ctrl+O) abre cada pasta na sua janela, com o nome do projeto no título; recentes no topo do Dashboard/Lançador; as pastas abertas voltam abertas ao reiniciar. A VPS só entra ao publicar pelo Agent (Hermes).
 
 ## Várias janelas e projetos ao mesmo tempo (v3.70.1)
 
