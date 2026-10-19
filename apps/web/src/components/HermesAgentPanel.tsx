@@ -212,7 +212,15 @@ function buildApprovalFollowUp(a: PendingApproval, r: { executed: boolean; succe
     + `Resultado (${r.success ? 'sucesso' : 'falhou'}):\n${r.output.slice(-3000)}\n\nContinue a partir daqui.`
 }
 
-export default function HermesAgentPanel({ initialProjectId }: { initialProjectId?: string } = {}) {
+/**
+ * `compact` (ETAPA 16 — painel lateral da IDE): as duas colunas ficam empilhadas para caber ao lado
+ * do editor. `vpsId`: só lista projetos daquela VPS (a IDE está aberta numa VPS específica).
+ */
+export default function HermesAgentPanel({ initialProjectId, compact = false, vpsId: vpsFilter }: {
+  initialProjectId?: string
+  compact?: boolean
+  vpsId?: string
+} = {}) {
   const [projects, setProjects] = useState<Project[]>([])
   const [projectId, setProjectId] = useState(initialProjectId ?? '')
   const [agentInfo, setAgentInfo] = useState<HermesProjectAgentInfo | null>(null)
@@ -331,7 +339,9 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
     if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight
   }, 60)
 
-  useEffect(() => { ipc.projects.list().then(setProjects).catch(() => {}) }, [])
+  useEffect(() => {
+    ipc.projects.list().then(ps => setProjects(vpsFilter ? ps.filter(p => p.vpsServerId === vpsFilter) : ps)).catch(() => {})
+  }, [vpsFilter])
 
   const loadStatus = useCallback(async (id: string) => {
     if (!id) { setAgentInfo(null); return }
@@ -898,9 +908,11 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
   const hasTodo = tasks.some(t => t.status === 'TODO')
 
   return (
-    <div className="flex-1 flex overflow-hidden">
-      {/* ═══ Coluna esquerda — objetivo autônomo, tarefas, DoD ═══ */}
-      <div className="w-80 shrink-0 border-r border-slate-800/60 flex flex-col overflow-hidden">
+    <div className={`flex-1 flex overflow-hidden ${compact ? 'flex-col' : ''}`}>
+      {/* ═══ Coluna esquerda — objetivo autônomo, tarefas, DoD (no modo compacto: em cima) ═══ */}
+      <div className={compact
+        ? 'max-h-[55%] shrink-0 border-b border-slate-800/60 flex flex-col overflow-hidden'
+        : 'w-80 shrink-0 border-r border-slate-800/60 flex flex-col overflow-hidden'}>
         <div className="p-4 space-y-3 border-b border-slate-800/60">
           <div className="flex items-center gap-2">
             <Bot size={15} className="text-purple-400 shrink-0" />
@@ -1402,7 +1414,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
       </div>
 
       {/* ═══ Coluna direita — ao vivo | quadro | logs, + mensagem livre ═══ */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <div role="tablist" aria-label="Visão do Hermes" className="shrink-0 flex items-center gap-1 border-b border-slate-800 px-2 pt-1.5 bg-slate-900/40">
           {([['live', 'Ao vivo'], ['board', 'Quadro'], ['logs', 'Logs']] as const).map(([id, label]) => (
             <button

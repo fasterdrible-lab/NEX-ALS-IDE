@@ -1310,3 +1310,15 @@ UI (`apps/web/src/components/HermesTaskBoard.tsx`): `useHermesRuns(projectId)` c
 |---|---|---|
 | `hermes:runs:list` | auth | `{ projectId, taskId? }` → `HermesRunSummary[]` (sem texto/atividade, últimos 200) |
 | `hermes:runs:get` | auth | `{ runId }` → `HermesRun \| null` (com texto e atividade) |
+
+## Hermes — painel Agent na IDE (v3.68.0+) — ETAPA 16
+
+```
+IDEPage (modo remoto) — botão "Agent" → showAgent
+  agentProjectId: ipc.projects.list() → p.vpsServerId === vpsId && remoteRoot ⊂ p.remotePath
+                  (o remotePath mais longo); null = nenhum → aviso + seletor
+  painel lateral (useResize 480, 360–960) → <HermesAgentPanel compact vpsId={vpsId} initialProjectId=…/>
+  ipc.hermes.agent.onChunk('done'|'error') → debounce 800ms → fsReaddir(raiz + expandedFolders) + loadGitStatus()
+```
+
+Sem IPC novo: o painel é o mesmo componente do AI Hub. `compact` empilha as colunas (`flex-col`, coluna de tarefas com `max-h-[55%]`); `vpsId` filtra os projetos. O estado de loop ativo (`activeLoops`) é por janela do renderer — uma IDE aberta em janela separada (multi-monitor) não enxerga o loop iniciado em outra janela; a trava por projeto do main (`hermesActiveByProject`) continua impedindo duas execuções na mesma sessão.

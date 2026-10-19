@@ -1,5 +1,16 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.68.0] — 2026-10-18
+
+### Adicionado — painel Agent (Hermes) dentro da IDE (ETAPA 16)
+
+- **Botão "Agent"** na barra do topo da IDE, ao lado de "IA" — só no modo remoto (o Hermes roda na VPS). Abre um painel lateral redimensionável (360–960 px) com o mesmo painel do AI Hub: objetivo, níveis de autonomia, regras, tarefas, entrega e as abas Ao vivo / Quadro / Logs.
+- **Já no projeto certo:** o painel escolhe o projeto cadastrado **desta VPS** cuja pasta contém a pasta aberta na IDE (o de caminho mais longo, se houver mais de um). Sem correspondência, avisa e deixa escolher — a lista só mostra projetos dessa VPS. Botão para abrir o mesmo projeto no AI Hub em tela cheia.
+- **Modo compacto** do `HermesAgentPanel` (`compact`): as duas colunas ficam empilhadas (tarefas em cima, Ao vivo / Quadro / Logs embaixo); `vpsId` filtra a lista de projetos. O AI Hub continua com o layout de duas colunas.
+- **A IDE acompanha o Hermes:** quando uma execução termina, a árvore de arquivos (raiz + pastas abertas) e o Git são recarregados na hora, em vez de esperar o polling de 30s. Um arquivo já aberto no editor não é recarregado sozinho (para não sobrescrever edição em andamento).
+
+**Verificado:** `pnpm typecheck` (5 pacotes) e `pnpm build`. **Não testado pela UI contra a VPS.**
+
 ## [3.67.0] — 2026-10-18
 
 ### Adicionado — Hermes: quadro de tarefas, painel de agentes e logs separados por execução (ETAPAS 12, 13, 37)

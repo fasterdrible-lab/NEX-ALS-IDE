@@ -14,9 +14,10 @@ import {
   Command, Search, PanelBottom, Copy, Files, Check, FolderOpen as FolderOpenIcon,
   MessageSquare, Send, Bot, Columns2, PanelRightClose, Network, Globe, Box, Cpu,
   ExternalLink, Siren, Rocket as RocketDeployIcon, List,
-  BookMarked, Lightbulb,
+  BookMarked, Lightbulb, ListChecks,
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
+import HermesAgentPanel from '../components/HermesAgentPanel'
 import { LSP_CONFIGS, monacoLangToLspKey } from '../lib/lsp'
 
 // ── language / icon helpers ────────────────────────────────────────────
@@ -214,6 +215,11 @@ export default function IDEPage() {
   const [leftW,    startResizeLeft] = useResize(240, 140, 500, 'x')
   const [termH,    startResizeTerm] = useResize(200, 100, 600, 'y')
   const [chatW,    startResizeChat] = useResize(320, 200, 600, 'x')
+  // ETAPA 16: painel Agent (Hermes) ao lado do editor — só modo remoto (o Hermes roda na VPS)
+  const [showAgent, setShowAgent] = useState(false)
+  const [agentW, startResizeAgent] = useResize(480, 360, 960, 'x')
+  // Projeto cadastrado desta VPS que contém a pasta aberta (o de caminho mais longo); null = nenhum.
+  const [agentProjectId, setAgentProjectId] = useState<string | null | undefined>(undefined)
   const [showTerm,    setShowTerm]    = useState(false)
   const [leftPanel,   setLeftPanel]   = useState<'files'|'search'|'git'|'ports'|'docker'|'pm2'|'outline'>('files')
   const [pm2Processes, setPm2Processes] = useState<Array<{id:number;name:string;status:string;cpu:number;memory:number;restarts:number;uptime:number}>>([])
@@ -594,6 +600,40 @@ export default function IDEPage() {
     if (leftPanel === 'git' && !gitStatus && !gitLoading) loadGitStatus()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leftPanel])
+
+  // ── ETAPA 16: painel Agent ────────────────────────────────────────────
+  // Abre já no projeto desta VPS cuja pasta contém a pasta aberta na IDE.
+  useEffect(() => {
+    if (!showAgent || !vpsId || agentProjectId !== undefined) return
+    ipc.projects.list().then(ps => {
+      const inRoot = (p: string) => remoteRoot === p || remoteRoot.startsWith(p.replace(/\/+$/, '') + '/')
+      const match = ps
+        .filter(p => p.vpsServerId === vpsId && p.remotePath && inRoot(p.remotePath))
+        .sort((a, b) => b.remotePath.length - a.remotePath.length)[0]
+      setAgentProjectId(match?.id ?? null)
+    }).catch(() => setAgentProjectId(null))
+  }, [showAgent, vpsId, remoteRoot, agentProjectId])
+
+  // Quando uma execução do Hermes termina, ele acabou de mexer em arquivos: recarrega a árvore
+  // (raiz + pastas abertas) e o Git, em vez de esperar o polling de 30s.
+  const agentRefreshRef = useRef<() => void>(() => {})
+  agentRefreshRef.current = () => {
+    void fsReaddir(remoteRoot).then(r => { if (r.success) setRootEntries(r.entries) })
+    expandedFoldersRef.current.forEach(p => {
+      void fsReaddir(p).then(r => { if (r.success) setFolderChildren(m => new Map([...m, [p, r.entries]])) })
+    })
+    void loadGitStatus()
+  }
+  useEffect(() => {
+    if (!showAgent || isLocal) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const unsub = ipc.hermes.agent.onChunk(chunk => {
+      if (chunk.type !== 'done' && chunk.type !== 'error') return
+      clearTimeout(timer)
+      timer = setTimeout(() => agentRefreshRef.current(), 800)
+    })
+    return () => { clearTimeout(timer); try { unsub() } catch { /* ignorar */ } }
+  }, [showAgent, isLocal])
 
   // Auto-fetch git status when tree first loads (VPS mode only)
   useEffect(() => {
@@ -1901,6 +1941,14 @@ export default function IDEPage() {
             className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${showChat?'bg-purple-600/40 text-purple-200 border border-purple-500/40':'text-purple-400 hover:text-purple-200 hover:bg-purple-900/40 border border-transparent'}`}>
             <Bot size={13}/> IA
           </button>
+          {/* ETAPA 16: painel Agent (Hermes) — só modo remoto */}
+          {!isLocal && (
+            <button onClick={()=>setShowAgent(v=>!v)} title="Agent (Hermes) — objetivos, tarefas, quadro e logs deste projeto, ao lado do editor"
+              aria-pressed={showAgent}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${showAgent?'bg-brand-600/30 text-brand-200 border border-brand-500/40':'text-brand-400 hover:text-brand-200 hover:bg-brand-900/40 border border-transparent'}`}>
+              <ListChecks size={13}/> Agent
+            </button>
+          )}
         </div>
       </div>
 
@@ -2761,6 +2809,39 @@ export default function IDEPage() {
             </div>
           </div>
         </div>
+
+        {/* ─── ETAPA 16: PAINEL AGENT (Hermes) — painel direito, modo remoto ─── */}
+        {showAgent && !isLocal && (
+          <>
+            <div className="w-1 bg-slate-800 hover:bg-brand-600/50 cursor-col-resize shrink-0 transition-colors active:bg-brand-500" onMouseDown={startResizeAgent}/>
+            <div className="flex flex-col bg-slate-900 border-l border-slate-800 shrink-0 overflow-hidden" style={{width:agentW}}>
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 shrink-0">
+                <ListChecks size={13} className="text-brand-400"/>
+                <span className="text-xs font-semibold text-slate-300 flex-1">Agent · Hermes</span>
+                {agentProjectId && (
+                  <button onClick={()=>navigate(`/ai-hub?mode=agent&project=${encodeURIComponent(agentProjectId)}`)}
+                    title="Abrir no AI Hub (tela cheia)" className="text-slate-500 hover:text-slate-300">
+                    <ExternalLink size={12}/>
+                  </button>
+                )}
+                <button onClick={()=>setShowAgent(false)} title="Fechar painel Agent" className="text-slate-500 hover:text-slate-300"><X size={13}/></button>
+              </div>
+              {agentProjectId === undefined ? (
+                <div className="p-4"><Loader2 size={14} className="animate-spin text-slate-500"/></div>
+              ) : (
+                <>
+                  {agentProjectId === null && (
+                    <p className="px-3 py-2 text-[10px] text-amber-300/90 bg-amber-950/30 border-b border-amber-900/40 shrink-0">
+                      Nenhum projeto cadastrado nesta VPS contém a pasta <span className="font-mono">{remoteRoot}</span>.
+                      Escolha um projeto abaixo ou cadastre um em Projetos.
+                    </p>
+                  )}
+                  <HermesAgentPanel key={agentProjectId ?? 'none'} compact vpsId={vpsId} initialProjectId={agentProjectId ?? undefined}/>
+                </>
+              )}
+            </div>
+          </>
+        )}
 
         {/* ─── IDE-21: CHAT CLAUDE (painel direito — ambos os modos) ─── */}
         {showChat && (

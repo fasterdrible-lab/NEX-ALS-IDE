@@ -8,7 +8,7 @@
   - [x] AutonomyPolicy + 3 níveis (ETAPAS 22/23) e tela Development Rules injetada via `.hermes.md` (ETAPA 21) — v3.62.0; falta validar pela UI na VPS-1 (Semi-autônomo parando numa tarefa de risco alto; regras aparecendo no `.hermes.md`)
   - [x] Qualidade: DoD como gate, review + security pass, `--checkpoints`, relatório final (ETAPAS 9, 24, 27, 28, 40) — v3.66.0; falta validar pela UI na VPS-1 (fechar a entrega de um objetivo real; ver bloqueio → correções → nova revisão)
   - [x] Task board/painel de agentes a partir dos eventos `stream-json` (ETAPAS 12/13); logs separados (ETAPA 37) — v3.67.0; falta ver pela UI na VPS-1 durante um loop real
-  - [ ] Painel Agent na IDE (ETAPA 16)
+  - [x] Painel Agent na IDE (ETAPA 16) — v3.68.0; falta ver pela UI na VPS-1 (abrir a IDE na pasta de um projeto e rodar uma tarefa pelo painel)
   - [ ] FASE 7 — NotificationMonitor + Incident Mode (ETAPAS 31/32)
 
 ## Concluídas recentemente (v3.56.0 → v3.57.0)

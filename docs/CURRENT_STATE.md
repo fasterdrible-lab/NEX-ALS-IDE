@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-18
-**Versão:** 3.67.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.68.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Hermes — painel Agent dentro da IDE (v3.68.0)
+
+Botão **Agent** na barra do topo da IDE (modo remoto) abre o painel do Hermes ao lado do editor, já no projeto desta VPS que contém a pasta aberta, em layout compacto (tarefas em cima; Ao vivo / Quadro / Logs embaixo). Ao terminar uma execução do Hermes, a árvore de arquivos e o Git da IDE são recarregados. Não testado pela UI contra a VPS ainda.
 
 ## Hermes — quadro de tarefas, agentes e logs por execução (v3.67.0)
 
