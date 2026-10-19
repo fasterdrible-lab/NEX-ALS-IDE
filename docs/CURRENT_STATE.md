@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-18
-**Versão:** 3.65.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.66.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Hermes — fechamento da entrega (v3.66.0)
+
+Ao terminar as tarefas, seção **Entrega** no painel Agent: o Hermes revisa código e segurança e roda build/testes sem alterar nada; o NEX reexecuta build/testes seguros na VPS e decide pelo exit code; a entrega só é **Aprovada** com evidência e a DoD completa (DoD agora é gate). Bloqueios corrigíveis viram tarefas (automático no Semi/Autônomo, até 3 rodadas). Relatório final em markdown com Copiar. Toda execução do Hermes usa `--checkpoints` (restaurar com `/rollback` no `hermes` interativo). Não testado pela UI de ponta a ponta ainda.
 
 ## Hermes — AutonomyPolicy em 3 níveis + Regras de desenvolvimento (v3.62.0)
 

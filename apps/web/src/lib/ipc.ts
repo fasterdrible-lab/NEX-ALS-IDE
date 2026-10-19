@@ -71,6 +71,31 @@ export interface HermesProjectAgentInfo {
   objective: string
   autonomyLevel: HermesAutonomyLevel
   devRules: string
+  baseCommit: string
+}
+
+// Fechamento da entrega (espelha packages/core/src/hermes/delivery.ts)
+export type CheckResult = 'passed' | 'failed' | 'not_run'
+export interface DeliveryCheck { command: string; result: CheckResult; summary: string; source: 'nex' | 'hermes'; output: string }
+export interface DeliveryFinding {
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  category: 'security' | 'bug' | 'quality'
+  file: string; title: string; detail: string
+}
+export type DeliveryVerdict = 'approved' | 'approved_with_notes' | 'blocked'
+export interface HermesDelivery {
+  verdict: DeliveryVerdict
+  blockingReasons: string[]
+  notes: string[]
+  build: DeliveryCheck
+  tests: DeliveryCheck
+  findings: DeliveryFinding[]
+  reviewSummary: string
+  reviewParsed: boolean
+  round: number
+  report: string
+  corrections: { title: string; description: string }[]
+  at: string
 }
 
 export interface DodItem {
@@ -274,6 +299,14 @@ export const ipc = {
         invoke<DodItem[]>('hermes:dod:toggle', { projectId, itemId, done }),
       runChecks: (projectId: string) =>
         invoke<DodItem[]>('hermes:dod:runChecks', { projectId }),
+    },
+    delivery: {
+      get: (projectId: string) =>
+        invoke<HermesDelivery | null>('hermes:delivery:get', { projectId }),
+      close: (projectId: string, reviewText: string) =>
+        invoke<HermesDelivery>('hermes:delivery:close', { projectId, reviewText }),
+      reevaluate: (projectId: string) =>
+        invoke<HermesDelivery>('hermes:delivery:reevaluate', { projectId }),
     },
     parallel: {
       start: (projectId: string, taskId: string, objective: string) =>

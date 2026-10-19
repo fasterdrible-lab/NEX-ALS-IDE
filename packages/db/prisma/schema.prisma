@@ -154,6 +154,8 @@ model HermesProjectAgent {
   autonomyLevel    String    @default("manual") // manual (Assistido)|semi|autonomous
   dodChecklist     String    @default("[]")     // JSON: [{id,label,done,auto}]
   devRules         String    @default("")       // Development Rules do projeto → .hermes.md
+  baseCommit       String    @default("")       // HEAD quando o objetivo começou — base do diff da revisão
+  delivery         String    @default("{}")     // JSON: DeliveryResult do último fechamento de entrega
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

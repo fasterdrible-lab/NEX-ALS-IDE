@@ -221,10 +221,13 @@ export class HermesClient {
       : ''
     const resumeFlag = sessionFlag || (opts.resume ? `--resume latest --in "${opts.workspace}"` : '')
     const skillFlag = hasClaude ? '-s claude-code' : ''
+    // --checkpoints (ETAPA 28): snapshot do diretório (repo git "sombra" em ~/.hermes/checkpoints)
+    // antes de cada write_file/patch/terminal do Hermes. Restaurar: `hermes` interativo na pasta →
+    // /rollback. Espaço: `hermes checkpoints status|prune`.
     const cmd = [
       PATH_PREFIX,
       `cd "${opts.workspace}" &&`,
-      `hermes chat -Q --format stream-json ${skillFlag} --query-file "${remoteFile}" ${resumeFlag} </dev/null;`,
+      `hermes chat -Q --format stream-json --checkpoints ${skillFlag} --query-file "${remoteFile}" ${resumeFlag} </dev/null;`,
       `rm -f "${remoteFile}"`,
     ].join(' ')
 

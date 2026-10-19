@@ -66,6 +66,8 @@ export const HermesAutonomyLevelSchema = z.enum(['manual', 'semi', 'autonomous']
 export const HERMES_DEV_RULES_MAX = 20_000
 // Hermes — Development Rules (ETAPA 21): texto livre por projeto, escrito no .hermes.md
 export const HermesDevRulesSchema = z.string().max(HERMES_DEV_RULES_MAX, `Regras de desenvolvimento: máximo ${HERMES_DEV_RULES_MAX} caracteres`)
+// Texto da revisão de entrega devolvido pelo Hermes (vem do renderer → validar tamanho no main)
+export const HermesReviewTextSchema = z.string().max(200_000, 'Revisão grande demais')
 
 export type VpsServer = z.infer<typeof VpsServerSchema> & { id: string; createdAt: Date; updatedAt: Date; sshHostFingerprint?: string | null }
 export type VpsServerInput = z.infer<typeof VpsServerSchema>

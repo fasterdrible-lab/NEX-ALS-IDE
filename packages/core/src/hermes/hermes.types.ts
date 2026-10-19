@@ -39,6 +39,8 @@ export interface HermesProjectAgentInfo {
   objective: string
   autonomyLevel: HermesAutonomyLevel
   devRules: string
+  /** HEAD do repositório quando o objetivo começou ('' se não era repo git). */
+  baseCommit: string
 }
 
 export interface DodItem {

@@ -12,6 +12,10 @@ import type {
   HermesCommandResult, HermesInstanceInfo, HermesInstallResult, HermesStatus,
   HermesProjectAgentInfo, HermesAgentStatus, HermesAutonomyLevel, DodItem, HermesSkillInfo,
 } from './hermes.types.js'
+import {
+  parseReview, isSafeCheckCommand, evaluateDelivery, buildDeliveryReport, correctionTasks,
+  type DeliveryResult, type ReviewCheck, type VerifiedCheck,
+} from './delivery.js'
 
 function parseSkillFiles(raw: string): HermesSkillInfo[] {
   const chunks = raw.split('@@@FILE:').slice(1)
@@ -221,11 +225,24 @@ export class HermesService {
       objective: agent.objective,
       autonomyLevel: agent.autonomyLevel as HermesAutonomyLevel,
       devRules: agent.devRules,
+      baseCommit: agent.baseCommit,
     }
   }
 
+  /**
+   * Objetivo novo: guarda o HEAD atual como base do diff da revisão de entrega e zera o
+   * fechamento anterior. Sem repositório git ainda, a base fica vazia (a revisão olha tudo).
+   */
   async setObjective(projectId: string, objective: string): Promise<void> {
-    await this.db.hermesProjectAgent.update({ where: { projectId }, data: { objective } })
+    const project = await this.db.project.findUnique({ where: { id: projectId } })
+    let baseCommit = ''
+    if (project) {
+      const out = await this.terminal.exec(
+        project.vpsServerId, `git -C "${project.remotePath}" rev-parse HEAD 2>/dev/null || true`, 15000,
+      ).catch(() => '')
+      baseCommit = /^[0-9a-f]{40}$/.test(out.trim()) ? out.trim() : ''
+    }
+    await this.db.hermesProjectAgent.update({ where: { projectId }, data: { objective, baseCommit, delivery: '{}' } })
   }
 
   async setAutonomyLevel(projectId: string, level: HermesAutonomyLevel): Promise<void> {
@@ -423,6 +440,100 @@ export class HermesService {
     })
     await this.db.hermesProjectAgent.update({ where: { projectId }, data: { dodChecklist: JSON.stringify(next) } })
     return next
+  }
+
+  /**
+   * Reexecuta no workspace um comando de build/teste informado pelo Hermes — só se estiver na
+   * lista segura (isSafeCheckCommand). O resultado vem do exit code, não do que o modelo disse.
+   * `bash -lc` para ter o PATH do usuário (nvm, pyenv…); o comando não tem aspas nem
+   * metacaracteres (garantido pela lista), então pode ir entre aspas simples.
+   */
+  private async verifyCheck(vpsId: string, workspace: string, c: ReviewCheck): Promise<VerifiedCheck> {
+    const claimed: VerifiedCheck = { ...c, source: 'hermes', output: '' }
+    const cmd = c.command.trim().replace(/\s+/g, ' ')
+    if (!isSafeCheckCommand(cmd) || /['"]/.test(workspace)) return claimed
+    const script = `cd "${workspace}" && f=$(mktemp) && (timeout 600 ${cmd}) >"$f" 2>&1; ec=$?; tail -c 3000 "$f"; rm -f "$f"; echo; echo __NEX_EXIT=$ec`
+    try {
+      const out = await this.terminal.exec(vpsId, `bash -lc '${script}'`, 620_000)
+      const m = out.match(/__NEX_EXIT=(\d+)\s*$/)
+      if (!m) return claimed
+      const output = out.slice(0, m.index).trim()
+      return { command: cmd, result: m[1] === '0' ? 'passed' : 'failed', summary: c.summary, source: 'nex', output }
+    } catch {
+      return claimed
+    }
+  }
+
+  async getDelivery(projectId: string): Promise<DeliveryResult | null> {
+    const agent = await this.db.hermesProjectAgent.findUnique({ where: { projectId } })
+    if (!agent) return null
+    try {
+      const d = JSON.parse(agent.delivery) as Partial<DeliveryResult>
+      return d && d.verdict ? (d as DeliveryResult) : null
+    } catch { return null }
+  }
+
+  /**
+   * Fecha a entrega do objetivo (ETAPAS 9/24/27/40): recebe o texto da revisão de código e de
+   * segurança que o Hermes acabou de fazer, reexecuta build/testes quando o comando é seguro,
+   * atualiza a DoD com a evidência, aplica o gate e gera o relatório final.
+   */
+  async closeDelivery(projectId: string, reviewText: string): Promise<DeliveryResult> {
+    const agent = await this.db.hermesProjectAgent.findUnique({ where: { projectId } })
+    const project = await this.db.project.findUnique({ where: { id: projectId } })
+    if (!agent || !project) throw new Error(`Projeto/agente Hermes não encontrado: ${projectId}`)
+
+    const review = parseReview(reviewText)
+    const build = await this.verifyCheck(project.vpsServerId, agent.workspace, review.build)
+    const tests = await this.verifyCheck(project.vpsServerId, agent.workspace, review.tests)
+
+    // DoD: itens automáticos + build/testes a partir da evidência; o resto continua manual.
+    const dod = (await this.runDodAutoChecks(projectId)).map(i =>
+      i.id === 'build' ? { ...i, done: build.result === 'passed' }
+        : i.id === 'tests' ? { ...i, done: tests.result === 'passed' }
+          : i)
+    await this.db.hermesProjectAgent.update({ where: { projectId }, data: { dodChecklist: JSON.stringify(dod) } })
+
+    const previous = await this.getDelivery(projectId)
+    const partial = {
+      build, tests, findings: review.findings, reviewSummary: review.summary, reviewParsed: review.parsed,
+      round: (previous?.round ?? 0) + 1, at: new Date().toISOString(),
+    }
+    return this.saveDelivery(projectId, project, agent, dod, partial)
+  }
+
+  /** Recalcula o veredito com a DoD atual (ex.: depois de marcar itens manuais) sem refazer a revisão. */
+  async reevaluateDelivery(projectId: string): Promise<DeliveryResult> {
+    const agent = await this.db.hermesProjectAgent.findUnique({ where: { projectId } })
+    const project = await this.db.project.findUnique({ where: { id: projectId } })
+    const previous = await this.getDelivery(projectId)
+    if (!agent || !project || !previous) throw new Error('Nenhum fechamento de entrega para reavaliar — rode a revisão primeiro.')
+    const dod = await this.getDodChecklist(projectId)
+    const { verdict: _v, blockingReasons: _b, notes: _n, report: _r, corrections: _c, ...partial } = previous
+    return this.saveDelivery(projectId, project, agent, dod, { ...partial, at: new Date().toISOString() })
+  }
+
+  private async saveDelivery(
+    projectId: string,
+    project: { name: string; vpsServerId: string },
+    agent: { workspace: string; objective: string; baseCommit: string },
+    dod: DodItem[],
+    partial: Omit<DeliveryResult, 'verdict' | 'blockingReasons' | 'notes' | 'report' | 'corrections'>,
+  ): Promise<DeliveryResult> {
+    const gate = evaluateDelivery({ dod, build: partial.build, tests: partial.tests, findings: partial.findings, reviewParsed: partial.reviewParsed })
+    const tasks = await this.db.$queryRawUnsafe(
+      `SELECT title, status FROM agent_tasks WHERE projectId = ? AND ownerAgent = 'hermes' ORDER BY createdAt ASC`, projectId,
+    ).catch(() => []) as { title: string; status: string }[]
+    const range = agent.baseCommit ? `${agent.baseCommit}..HEAD` : '-20'
+    const commits = await this.terminal.exec(
+      project.vpsServerId, `git -C "${agent.workspace}" log --oneline ${range} 2>/dev/null | head -50`, 15000,
+    ).catch(() => '')
+    const result: Omit<DeliveryResult, 'report' | 'corrections'> = { ...partial, ...gate }
+    const report = buildDeliveryReport({ projectName: project.name, objective: agent.objective, tasks, commits, dod, result })
+    const corrections = gate.verdict === 'blocked' ? correctionTasks(partial) : []
+    const delivery: DeliveryResult = { ...result, report, corrections }
+    await this.db.hermesProjectAgent.update({ where: { projectId }, data: { delivery: JSON.stringify(delivery) } })
+    return delivery
   }
 
   /** Há execução do Hermes rodando na pasta do projeto, na VPS (inclusive órfã de um app anterior)? */

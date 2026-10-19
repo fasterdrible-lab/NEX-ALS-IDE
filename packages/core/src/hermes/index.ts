@@ -5,3 +5,7 @@ export type {
   HermesStatus, HermesInstanceInfo, HermesInstallResult, HermesCommandResult,
   HermesAgentStatus, HermesProjectAgentInfo, HermesAutonomyLevel, DodItem, HermesSkillInfo,
 } from './hermes.types.js'
+export {
+  MAX_DELIVERY_ROUNDS, correctionTasks,
+  type DeliveryResult, type DeliveryVerdict, type ReviewFinding, type VerifiedCheck, type CheckResult,
+} from './delivery.js'

@@ -1,5 +1,22 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.66.0] — 2026-10-18
+
+### Adicionado — Hermes: fechamento da entrega (DoD como gate, revisão de código e segurança, checkpoints, relatório final — ETAPAS 9, 24, 27, 28, 40)
+
+Quando todas as tarefas de um objetivo terminam, o painel Agent mostra a seção **Entrega** → **Revisar e fechar entrega**:
+1. **Revisão (ETAPAS 24/27):** o Hermes, numa sessão própria (`nex-review-…`), lê o diff do objetivo (`git diff <base>..HEAD` — o HEAD é guardado quando o objetivo começa), roda build e testes e revisa código e segurança (secrets, injeção, auth, dados em log), **sem alterar arquivos**, devolvendo JSON com checks e achados por severidade.
+2. **Evidência conferida pelo NEX:** os comandos de build/teste que o Hermes informou são **reexecutados pelo próprio NEX** na VPS e o resultado vem do exit code — mas só se estiverem numa lista segura (`npm/pnpm/yarn/bun test|build|typecheck|lint|check`, `npx tsc --noEmit`, `pytest`, `go test ./...`, `cargo test`, `make test`…) e sem nenhum metacaractere de shell. Fora da lista, fica "informado pelo Hermes" e vira ressalva.
+3. **DoD como gate (ETAPA 9):** build/testes da DoD são marcados pela evidência; a entrega só é **Aprovada** com build e testes passando, sem achado crítico nem de segurança alto, revisão no formato esperado e **todos** os itens da DoD marcados. Senão: **Bloqueada** com os motivos, ou **Aprovada com ressalvas** (testes não executados, achados altos/médios não-segurança, check não conferido). **Reavaliar DoD** recalcula depois de marcar itens manuais, sem refazer a revisão.
+4. **Correções:** o que bloqueia e é corrigível (check falhando, achado crítico/segurança alto) vira tarefa nova. No Semi-autônomo/Autônomo isso é automático ao fim do loop — revisão → correções → loop → revisão — com teto de **3 rodadas** para não virar ciclo infinito; no Assistido, botão "Criar N tarefa(s) de correção".
+5. **Relatório final (ETAPA 40):** markdown com veredito, objetivo, tarefas, commits do objetivo, verificações (e quem conferiu), DoD, achados, motivos e ressalvas; recolhível no painel, com **Copiar**.
+
+**Checkpoints (ETAPA 28):** toda execução do Hermes passa a usar `--checkpoints` (snapshot do diretório antes de cada escrita/comando, num repo git "sombra" em `~/.hermes/checkpoints`). Restaurar: rodar `hermes` interativo na pasta do projeto → `/rollback`. Verificado na VPS-1 que a flag convive com `-Q --format stream-json --query-file` sem alterar a saída.
+
+**Backend:** módulo puro `packages/core/src/hermes/delivery.ts` (`parseReview`, `isSafeCheckCommand`, `evaluateDelivery`, `correctionTasks`, `buildDeliveryReport`) + 12 testes; `HermesService.closeDelivery/reevaluateDelivery/getDelivery`; `setObjective` guarda `baseCommit` e zera o fechamento anterior; colunas `hermes_project_agents.baseCommit` e `delivery` (JSON); IPC `hermes:delivery:get|close|reevaluate` (texto da revisão validado com Zod, ≤ 200 KB).
+
+**Verificado:** `pnpm typecheck` (5 pacotes); testes 17/17 no core e 17/17 no config; na VPS-1, o script de reexecução do NEX devolveu exit 0 para `npm test` passando e 3 para `npm run build` falhando. **Não testado pela UI de ponta a ponta** (revisão real do Hermes num projeto).
+
 ## [3.65.0] — 2026-10-18
 
 ### Alterado — paleta e cabeçalho no visual do logo Zeus

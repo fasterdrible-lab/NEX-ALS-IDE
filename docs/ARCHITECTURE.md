@@ -1251,3 +1251,39 @@ Autorizar/Negar de comando perigoso (FASE A) é independente do nível: vale nos
 |---|---|---|
 | `hermes:agent:setAutonomy` | admin | agora valida `level` com `HermesAutonomyLevelSchema` (`manual`/`semi`/`autonomous`) |
 | `hermes:agent:setDevRules` | admin | `{ projectId, devRules }` → `{ written, path }` |
+
+## Hermes — fechamento da entrega (v3.66.0+) — ETAPAS 9, 24, 27, 28, 40
+
+```
+setObjective(projectId, objective)          → baseCommit = git rev-parse HEAD; delivery = '{}'
+
+fim do loop (fila vazia, tudo DONE, algo executado nesta rodada) e policy.autoAdvance
+  ou botão "Revisar e fechar entrega"
+    → sendAndWait(buildReviewPrompt(objective, baseCommit), sessão nex-review-<projeto>-<ts>)
+         Hermes: lê git diff base..HEAD, roda build/testes, revisa código+segurança, NÃO altera nada
+         responde JSON {build, tests, findings[], summary}
+    → hermes:delivery:close {projectId, reviewText}          [requireAdmin, Zod ≤ 200 KB]
+         HermesService.closeDelivery
+           parseReview(text)                                 delivery.ts (puro, testado)
+           verifyCheck(build|tests):
+             isSafeCheckCommand(cmd)? → bash -lc 'cd ws && (timeout 600 cmd) >f 2>&1; …; echo __NEX_EXIT=$ec'
+                                        resultado = exit code (source:'nex')
+             senão → mantém o que o Hermes informou (source:'hermes' → ressalva)
+           runDodAutoChecks + build/tests da DoD ← evidência
+           evaluateDelivery → approved | approved_with_notes | blocked
+           buildDeliveryReport (tarefas, git log base..HEAD, checks, DoD, achados)
+           correctionTasks (só se blocked) → hermes_project_agents.delivery (JSON)
+    → blocked + corrections + auto + round < 3 → cria tarefas → runLoop() → … → nova revisão
+```
+
+**Gate (`evaluateDelivery`):** bloqueia com revisão fora do formato, build/testes `failed`, achado `critical` (qualquer categoria) ou `high/security`, e item da DoD não marcado. Ressalva: check `not_run`, check só informado pelo Hermes, achado `high` não-segurança ou `medium`.
+
+**Lista segura (`isSafeCheckCommand`):** regex por comando conhecido + recusa de qualquer `; & | $ \` < > ( ) { } \ ' " * ? ~ ! #` e quebra de linha — texto do modelo nunca vira comando arbitrário. Workspace com aspas simples também não é reexecutado.
+
+**`--checkpoints`:** sempre ligado em `HermesClient.streamObjective` (inclui tarefas paralelas). Store em `~/.hermes/checkpoints`; restauração só pelo `/rollback` interativo do Hermes — o NEX não automatiza rollback (o histórico git por tarefa, v3.59.4, já é o caminho principal de desfazer).
+
+| Canal | Auth | Descrição |
+|---|---|---|
+| `hermes:delivery:get` | auth | `{ projectId }` → `DeliveryResult \| null` |
+| `hermes:delivery:close` | admin | `{ projectId, reviewText }` → `DeliveryResult` |
+| `hermes:delivery:reevaluate` | admin | `{ projectId }` → `DeliveryResult` (gate com a DoD atual, sem nova revisão) |

@@ -1,5 +1,5 @@
 import { getPrismaClient } from '@cwm/db'
-import { HermesAutonomyLevelSchema, HermesDevRulesSchema } from '@cwm/config'
+import { HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesReviewTextSchema } from '@cwm/config'
 import type { IpcMain } from 'electron'
 import { BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
 import fs from 'node:fs/promises'
@@ -182,6 +182,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
           autonomyLevel TEXT NOT NULL DEFAULT 'manual',
           dodChecklist TEXT NOT NULL DEFAULT '[]',
           devRules TEXT NOT NULL DEFAULT '',
+          baseCommit TEXT NOT NULL DEFAULT '',
+          delivery TEXT NOT NULL DEFAULT '{}',
           createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         )`,
@@ -217,6 +219,9 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     await db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN dodChecklist TEXT NOT NULL DEFAULT '[]'`).catch(() => {})
     // Development Rules (v3.62.0)
     await db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN devRules TEXT NOT NULL DEFAULT ''`).catch(() => {})
+    // Fechamento da entrega (v3.66.0)
+    await db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN baseCommit TEXT NOT NULL DEFAULT ''`).catch(() => {})
+    await db.$executeRawUnsafe(`ALTER TABLE hermes_project_agents ADD COLUMN delivery TEXT NOT NULL DEFAULT '{}'`).catch(() => {})
     for (const [table, { ddl, dateCols }] of Object.entries(HERMES_TABLES)) {
       await migrateHermesDateColumns(table, ddl, dateCols)
         .catch((e: unknown) => console.error(`[DB] falha ao migrar datas de ${table}:`, e))
@@ -681,6 +686,16 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   // ETAPA 21 — Development Rules do projeto (persiste + regrava .hermes.md)
   ipcMain.handle('hermes:agent:setDevRules', (_, { projectId, devRules }: { projectId: string; devRules: unknown }) =>
     wrapHandler(() => { requireAdmin(); return hermesSvc.setDevRules(projectId, HermesDevRulesSchema.parse(devRules)) })
+  )
+  // Fechamento da entrega — revisão + checks reexecutados pelo NEX + DoD como gate + relatório (v3.66.0)
+  ipcMain.handle('hermes:delivery:get', (_, { projectId }: { projectId: string }) =>
+    wrapHandler(() => { requireAuth(); return hermesSvc.getDelivery(projectId) })
+  )
+  ipcMain.handle('hermes:delivery:close', (_, { projectId, reviewText }: { projectId: string; reviewText: unknown }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.closeDelivery(projectId, HermesReviewTextSchema.parse(reviewText)) })
+  )
+  ipcMain.handle('hermes:delivery:reevaluate', (_, { projectId }: { projectId: string }) =>
+    wrapHandler(() => { requireAdmin(); return hermesSvc.reevaluateDelivery(projectId) })
   )
   ipcMain.handle('hermes:dod:get', (_, { projectId }: { projectId: string }) =>
     wrapHandler(() => { requireAuth(); return hermesSvc.getDodChecklist(projectId) })

@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom'
 import {
   Bot, Send, Loader2, Square, ExternalLink, Play, ListChecks,
   ChevronDown, ChevronRight, RefreshCw, CheckCircle2, ShieldAlert, Wrench, AlertTriangle,
+  ShieldCheck, FileText, Copy,
 } from 'lucide-react'
 import type { Project } from '@cwm/config'
 import {
   ipc, type HermesProjectAgentInfo, type HermesStatus, type HermesAgentStatus,
   type HermesAutonomyLevel, type DodItem, type AgentTask, type TaskStatus,
   type HermesActivity, type HermesApprovalRequest, type TaskRisk,
+  type HermesDelivery, type DeliveryVerdict, type DeliveryCheck,
 } from '../lib/ipc'
 import {
   AUTONOMY_LEVELS, AUTONOMY_POLICIES, getAutonomyPolicy, classifyTaskRisk, needsRiskGate,
@@ -97,6 +99,43 @@ const RISK_BADGE: Record<TaskRisk, { label: string; cls: string } | null> = {
   medium: { label: 'risco médio', cls: 'text-amber-400 bg-amber-950/40' },
   high: { label: 'risco alto', cls: 'text-red-400 bg-red-950/40' },
 }
+
+/**
+ * Revisão de fechamento da entrega (ETAPAS 24/27): código + segurança, build e testes, sem alterar
+ * nada. Os comandos informados precisam ser simples para o NEX conseguir reexecutá-los e conferir
+ * o resultado pelo exit code (lista segura em packages/core/src/hermes/delivery.ts).
+ */
+function buildReviewPrompt(objective: string, baseCommit: string): string {
+  const range = baseCommit ? `git diff ${baseCommit}..HEAD (e git log ${baseCommit}..HEAD)` : 'o histórico e o código atual do repositório'
+  return [
+    'Faça a REVISÃO DE FECHAMENTO da entrega deste objetivo. NÃO altere, crie nem apague arquivos e NÃO faça commit — só leia e rode verificações.',
+    '',
+    `Objetivo: ${objective || '(ver histórico do repositório)'}`,
+    '',
+    `1. Leia as alterações do objetivo: ${range}.`,
+    '2. Rode o build e os testes padrão do projeto, se existirem. Use o comando simples do projeto, sem && | ; nem redirecionamento',
+    '   (ex.: npm test, pnpm build, pnpm run typecheck, pytest, go test ./..., cargo test, make test). Se não houver, use result "not_run".',
+    '3. Revise o código: bugs, tratamento de erro, validação de entrada.',
+    '4. Revise a segurança: secrets/credenciais no código, injeção (SQL, comando, path), autenticação/autorização, dados sensíveis em log, dependências perigosas.',
+    '',
+    'Responda APENAS com um bloco ```json neste formato, sem texto antes ou depois:',
+    '{"build":{"command":"...","result":"passed|failed|not_run","summary":"..."},',
+    ' "tests":{"command":"...","result":"passed|failed|not_run","summary":"..."},',
+    ' "findings":[{"severity":"critical|high|medium|low","category":"security|bug|quality","file":"caminho","title":"...","detail":"..."}],',
+    ' "summary":"resumo da revisão em 2 a 5 frases"}',
+    'Use "critical" só para o que quebra a aplicação ou expõe dados; seja objetivo, sem achados genéricos.',
+  ].join('\n')
+}
+
+/** Igual a MAX_DELIVERY_ROUNDS do core: teto do ciclo revisão → correção automática. */
+const MAX_DELIVERY_ROUNDS = 3
+
+const VERDICT_STYLE: Record<DeliveryVerdict, { label: string; cls: string }> = {
+  approved: { label: 'Aprovada', cls: 'text-emerald-300 bg-emerald-950/50 border-emerald-700/50' },
+  approved_with_notes: { label: 'Aprovada com ressalvas', cls: 'text-amber-300 bg-amber-950/40 border-amber-700/50' },
+  blocked: { label: 'Bloqueada', cls: 'text-red-300 bg-red-950/40 border-red-700/50' },
+}
+const CHECK_LABEL: Record<DeliveryCheck['result'], string> = { passed: 'passou', failed: 'falhou', not_run: 'não executado' }
 
 const DEV_RULES_TEMPLATE = [
   '- Siga a arquitetura e as convenções que já existem no repositório; não reestruture sem necessidade.',
@@ -222,6 +261,14 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
   // loadStatus roda depois de cada execução — só carrega as regras ao trocar de projeto, para não apagar a edição.
   const devRulesProjectRef = useRef<string | null>(null)
 
+  // ── Fechamento da entrega (ETAPAS 9/24/27/40) ─────────────────────────────
+  const [delivery, setDelivery] = useState<HermesDelivery | null>(null)
+  const [reviewing, setReviewing] = useState(false)
+  const [deliveryMsg, setDeliveryMsg] = useState('')
+  const [reportOpen, setReportOpen] = useState(false)
+  // runLoop é declarado antes do fechamento — chama a revisão automática por ref.
+  const autoReviewRef = useRef<(() => void) | null>(null)
+
   // ── Governança + activity feed (stream-json) ──────────────────────────────
   const [activity, setActivity] = useState<ActivityEntry[]>([])
   const [approvals, setApprovals] = useState<PendingApproval[]>([])
@@ -334,6 +381,14 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
   }, [projectId, agentInfo])
 
   useEffect(() => { void loadDod() }, [loadDod])
+
+  useEffect(() => {
+    setDelivery(null); setDeliveryMsg(''); setReportOpen(false)
+    if (!projectId) return
+    let cancelled = false
+    ipc.hermes.delivery.get(projectId).then(d => { if (!cancelled) setDelivery(d) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [projectId])
 
   // Listener do fluxo de "mensagem livre" (FASE 2) — ignora chunks enquanto o loop autônomo
   // está usando o mesmo canal via sendAndWait (guardado por `sending`).
@@ -529,6 +584,9 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
     setLooping(true)
     setRiskGateTaskId(null)
     loopStopRef.current = false
+    // Fila esvaziada com tudo concluído depois de ter executado algo nesta rodada → fechar a entrega.
+    let executedAny = false
+    let finishedAll = false
     try {
       let guard = 0
       const cap = 20
@@ -538,7 +596,10 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
         const current = await ipc.tasks.list({ projectId, ownerAgent: 'hermes' }).catch(() => [] as AgentTask[])
         setTasks(current)
         const todo = current.filter(t => t.status === 'TODO')
-        if (todo.length === 0) break
+        if (todo.length === 0) {
+          finishedAll = executedAny && current.length > 0 && current.every(t => t.status === 'DONE')
+          break
+        }
         guard++
         if (guard > Math.max(cap, todo.length * 3)) break
 
@@ -563,6 +624,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
           await loadTasks()
           await runParallelBatch(batch)
           await loadTasks()
+          executedAny = true
           continue
         }
 
@@ -575,6 +637,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
         await loadTasks()
         const result = await executeTask(next)
         await loadTasks()
+        executedAny = true
         if (result !== 'done') break
       }
     } finally {
@@ -583,6 +646,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
       setLooping(false)
       void loadStatus(projectId)
     }
+    if (finishedAll && !handle.stop && policy.autoAdvance) autoReviewRef.current?.()
   }, [looping, projectId, agentInfo, policy, executeTask, runParallelBatch, loadTasks, loadStatus])
 
   const runNextTaskOnce = useCallback(async () => {
@@ -623,6 +687,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
       }).catch(() => {})
     }
     setGoalInput('')
+    setDelivery(null)
     await loadTasks()
     await loadStatus(projectId)
     if (policy.autoAdvance) void runLoop()
@@ -720,6 +785,60 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
     if (projectId) await ipc.hermes.agent.setAutonomy(projectId, level).catch(() => {})
   }, [projectId])
 
+  const createCorrections = useCallback(async (d: HermesDelivery) => {
+    for (const c of d.corrections) {
+      await ipc.tasks.create({
+        title: c.title, description: c.description, projectId, ownerAgent: 'hermes',
+        status: 'TODO', parallelizable: false, risk: classifyTaskRisk(c),
+      }).catch(() => {})
+    }
+    await loadTasks()
+  }, [projectId, loadTasks])
+
+  /**
+   * Fecha a entrega: o Hermes revisa (sessão própria, não suja a do projeto) → o main reexecuta
+   * build/testes seguros, atualiza a DoD, aplica o gate e gera o relatório. `auto` (fim do loop no
+   * Semi-autônomo/Autônomo): se bloquear por algo corrigível, cria as tarefas de correção e volta
+   * ao loop — no máximo MAX_DELIVERY_ROUNDS rodadas, para não virar um ciclo infinito.
+   */
+  const runDeliveryReview = useCallback(async (auto = false) => {
+    if (!projectId || reviewing || activeLoops.has(projectId)) return
+    setReviewing(true)
+    setDeliveryMsg('O Hermes está revisando código e segurança e rodando build/testes…')
+    currentTaskRef.current = null
+    try {
+      const session = `nex-review-${projectId.replace(/[^A-Za-z0-9_-]/g, '')}-${Date.now()}`.slice(0, 80)
+      const { text, ok } = await sendAndWait(buildReviewPrompt(agentInfo?.objective ?? '', agentInfo?.baseCommit ?? ''), session)
+      if (!ok) { setDeliveryMsg('A revisão não terminou — veja a saída ao lado e tente de novo.'); return }
+      setDeliveryMsg('Conferindo build/testes no servidor e aplicando a Definition of Done…')
+      const d = await ipc.hermes.delivery.close(projectId, text)
+      setDelivery(d)
+      setDodItems(await ipc.hermes.dod.get(projectId).catch(() => dodItems))
+      setDeliveryMsg('')
+      if (auto && d.verdict === 'blocked' && d.corrections.length > 0 && d.round < MAX_DELIVERY_ROUNDS && approvalsRef.current.length === 0) {
+        setDeliveryMsg(`Entrega bloqueada — ${d.corrections.length} tarefa(s) de correção criada(s) (rodada ${d.round}/${MAX_DELIVERY_ROUNDS}).`)
+        await createCorrections(d)
+        setReviewing(false)
+        // Por ref: a revisão leva minutos, e o runLoop capturado aqui teria o estado de antes dela.
+        setTimeout(() => { void runLoopRef.current() }, 0)
+      }
+    } catch (e) {
+      setDeliveryMsg(`Erro no fechamento: ${String(e)}`)
+    } finally {
+      setReviewing(false)
+    }
+  }, [projectId, reviewing, agentInfo, sendAndWait, dodItems, createCorrections])
+
+  const runLoopRef = useRef(runLoop)
+  useEffect(() => { runLoopRef.current = runLoop }, [runLoop])
+  useEffect(() => { autoReviewRef.current = () => { setTimeout(() => { void runDeliveryReview(true) }, 0) } }, [runDeliveryReview])
+
+  const reevaluateDelivery = useCallback(async () => {
+    if (!projectId) return
+    try { setDelivery(await ipc.hermes.delivery.reevaluate(projectId)); setDeliveryMsg('') }
+    catch (e) { setDeliveryMsg(`Erro: ${String(e)}`) }
+  }, [projectId])
+
   const saveDevRules = useCallback(async () => {
     if (!projectId) return
     setSavingDevRules(true)
@@ -764,7 +883,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
   const hermesReady = agentInfo?.hermesStatus === 'running'
   // Loop deste projeto rodando em qualquer instância do painel (inclusive uma já desmontada).
   const loopHandle = projectId ? activeLoops.get(projectId) : undefined
-  const busy = sending || planning || looping || orphanRunning || !!loopHandle
+  const busy = sending || planning || looping || reviewing || orphanRunning || !!loopHandle
   const canSendChat = hermesReady && !busy && chatInput.trim().length > 0
   const canStartGoal = hermesReady && !busy && goalInput.trim().length > 0
   const doneCount = tasks.filter(t => t.status === 'DONE').length
@@ -1163,9 +1282,111 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
               </div>
             )}
 
+            {/* Fechamento da entrega — revisão + checks conferidos pelo NEX + DoD como gate + relatório */}
             {tasks.length > 0 && !hasTodo && !looping && (
-              <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-950/30 border border-emerald-800/40 rounded px-2 py-1.5">
-                <CheckCircle2 size={13} /> Todas as tarefas foram processadas — revise o DoD acima.
+              <div className="space-y-2 border border-slate-700/60 rounded-lg p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <ShieldCheck size={12} /> Entrega
+                  </p>
+                  {delivery && (
+                    <span className={`px-1.5 py-0.5 rounded border text-[9px] font-semibold ${VERDICT_STYLE[delivery.verdict].cls}`}>
+                      {VERDICT_STYLE[delivery.verdict].label} · rodada {delivery.round}
+                    </span>
+                  )}
+                </div>
+
+                {!delivery && (
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    <CheckCircle2 size={11} className="inline text-emerald-400 mr-1" />
+                    Tarefas processadas. Feche a entrega: o Hermes revisa código e segurança e roda build/testes; o NEX reexecuta
+                    esses comandos no servidor e só aprova com evidência e a Definition of Done completa.
+                  </p>
+                )}
+
+                {delivery && (
+                  <div className="space-y-1.5 text-[10px]">
+                    {(['build', 'tests'] as const).map(k => {
+                      const c = delivery[k]
+                      const color = c.result === 'passed' ? 'text-emerald-400' : c.result === 'failed' ? 'text-red-400' : 'text-slate-500'
+                      return (
+                        <p key={k} className="text-slate-400">
+                          {k === 'build' ? 'Build' : 'Testes'}: <span className={color}>{CHECK_LABEL[c.result]}</span>
+                          {c.command && <span className="font-mono text-slate-500"> · {c.command}</span>}
+                          <span className="text-slate-600"> · {c.source === 'nex' ? 'conferido pelo NEX' : 'informado pelo Hermes'}</span>
+                        </p>
+                      )
+                    })}
+                    {delivery.blockingReasons.length > 0 && (
+                      <ul className="space-y-0.5 text-red-300 list-disc pl-4">
+                        {delivery.blockingReasons.map((r, i) => <li key={i}>{r}</li>)}
+                      </ul>
+                    )}
+                    {delivery.notes.length > 0 && (
+                      <ul className="space-y-0.5 text-amber-300/90 list-disc pl-4">
+                        {delivery.notes.map((n, i) => <li key={i}>{n}</li>)}
+                      </ul>
+                    )}
+                    {delivery.verdict === 'blocked' && delivery.round >= MAX_DELIVERY_ROUNDS && (
+                      <p className="text-slate-500">Limite de {MAX_DELIVERY_ROUNDS} rodadas automáticas atingido — as correções seguintes ficam com você.</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => void runDeliveryReview(false)}
+                    disabled={!hermesReady || busy}
+                    className="text-[10px] px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-30 flex items-center gap-1"
+                  >
+                    {reviewing ? <Loader2 size={10} className="animate-spin" /> : <ShieldCheck size={10} />}
+                    {delivery ? 'Revisar de novo' : 'Revisar e fechar entrega'}
+                  </button>
+                  {delivery && (
+                    <button
+                      onClick={() => void reevaluateDelivery()}
+                      disabled={busy}
+                      title="Recalcula o veredito com a Definition of Done atual, sem refazer a revisão"
+                      className="text-[10px] px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30"
+                    >
+                      Reavaliar DoD
+                    </button>
+                  )}
+                  {delivery?.verdict === 'blocked' && delivery.corrections.length > 0 && (
+                    <button
+                      onClick={() => void createCorrections(delivery).then(() => { if (policy.autoAdvance) void runLoop() })}
+                      disabled={busy}
+                      className="text-[10px] px-2 py-1 rounded bg-red-800 hover:bg-red-700 disabled:opacity-30"
+                    >
+                      Criar {delivery.corrections.length} tarefa(s) de correção
+                    </button>
+                  )}
+                </div>
+                {deliveryMsg && <p className="text-[10px] text-slate-500">{deliveryMsg}</p>}
+
+                {delivery?.report && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setReportOpen(v => !v)}
+                        aria-expanded={reportOpen}
+                        className="text-[10px] text-slate-400 hover:text-slate-200 flex items-center gap-1"
+                      >
+                        {reportOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                        <FileText size={11} /> Relatório final
+                      </button>
+                      <button
+                        onClick={() => { void navigator.clipboard.writeText(delivery.report).then(() => setDeliveryMsg('Relatório copiado.')) }}
+                        className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 ml-auto"
+                      >
+                        <Copy size={10} /> Copiar
+                      </button>
+                    </div>
+                    {reportOpen && (
+                      <pre className="text-[10px] font-mono text-slate-300 bg-slate-950 border border-slate-800 rounded p-2 whitespace-pre-wrap max-h-72 overflow-auto">{delivery.report}</pre>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

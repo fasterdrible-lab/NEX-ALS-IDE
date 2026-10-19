@@ -6,7 +6,7 @@
 - [ ] **Hermes — validação ponta a ponta pela UI (VPS-1)** — rodar o cenário "assistência técnica" do brief: plano → loop autônomo → Autorizar/Negar → DoD; corrigir o que quebrar
 - [ ] **Hermes — próximas fases do brief (gap analysis 2026-10-17)**, em ordem:
   - [x] AutonomyPolicy + 3 níveis (ETAPAS 22/23) e tela Development Rules injetada via `.hermes.md` (ETAPA 21) — v3.62.0; falta validar pela UI na VPS-1 (Semi-autônomo parando numa tarefa de risco alto; regras aparecendo no `.hermes.md`)
-  - [ ] Qualidade: DoD como gate, review + security pass, `--checkpoints`, relatório final (ETAPAS 9, 24, 27, 28, 40)
+  - [x] Qualidade: DoD como gate, review + security pass, `--checkpoints`, relatório final (ETAPAS 9, 24, 27, 28, 40) — v3.66.0; falta validar pela UI na VPS-1 (fechar a entrega de um objetivo real; ver bloqueio → correções → nova revisão)
   - [ ] Task board/painel de agentes a partir dos eventos `stream-json` (ETAPAS 12/13); logs separados (ETAPA 37)
   - [ ] Painel Agent na IDE (ETAPA 16)
   - [ ] FASE 7 — NotificationMonitor + Incident Mode (ETAPAS 31/32)
