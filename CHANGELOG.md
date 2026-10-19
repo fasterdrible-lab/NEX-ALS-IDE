@@ -1,5 +1,13 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.70.2] — 2026-10-19
+
+### Alterado — Lançador: nova janela visível e projetos abrem na IDE
+
+Reportado pelo usuário: não encontrava o botão de nova janela — no Lançador ele era só um ícone (⎋) sem texto, ao lado de outros dois ícones soltos; e o cartão do projeto só tinha "Abrir no VS Code".
+- Botões da VPS com nome: **Nova janela**, **Incidente**, **Deploy**.
+- Cartão do projeto: **IDE ⎋** (janela própria já na pasta do projeto — vários projetos abertos ao mesmo tempo), **Agent** (Hermes do projeto), **Projeto** (página do projeto) e **VS Code**.
+
 ## [3.70.1] — 2026-10-19
 
 ### Corrigido — vários projetos e várias janelas ao mesmo tempo

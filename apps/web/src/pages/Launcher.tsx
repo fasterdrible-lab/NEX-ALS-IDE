@@ -152,23 +152,23 @@ export default function Launcher() {
                     <button
                       onClick={() => ipc.window.openIde(v.id, v.name)}
                       className="btn-secondary text-xs py-1.5 px-3"
-                      title="Abrir IDE em nova janela independente"
+                      title="Abrir a IDE desta VPS numa janela independente (dá para ter várias abertas)"
                     >
-                      <ExternalLink size={13} />
+                      <ExternalLink size={13} /> Nova janela
                     </button>
                     <button
                       onClick={() => ipc.window.openIncident(v.id, v.name)}
                       className="btn-secondary text-xs py-1.5 px-3 text-red-400 hover:text-red-300 border-red-800/40"
                       title="Abrir Incident Mode para esta VPS"
                     >
-                      <Siren size={13} />
+                      <Siren size={13} /> Incidente
                     </button>
                     <button
                       onClick={() => ipc.window.openDeploy(v.id, v.name)}
                       className="btn-secondary text-xs py-1.5 px-3 text-emerald-400 hover:text-emerald-300 border-emerald-800/40"
                       title="Deploy Assistant — plano de deploy com aprovação"
                     >
-                      <RocketIcon size={13} />
+                      <RocketIcon size={13} /> Deploy
                     </button>
                     <button
                       onClick={() => navigate(`/hermes/${v.id}/${encodeURIComponent(v.name)}`)}
@@ -252,16 +252,43 @@ export default function Launcher() {
                     </div>
                   )}
 
-                  <button
-                    onClick={() => handleOpenProject(p.id)}
-                    disabled={state?.loading}
-                    className="btn-primary w-full"
-                  >
-                    {state?.loading
-                      ? <><Loader2 size={14} className="animate-spin" /> Abrindo...</>
-                      : <><Rocket size={14} /> Abrir no VS Code</>
-                    }
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {/* Janela própria na pasta do projeto: vários projetos abertos ao mesmo tempo */}
+                    <button
+                      onClick={() => {
+                        ipc.window.openIde(p.vpsServerId, p.vpsServer?.name ?? p.vpsServerId, p.remotePath)
+                          .catch(e => setLaunchStates(s => ({ ...s, [p.id]: { loading: false, success: false, message: String(e instanceof Error ? e.message : e) } })))
+                      }}
+                      className="btn-primary text-xs py-1.5 px-3"
+                      title="Abre a IDE na pasta do projeto, numa janela própria — dá para abrir outros projetos ao mesmo tempo"
+                    >
+                      <Code2 size={13} /> IDE <ExternalLink size={11} />
+                    </button>
+                    <button
+                      onClick={() => navigate(`/ai-hub?mode=agent&project=${encodeURIComponent(p.id)}`)}
+                      className="btn-secondary text-xs py-1.5 px-3 text-purple-400 hover:text-purple-300 border-purple-800/40"
+                      title="Agent (Hermes) deste projeto"
+                    >
+                      <Bot size={13} /> Agent
+                    </button>
+                    <button
+                      onClick={() => navigate(`/projects/${p.id}`)}
+                      className="btn-secondary text-xs py-1.5 px-3"
+                      title="Página do projeto: atalhos e resumo (Hermes, tarefas, git)"
+                    >
+                      <FolderOpen size={13} /> Projeto
+                    </button>
+                    <button
+                      onClick={() => handleOpenProject(p.id)}
+                      disabled={state?.loading}
+                      className="btn-secondary text-xs py-1.5 px-3"
+                    >
+                      {state?.loading
+                        ? <><Loader2 size={13} className="animate-spin" /> Abrindo...</>
+                        : <><Rocket size={13} /> VS Code</>
+                      }
+                    </button>
+                  </div>
                 </div>
               )
             })}
