@@ -1,5 +1,23 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.69.2] — 2026-10-19
+
+### Corrigido — diagnóstico do Hermes "não respondeu no formato esperado", ações sumindo e "Error" solto
+
+Reportado no Incident Mode (VPS-1): o diagnóstico aparecia como texto bruto, sem ações, com um "Error" sem detalhe embaixo.
+
+**1. "Error" vazio — e Logs/diagnóstico ao vivo que nunca carregavam (bug da 3.67.0/3.69.0):** o `invoke` do renderer trata como falha do IPC **qualquer** resposta com a chave `error`. Os registros de execução (`HermesRunSummary`) e de incidente (`HermesIncident`) tinham um campo `error` (normalmente vazio) → `hermes:runs:get`, `hermes:incident:get/diagnose/resolve` lançavam `Error('')`. Efeitos: o detalhe da aba **Logs** ficava girando, a saída ao vivo do diagnóstico não aparecia e as ações do Incident Mode mostravam "Error". O campo passa a se chamar **`failure`** nos objetos (a coluna no banco continua `error`, sem migração), com comentário explicando a colisão. Os testes de integração chamavam o core direto e não passavam por essa camada.
+
+**2. JSON do Hermes com erro de sintaxe:** o modelo gratuito escreveu `"…sem reinicição"),"Load…"` (parêntese sobrando) e o `JSON.parse` recusou o diagnóstico inteiro. Nova leitura tolerante `extractJsonObject` (`packages/core/src/hermes/json-loose.ts`): tenta o JSON como veio e, se falhar, conserta parêntese sobrando depois de string e vírgula antes de `]`/`}`. Usada pelo diagnóstico de incidente e pela revisão de fechamento da entrega.
+
+**3. Ações fora do JSON:** no mesmo diagnóstico, o Hermes pôs as ações numa tabela markdown depois do JSON — mesmo lido, ficava sem nenhuma ação para executar. JSON sem o campo `actions` agora é **incompleto** (`"actions": []` continua válido: nada a corrigir).
+
+**4. Segunda chance:** JSON ilegível ou incompleto → o NEX pede ao Hermes, **na mesma sessão e uma única vez**, que reenvie só o JSON corrigido sem rodar comandos (`buildJsonFixPrompt`). No incidente isso acontece no main; na revisão de entrega, o painel confere antes de fechar (`hermes:delivery:checkReview`), para a correção não gastar uma das 3 rodadas.
+
+**Documentação atualizada para 3.62 → 3.69:** Manual de Uso no app (`Help.tsx` — seção Hermes: níveis de autonomia, regras, checkpoints, fechamento da entrega, Quadro/Logs, painel na IDE; seção Incident Mode: incidentes, aba Hermes, reparo confirmado, trava de segurança; versão do guia), `AGENTE.md` (módulo `hermes/`, IPC novos, estado atual, armadilhas do IPC e do BIGINT), `CLAUDE.md` (nome Zeus IDE, versão, botão Agent nos atalhos).
+
+**Verificado:** o texto real que falhou agora é lido (status, 11 evidências); a segunda chance testada na VPS-1 na sessão de um diagnóstico real — 0 comandos executados, só o JSON, 3 ações dentro; 32/32 testes no core (7 novos de leitura tolerante/incompleto); testes de integração do log e dos incidentes refeitos com `failure`; `pnpm typecheck` (5 pacotes).
+
 ## [3.69.1] — 2026-10-19
 
 ### Corrigido — Incident Mode caía com "Minified React error #31" ao carregar as métricas

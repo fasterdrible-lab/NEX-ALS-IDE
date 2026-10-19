@@ -6,6 +6,7 @@
  * só roda com confirmação do usuário, o comando vem do diagnóstico guardado no main (nunca da
  * tela) e o que é destrutivo/irreversível é recusado sempre (isForbiddenRepair).
  */
+import { extractJsonObject } from './json-loose.js'
 
 export type IncidentType = 'disk' | 'cpu' | 'ram' | 'manual'
 export type IncidentStatus = 'open' | 'diagnosing' | 'diagnosed' | 'diagnosis_failed' | 'resolved'
@@ -25,6 +26,10 @@ export interface RepairAction {
 
 export interface IncidentDiagnosis {
   parsed: boolean
+  /** Por que não deu para ler o JSON, ou o que faltou nele (vai no pedido de correção ao Hermes). */
+  parseError?: string
+  /** JSON lido, mas sem o campo "actions" (visto na VPS-1: ações numa tabela markdown fora do JSON). */
+  incomplete?: boolean
   status: IncidentSeverity
   summary: string
   rootCause: string
@@ -32,7 +37,13 @@ export interface IncidentDiagnosis {
   actions: RepairAction[]
 }
 
-const str = (v: unknown, max = 2000) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+const str =(v: unknown, max = 2000) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+
+/** Segunda chance quando o JSON veio inválido: mesma sessão, só o JSON corrigido. */
+export function buildJsonFixPrompt(parseError: string): string {
+  return `Seu bloco JSON anterior está inválido ou incompleto (${parseError}). Não rode nenhum comando de novo. `
+    + 'Reenvie APENAS o bloco ```json corrigido, no mesmo formato e com o mesmo conteúdo, sem nenhum texto antes ou depois.'
+}
 
 const TYPE_LABEL: Record<IncidentType, string> = {
   disk: 'disco quase cheio', cpu: 'CPU alta', ram: 'memória (RAM) alta', manual: 'investigação manual',
@@ -62,16 +73,11 @@ export function buildIncidentPrompt(i: { vpsName: string; type: IncidentType; va
 }
 
 export function parseDiagnosis(text: string): IncidentDiagnosis {
-  const empty: IncidentDiagnosis = { parsed: false, status: 'degraded', summary: text.trim().slice(0, 1500), rootCause: '', evidence: [], actions: [] }
-  const fence = text.match(/```json\s*([\s\S]*?)```/i)
-  const raw = fence ? fence[1] : (text.match(/\{[\s\S]*\}/)?.[0] ?? null)
-  if (!raw) return empty
-  let o: Record<string, unknown>
-  try {
-    const v: unknown = JSON.parse(raw)
-    if (!v || typeof v !== 'object' || Array.isArray(v)) return empty
-    o = v as Record<string, unknown>
-  } catch { return empty }
+  const json = extractJsonObject(text)
+  if ('error' in json) {
+    return { parsed: false, parseError: json.error, status: 'degraded', summary: text.trim().slice(0, 1500), rootCause: '', evidence: [], actions: [] }
+  }
+  const o = json.value
   const status = (['ok', 'degraded', 'critical'] as const).find(s => s === o['status']) ?? 'degraded'
   const evidence = (Array.isArray(o['evidence']) ? o['evidence'] : []).map(e => str(e, 400)).filter(Boolean).slice(0, 20)
   const actions = (Array.isArray(o['actions']) ? o['actions'] : [])
@@ -82,7 +88,13 @@ export function parseDiagnosis(text: string): IncidentDiagnosis {
       return { title: str(a['title'], 200) || command, command, risk, why: str(a['why'], 800), allowed: !!command && !isForbiddenRepair(command) }
     })
     .slice(0, 10)
-  return { parsed: true, status, summary: str(o['summary'], 1500), rootCause: str(o['rootCause'], 1000), evidence, actions }
+  const result: IncidentDiagnosis = { parsed: true, status, summary: str(o['summary'], 1500), rootCause: str(o['rootCause'], 1000), evidence, actions }
+  // "actions": [] é válido (nada a corrigir); campo ausente não — as ações ficaram fora do JSON.
+  if (!Array.isArray(o['actions'])) {
+    result.incomplete = true
+    result.parseError = 'faltou o campo "actions" — as ações sugeridas precisam estar dentro do JSON, não em tabela ou texto'
+  }
+  return result
 }
 
 // Recusado sempre, mesmo com confirmação: apaga em massa, formata, derruba o servidor, mexe em

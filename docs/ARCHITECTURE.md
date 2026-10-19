@@ -1336,6 +1336,10 @@ hermes:incident:runAction {incidentId, actionIndex}   [admin]
   → actions[i].executed = {at, success, output}
 ```
 
+**JSON do modelo (v3.69.2):** `extractJsonObject` (`json-loose.ts`) lê o bloco ```json ou o primeiro `{…}`; se o `JSON.parse` falhar, tenta de novo consertando `")` sobrando e vírgula antes de `]`/`}`. Diagnóstico ilegível ou sem `actions` → 2ª tentativa na mesma sessão com `buildJsonFixPrompt` (sem rodar comandos, só o JSON). A revisão de entrega usa o mesmo leitor e a mesma 2ª chance via `hermes:delivery:checkReview` antes de `close`.
+
+**Armadilha do IPC:** `invoke()` em `apps/web/src/lib/ipc.ts` trata qualquer resposta com chave `error` como falha. Objetos de domínio devolvidos ao renderer não podem ter um campo `error` — por isso `HermesRunSummary.failure` e `HermesIncident.failure` (a coluna no banco segue `error`).
+
 Tabela `hermes_incidents` (raw SQL): `id, vpsId, vpsName, type, value, threshold, title, status (open|diagnosing|diagnosed|diagnosis_failed|resolved), createdAt BIGINT, updatedAt BIGINT, runId, error, diagnosis(JSON)`; boot marca `diagnosing` órfão como `diagnosis_failed`. Confirmação na UI (`HermesIncidentPanel`): toda ação pede confirmar; risco alto exige digitar CONFIRMO — mesma convenção do ToolExecutor (v3.3.0).
 
 | Canal | Auth | Descrição |

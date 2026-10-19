@@ -826,8 +826,16 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
     currentTaskRef.current = null
     try {
       const session = `nex-review-${projectId.replace(/[^A-Za-z0-9_-]/g, '')}-${Date.now()}`.slice(0, 80)
-      const { text, ok } = await sendAndWait(buildReviewPrompt(agentInfo?.objective ?? '', agentInfo?.baseCommit ?? ''), session)
+      let { text, ok } = await sendAndWait(buildReviewPrompt(agentInfo?.objective ?? '', agentInfo?.baseCommit ?? ''), session)
       if (!ok) { setDeliveryMsg('A revisão não terminou — veja a saída ao lado e tente de novo.'); return }
+      // JSON ilegível (o modelo gratuito às vezes erra a sintaxe): pede só o JSON corrigido, na
+      // mesma sessão, uma vez — antes de fechar, porque cada fechamento conta uma rodada.
+      const check = await ipc.hermes.delivery.checkReview(text).catch(() => ({ parsed: true, fixPrompt: '' }))
+      if (!check.parsed) {
+        setDeliveryMsg('A resposta da revisão veio com o JSON inválido — pedindo ao Hermes que reenvie corrigido…')
+        const retry = await sendAndWait(check.fixPrompt, session)
+        if (retry.ok) ({ text, ok } = retry)
+      }
       setDeliveryMsg('Conferindo build/testes no servidor e aplicando a Definition of Done…')
       const d = await ipc.hermes.delivery.close(projectId, text)
       setDelivery(d)

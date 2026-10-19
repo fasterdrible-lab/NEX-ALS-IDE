@@ -239,8 +239,8 @@ export function HermesRunLogs({ tasks, runs, taskFilter, onTaskFilter }: {
               <div className="p-4"><Loader2 size={14} className="animate-spin text-slate-500" /></div>
             ) : (
               <>
-                {detail.error && (
-                  <p className="shrink-0 px-3 py-1.5 text-[10px] text-red-300 bg-red-950/30 border-b border-red-900/40 break-words">{detail.error}</p>
+                {detail.failure && (
+                  <p className="shrink-0 px-3 py-1.5 text-[10px] text-red-300 bg-red-950/30 border-b border-red-900/40 break-words">{detail.failure}</p>
                 )}
                 {detail.activity.length > 0 && (
                   <div className="shrink-0 max-h-48 overflow-y-auto border-b border-slate-800 bg-slate-900/60 px-3 py-2 space-y-0.5">

@@ -1,4 +1,4 @@
-# AGENTE.md — NEX-ALS IDE
+# AGENTE.md — Zeus IDE (antes NEX-ALS IDE)
 
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
 **Remote local:** `git remote set-url origin https://github.com/fasterdrible-lab/NEX-ALS-IDE.git`
@@ -142,7 +142,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 - `KnowledgeService.delete(id)` — remove
 - `KnowledgeService.buildContext()` — formata KB como markdown agrupado por categoria para injeção nos system prompts de Squad e AI HUB
 
-### `packages/core/src/hermes/` ← adicionado em 3.52.0, estendido em 3.53.0, 3.54.0, 3.55.0 e 3.56.0
+### `packages/core/src/hermes/` ← adicionado em 3.52.0, estendido até 3.69.2
 - `HermesService` — gerenciador de ciclo de vida do runtime agentic externo Hermes Agent (Nous Research) numa VPS
 - `getStatus/install/update/start/stop/restart/execCommand/getLogs(vpsId)` — reaproveita `TerminalService.exec` (SSH), sem novo transporte
 - FASE 1: instala/atualiza o binário `hermes`, gerencia `hermes gateway` em background via PID file
@@ -151,7 +151,15 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 - FASE 4 (3.55.0): construtor passa a injetar também `GitService`; `startParallelTask/finishParallelTask(projectId, ...)` — cria git worktree isolado por tarefa (gerenciado pelo NEX, não pela flag `-w` do Hermes, pouco documentada) e roda a tarefa dentro dele sem `--resume`; "subagentes" nomeados não existem como API externa do Hermes — é execução paralela real de tarefas independentes
 - FASE 5 (3.56.0): construtor passa a injetar também `KnowledgeService`/`ProjectMemoryService`; `getSkills(vpsId)` lê e parseia `~/.hermes/skills/**/SKILL.md` (só leitura); `getSessionsSummary(vpsId)` roda `hermes sessions stats/list`; `syncProjectContext(projectId)` escreve KB Global + memória do projeto em `.hermes.md` — arquivo que o Hermes já injeta sozinho no system prompt, sem flag
 - Nenhum agent loop novo no backend do NEX — Squad continua sendo o único orquestrador server-independent; o Hermes já é agentic por conta própria, e o loop de tarefas das FASEs 3/4 é só orquestração de chamadas já existentes
-- Ver `docs/HERMES_INTEGRATION.md` para arquitetura completa e roadmap das 7 fases
+- FASE A (3.58.0) + 3.59.x/3.60.x: `hermes chat --format stream-json` → `HermesEventStream` (`hermes-events.ts`); comando bloqueado vira Autorizar/Negar (`runApprovedCommand`, auditado); delegação ao Claude Code CLI na VPS; uma sessão nomeada por tarefa (`nex-task-<id>`); detecção/encerramento de execução órfã na VPS
+- 3.62.0: 3 níveis de autonomia `manual` (Assistido) / `semi` / `autonomous` — política no renderer (`apps/web/src/lib/autonomy-policy.ts`); risco por tarefa (`agent_tasks.risk`); `setDevRules` → Development Rules no início do `.hermes.md`
+- 3.66.0: fechamento da entrega — `delivery.ts` (puro: `parseReview`, `isSafeCheckCommand`, `evaluateDelivery`, `correctionTasks`, `buildDeliveryReport`); `closeDelivery/reevaluateDelivery/getDelivery`; `setObjective` guarda `baseCommit`; `--checkpoints` em toda execução
+- 3.67.0: `HermesRunLog` (`run-log.ts`) — log separado por execução gravado pelo main (`hermes_task_runs`), base do Quadro/Logs
+- 3.69.0: FASE 7 — `incident.ts` (puro: `buildIncidentPrompt`, `parseDiagnosis`, `isForbiddenRepair`) + `HermesIncidentStore` (`hermes_incidents`); `startIncidentDiagnosis` (somente leitura, `~/.hermes-nex/incidents`) e `runIncidentRepair` (só com confirmação, auditado)
+- 3.69.2: `json-loose.ts` — leitura tolerante do JSON do modelo + 2ª chance na mesma sessão (`buildJsonFixPrompt`)
+- **Armadilha do IPC:** `invoke()` do renderer trata qualquer resposta com chave `error` como falha — objetos de domínio devolvidos à tela usam `failure`, nunca `error`
+- Tabelas raw-SQL novas usam datas em **BIGINT** (com `INTEGER` o `$queryRawUnsafe` do Prisma lê i32 e falha com P2010)
+- Ver `docs/HERMES_INTEGRATION.md` para arquitetura completa e roadmap das fases
 
 ### `packages/core/src/tunnel/` ← adicionado em 1.5.0
 - `TunnelService.open(vpsId, localPort, remotePort, remoteHost?)` — cria túnel SSH local via `ssh2.forwardOut`
@@ -234,7 +242,9 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 
 ## Estado atual
 
-`v3.56.0` — **NEX-ALS IDE completo + Squad com 22 agentes especializados + Pipeline autônomo + Memória Persistente + Busca Web + Planning Mode + Conta & Uso + Hermes Manager (FASE 1) + Hermes Agent Mode (FASE 2) + Hermes Autonomous Loop (FASE 3) + Hermes Execução Paralela (FASE 4) + Hermes Memory + Skills (FASE 5)**. Agent Mode: toggle Chat/Agent no AI Hub (`HermesAgentPanel.tsx`) quebra um objetivo em tarefas (`agent_tasks`, reaproveitado do Squad), executa em loop manual/autônomo via `hermes chat -q` na VPS com protocolo de tags e Decision Requests, roda tarefas independentes em paralelo via git worktrees isolados gerenciados pelo NEX (não a flag `-w` do Hermes, pouco documentada), mostra um checklist de Definition of Done, e sincroniza KB Global + memória do projeto com o Hermes via `.hermes.md` (arquivo que ele já injeta sozinho no system prompt). IDE com Monaco/xterm/SFTP/Git + Semantic Highlighting + Breadcrumbs + Outline View + LSP auto-start local. NEX-ALS AI HUB com 6 providers + Claude Code. Squad com **22 agentes** (ECC expandido: Natasha/Hank/Ghost/Rhodey/Bruce/Sam/Scott/Thor/Riri/Hope/Carol/Wanda), ACTION tags (SHELL/READ_FILE/READ_DIR/WRITE_FILE/**SEARCH**), **Modo Pipeline autônomo** (Jarvis→Friday→Reviewer→Tester→DevOps), Exec auto, modo autônomo, KB por projeto, KB Global, robocopy `/XD node_modules`, **Memória Persistente** (tabela `squad_memories`, extração por IA, injeção automática), **Busca Web** (Brave Search API, ACTION SEARCH, Fury reformulado). **Skills + ContextBuilder** (detecção por gatilho, banner pós-pipeline). **Planning Mode** (PlanningPage, fila de tarefas, automações, contexto por agente). **Workspace Intelligence** (WorkspacePage 5 abas). **Conta & Uso** (painel com barras Session 5h + Weekly 7d via `api.anthropic.com/api/oauth/usage`). **Visual NEX-ALS Dark Luxury** (paleta `#080612`/dourado/roxo). Ver `docs/CURRENT_STATE.md`.
+`v3.69.2` — **Zeus IDE** (renomeado de NEX-ALS IDE na 3.64.0; appId `com.nexals.ide` e pasta de dados `%APPDATA%\@cwm\desktop` mantidos). Hermes: 3 níveis de autonomia + Regras de desenvolvimento (3.62.0), fechamento da entrega com revisão de código/segurança, checks reexecutados pelo NEX e DoD como gate (3.66.0), Quadro + Agentes em execução + Logs por execução (3.67.0), painel Agent dentro da IDE (3.68.0), FASE 7 — incidentes de VPS com diagnóstico somente leitura e reparo confirmado (3.69.0). Visual azul Zeus (3.65.0). Detalhes em `docs/CURRENT_STATE.md` e `CHANGELOG.md`.
+
+Histórico (v3.56.0) — **NEX-ALS IDE completo + Squad com 22 agentes especializados + Pipeline autônomo + Memória Persistente + Busca Web + Planning Mode + Conta & Uso + Hermes Manager (FASE 1) + Hermes Agent Mode (FASE 2) + Hermes Autonomous Loop (FASE 3) + Hermes Execução Paralela (FASE 4) + Hermes Memory + Skills (FASE 5)**. Agent Mode: toggle Chat/Agent no AI Hub (`HermesAgentPanel.tsx`) quebra um objetivo em tarefas (`agent_tasks`, reaproveitado do Squad), executa em loop manual/autônomo via `hermes chat -q` na VPS com protocolo de tags e Decision Requests, roda tarefas independentes em paralelo via git worktrees isolados gerenciados pelo NEX (não a flag `-w` do Hermes, pouco documentada), mostra um checklist de Definition of Done, e sincroniza KB Global + memória do projeto com o Hermes via `.hermes.md` (arquivo que ele já injeta sozinho no system prompt). IDE com Monaco/xterm/SFTP/Git + Semantic Highlighting + Breadcrumbs + Outline View + LSP auto-start local. NEX-ALS AI HUB com 6 providers + Claude Code. Squad com **22 agentes** (ECC expandido: Natasha/Hank/Ghost/Rhodey/Bruce/Sam/Scott/Thor/Riri/Hope/Carol/Wanda), ACTION tags (SHELL/READ_FILE/READ_DIR/WRITE_FILE/**SEARCH**), **Modo Pipeline autônomo** (Jarvis→Friday→Reviewer→Tester→DevOps), Exec auto, modo autônomo, KB por projeto, KB Global, robocopy `/XD node_modules`, **Memória Persistente** (tabela `squad_memories`, extração por IA, injeção automática), **Busca Web** (Brave Search API, ACTION SEARCH, Fury reformulado). **Skills + ContextBuilder** (detecção por gatilho, banner pós-pipeline). **Planning Mode** (PlanningPage, fila de tarefas, automações, contexto por agente). **Workspace Intelligence** (WorkspacePage 5 abas). **Conta & Uso** (painel com barras Session 5h + Weekly 7d via `api.anthropic.com/api/oauth/usage`). **Visual NEX-ALS Dark Luxury** (paleta `#080612`/dourado/roxo). Ver `docs/CURRENT_STATE.md`.
 
 ## Squad — visão geral
 
@@ -491,7 +501,8 @@ git pull
 - `hermes:agent:send` ← 3.53.0 — envia objetivo ao Hermes do projeto; streaming via evento `hermes:agent:chunk`
 - `hermes:agent:cancel` ← 3.53.0 — cancela um envio em andamento
 - `hermes:agent:setObjective` ← 3.54.0 — persiste o objetivo de alto nível atual do projeto
-- `hermes:agent:setAutonomy` ← 3.54.0 — define `manual`/`autonomous` para o loop de tarefas
+- `hermes:agent:setAutonomy` ← 3.54.0, 3 níveis desde 3.62.0 — `manual` (Assistido) / `semi` / `autonomous`, validado com Zod
+- `hermes:agent:setDevRules` ← 3.62.0 — salva as Regras de desenvolvimento do projeto e regrava `.hermes.md`
 - `hermes:dod:get` ← 3.54.0 — retorna o checklist de Definition of Done (lazy-init com 7 itens padrão)
 - `hermes:dod:toggle` ← 3.54.0 — marca/desmarca um item manual do DoD
 - `hermes:dod:runChecks` ← 3.54.0 — roda os 2 checks automáticos (`.env.example`, commits no git) via SSH direto
@@ -499,7 +510,12 @@ git pull
 - `hermes:parallel:finish` ← 3.55.0 — merge cauteloso do worktree de volta (nunca força; conflito preserva branch para revisão manual)
 - `hermes:skills:list` ← 3.56.0 — lista skills instaladas na VPS (parse de `SKILL.md`, só leitura)
 - `hermes:sessions:summary` ← 3.56.0 — `hermes sessions stats` + `hermes sessions list` (texto bruto)
-- `hermes:agent:syncContext` ← 3.56.0 — escreve `.hermes.md` (KB Global + memória do projeto) na VPS
+- `hermes:agent:syncContext` ← 3.56.0 — escreve `.hermes.md` (regras + KB Global + memória do projeto) na VPS
+- `hermes:approval:resolve` ← 3.58.0 — Autorizar/Negar comando bloqueado (recebe só o id; o comando fica no main)
+- `hermes:agent:active` / `hermes:agent:stopRemote` ← 3.59.5/3.59.7 — reconectar à execução em andamento; encerrar execução órfã na VPS
+- `hermes:delivery:get|close|reevaluate|checkReview` ← 3.66.0/3.69.2 — fechamento da entrega (revisão, checks reexecutados pelo NEX, DoD como gate, relatório)
+- `hermes:runs:list|get` ← 3.67.0 — log separado por execução (Quadro / Logs)
+- `hermes:incident:list|get|diagnose|runAction|resolve` + evento `hermes:incident:updated` ← 3.69.0 — incidentes de VPS, diagnóstico somente leitura, reparo confirmado
 
 ### git:*
 - `git:status` — status do repositório

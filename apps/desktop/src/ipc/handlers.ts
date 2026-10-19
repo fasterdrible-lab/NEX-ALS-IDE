@@ -43,6 +43,8 @@ import {
   HermesIncidentStore,
   buildIncidentPrompt,
   parseDiagnosis,
+  buildJsonFixPrompt,
+  parseReview,
   type IncidentType,
 } from '@cwm/core'
 
@@ -735,69 +737,88 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     if (!inc) throw new Error('Incidente não encontrado')
     if (incidentDiagnosing.has(inc.vpsId)) throw new Error('Já há um diagnóstico do Hermes rodando nesta VPS — aguarde terminar.')
     incidentDiagnosing.add(inc.vpsId)
-    let stream: HermesEventStream
-    try {
-      stream = await hermesSvc.startIncidentDiagnosis(inc.vpsId, buildIncidentPrompt(inc), `nex-incident-${Date.now()}`)
-    } catch (e) {
-      incidentDiagnosing.delete(inc.vpsId)
-      await incidentStore.update(incidentId, { status: 'diagnosis_failed', error: e instanceof Error ? e.message : String(e) })
-      broadcastIncident(incidentId, inc.vpsId)
-      throw e
-    }
-    const runId = hermesRunLog.start({ projectId: `incident:${inc.vpsId}`, taskId: incidentId, kind: 'incident' })
-    await incidentStore.update(incidentId, { status: 'diagnosing', runId, error: '', diagnosis: null })
-    broadcastIncident(incidentId, inc.vpsId)
+    // Mesma sessão nas duas tentativas: o pedido de correção do JSON continua a conversa do diagnóstico.
+    const session = `nex-incident-${Date.now()}`
 
-    let text = ''
-    let settled = false
-    let lastAt = Date.now()
-    // eslint-disable-next-line prefer-const
-    let watchdog: ReturnType<typeof setInterval>
-    const end = async (ok: boolean, error?: string) => {
-      if (settled) return
-      settled = true
-      clearInterval(watchdog)
-      hermesRunLog.finish(runId, ok, error)
+    const fail = async (message: string) => {
       incidentDiagnosing.delete(inc.vpsId)
-      if (!ok) {
-        await incidentStore.update(incidentId, { status: 'diagnosis_failed', error: error ?? 'falha no diagnóstico' }).catch(() => {})
-      } else {
-        const diagnosis = parseDiagnosis(text)
-        await incidentStore.update(incidentId, { status: 'diagnosed', diagnosis }).catch(() => {})
-        if (notificationsEnabled && Notification.isSupported()) {
-          const label = { ok: 'OK', degraded: 'degradado', critical: 'CRÍTICO' }[diagnosis.status]
-          const n = new Notification({
-            title: `Diagnóstico pronto — ${inc.vpsName} (${label})`,
-            body: `${diagnosis.summary || inc.title}`.slice(0, 200) + (diagnosis.actions.length ? ` · ${diagnosis.actions.length} ação(ões) sugerida(s)` : ''),
-          })
-          n.on('click', () => openIncidentWindow?.(inc.vpsId, inc.vpsName))
-          n.show()
-        }
+      await incidentStore.update(incidentId, { status: 'diagnosis_failed', error: message }).catch(() => {})
+      broadcastIncident(incidentId, inc.vpsId)
+    }
+
+    const finish = async (diagnosis: ReturnType<typeof parseDiagnosis>) => {
+      incidentDiagnosing.delete(inc.vpsId)
+      await incidentStore.update(incidentId, { status: 'diagnosed', diagnosis }).catch(() => {})
+      if (notificationsEnabled && Notification.isSupported()) {
+        const label = { ok: 'OK', degraded: 'degradado', critical: 'CRÍTICO' }[diagnosis.status]
+        const n = new Notification({
+          title: `Diagnóstico pronto — ${inc.vpsName} (${label})`,
+          body: `${diagnosis.summary || inc.title}`.slice(0, 200) + (diagnosis.actions.length ? ` · ${diagnosis.actions.length} ação(ões) sugerida(s)` : ''),
+        })
+        n.on('click', () => openIncidentWindow?.(inc.vpsId, inc.vpsName))
+        n.show()
       }
       broadcastIncident(incidentId, inc.vpsId)
     }
-    stream.on('data', (chunk: string) => {
-      lastAt = Date.now()
-      if (text.length < 400_000) text += chunk
-      hermesRunLog.appendText(runId, chunk)
-    })
-    stream.on('event', (e: HermesEvent) => {
-      lastAt = Date.now()
-      if (e.kind === 'tool_use') hermesRunLog.appendActivity(runId, { kind: 'tool', tool: e.tool, summary: e.summary })
-      else if (e.kind === 'tool_result' && !e.ok) hermesRunLog.appendActivity(runId, { kind: 'tool_error', tool: e.tool, summary: e.summary })
-      else if (e.kind === 'init') hermesRunLog.appendActivity(runId, { kind: 'init', tool: '', summary: e.model })
-      // Diagnóstico é só leitura: comando bloqueado pelo Hermes não vira Autorizar/Negar, só fica no log.
-      else if (e.kind === 'blocked') hermesRunLog.appendActivity(runId, { kind: 'blocked', tool: e.tool, summary: `${e.command || e.tool} — ${e.reason}` })
-    })
-    stream.on('close', (code: number | null) => {
-      const r = stream.result
-      const ok = r ? r.ok : (code === 0 && text.length > 0)
-      void end(ok, ok ? undefined : (r?.error || `hermes encerrou sem resultado (código ${code})`))
-    })
-    stream.on('error', (err: Error) => { void end(false, err.message) })
-    watchdog = setInterval(() => {
-      if (Date.now() - lastAt > 900_000) { stream.kill(); void end(false, 'Timeout: Hermes não respondeu em 900s.') }
-    }, 15_000)
+
+    /** 1ª tentativa: o diagnóstico. 2ª (só se o JSON veio inválido e o reparo automático não deu conta): pedir só o JSON corrigido. */
+    const attempt = async (objective: string, n: 1 | 2): Promise<void> => {
+      let stream: HermesEventStream
+      try {
+        stream = await hermesSvc.startIncidentDiagnosis(inc.vpsId, objective, session)
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e)
+        await fail(message)
+        throw e
+      }
+      const runId = hermesRunLog.start({ projectId: `incident:${inc.vpsId}`, taskId: incidentId, kind: 'incident' })
+      await incidentStore.update(incidentId, n === 1 ? { status: 'diagnosing', runId, error: '', diagnosis: null } : { runId })
+      broadcastIncident(incidentId, inc.vpsId)
+
+      let text = ''
+      let settled = false
+      let lastAt = Date.now()
+      // eslint-disable-next-line prefer-const
+      let watchdog: ReturnType<typeof setInterval>
+      const end = async (ok: boolean, error?: string) => {
+        if (settled) return
+        settled = true
+        clearInterval(watchdog)
+        hermesRunLog.finish(runId, ok, error)
+        if (!ok) { await fail(error ?? 'falha no diagnóstico'); return }
+        const diagnosis = parseDiagnosis(text)
+        if ((!diagnosis.parsed || diagnosis.incomplete) && n === 1) {
+          void attempt(buildJsonFixPrompt(diagnosis.parseError ?? 'formato inesperado'), 2)
+            .catch((e: unknown) => console.error('[Incident] pedido de correção do JSON:', e))
+          return
+        }
+        await finish(diagnosis)
+      }
+      stream.on('data', (chunk: string) => {
+        lastAt = Date.now()
+        if (text.length < 400_000) text += chunk
+        hermesRunLog.appendText(runId, chunk)
+      })
+      stream.on('event', (e: HermesEvent) => {
+        lastAt = Date.now()
+        if (e.kind === 'tool_use') hermesRunLog.appendActivity(runId, { kind: 'tool', tool: e.tool, summary: e.summary })
+        else if (e.kind === 'tool_result' && !e.ok) hermesRunLog.appendActivity(runId, { kind: 'tool_error', tool: e.tool, summary: e.summary })
+        else if (e.kind === 'init') hermesRunLog.appendActivity(runId, { kind: 'init', tool: '', summary: e.model })
+        // Diagnóstico é só leitura: comando bloqueado pelo Hermes não vira Autorizar/Negar, só fica no log.
+        else if (e.kind === 'blocked') hermesRunLog.appendActivity(runId, { kind: 'blocked', tool: e.tool, summary: `${e.command || e.tool} — ${e.reason}` })
+      })
+      stream.on('close', (code: number | null) => {
+        const r = stream.result
+        const ok = r ? r.ok : (code === 0 && text.length > 0)
+        void end(ok, ok ? undefined : (r?.error || `hermes encerrou sem resultado (código ${code})`))
+      })
+      stream.on('error', (err: Error) => { void end(false, err.message) })
+      watchdog = setInterval(() => {
+        if (Date.now() - lastAt > 900_000) { stream.kill(); void end(false, 'Timeout: Hermes não respondeu em 900s.') }
+      }, 15_000)
+    }
+
+    await attempt(buildIncidentPrompt(inc), 1)
   }
 
   notifMonitor?.onAlert(alert => {
@@ -876,6 +897,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   )
   ipcMain.handle('hermes:delivery:close', (_, { projectId, reviewText }: { projectId: string; reviewText: unknown }) =>
     wrapHandler(() => { requireAdmin(); return hermesSvc.closeDelivery(projectId, HermesReviewTextSchema.parse(reviewText)) })
+  )
+  // Confere se a revisão do Hermes é legível antes de fechar a entrega (fechar conta uma rodada).
+  // Ilegível → devolve o pedido de correção para o painel reenviar na mesma sessão, uma vez.
+  ipcMain.handle('hermes:delivery:checkReview', (_, { reviewText }: { reviewText: unknown }) =>
+    wrapHandler(async () => {
+      requireAuth()
+      const r = parseReview(HermesReviewTextSchema.parse(reviewText))
+      return r.parsed ? { parsed: true, fixPrompt: '' } : { parsed: false, fixPrompt: buildJsonFixPrompt(r.parseError ?? 'formato inesperado') }
+    })
   )
   ipcMain.handle('hermes:delivery:reevaluate', (_, { projectId }: { projectId: string }) =>
     wrapHandler(() => { requireAdmin(); return hermesSvc.reevaluateDelivery(projectId) })

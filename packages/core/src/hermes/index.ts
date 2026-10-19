@@ -6,7 +6,7 @@ export type {
   HermesAgentStatus, HermesProjectAgentInfo, HermesAutonomyLevel, DodItem, HermesSkillInfo,
 } from './hermes.types.js'
 export {
-  buildIncidentPrompt, parseDiagnosis, isForbiddenRepair,
+  buildIncidentPrompt, parseDiagnosis, isForbiddenRepair, buildJsonFixPrompt,
   type IncidentType, type IncidentStatus, type IncidentDiagnosis, type RepairAction,
 } from './incident.js'
 export { HermesIncidentStore, type HermesIncident } from './incident-store.js'
@@ -15,6 +15,6 @@ export {
   type HermesRunKind, type HermesRunStatus, type HermesRunSummary, type HermesRun, type HermesRunActivity,
 } from './run-log.js'
 export {
-  MAX_DELIVERY_ROUNDS, correctionTasks,
+  MAX_DELIVERY_ROUNDS, correctionTasks, parseReview,
   type DeliveryResult, type DeliveryVerdict, type ReviewFinding, type VerifiedCheck, type CheckResult,
 } from './delivery.js'

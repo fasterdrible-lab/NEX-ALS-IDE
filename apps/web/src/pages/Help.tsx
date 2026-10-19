@@ -275,9 +275,9 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">4 painéis em grade</p>
           <Block>{`┌─────────────────────┬──────────────────────┐
-│  Diagnóstico IA     │  Logs live           │
-│  Auto-análise ao    │  Comando editável    │
-│  abrir + chat livre │  journalctl / tail   │
+│  Diagnóstico        │  Logs live           │
+│  [Hermes] incidentes│  Comando editável    │
+│  [Chat IA] análise  │  journalctl / tail   │
 ├─────────────────────┼──────────────────────┤
 │  Docker + PM2       │  Terminal emergência │
 │  Status containers  │  Comandos rápidos   │
@@ -286,9 +286,20 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
 
         <div className="space-y-2">
-          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Diagnóstico automático</p>
-          <p className="text-xs">Ao abrir, o Incident Mode aguarda 1,5s para carregar todos os dados (CPU/RAM/Disco, Docker, PM2, logs recentes) e automaticamente envia para a IA com a pergunta: <em>"Analise o estado atual e informe STATUS, problemas identificados e ação imediata."</em></p>
-          <Info>Depois do diagnóstico automático, o painel vira um chat livre. Pergunte o que quiser sobre a infraestrutura.</Info>
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Alertas viram incidentes</p>
+          <p className="text-xs">Quando o monitor detecta disco ≥ 85%, CPU ≥ 90% ou RAM ≥ 90%, o alerta fica registrado como <strong className="text-slate-100">incidente</strong> (alerta repetido atualiza o mesmo) e a notificação do Windows passa a abrir o Incident Mode ao ser clicada. Se o Hermes está rodando na VPS, ele começa a investigar sozinho — mesmo com o app minimizado — e avisa com outra notificação quando o diagnóstico fica pronto.</p>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Aba Hermes — diagnóstico e reparo</p>
+          <KV items={[
+            ['Diagnóstico geral', 'Investiga a VPS a qualquer momento, sem precisar de alerta'],
+            ['Somente leitura',   'O Hermes só usa comandos de inspeção (df, du, free, ps, docker ps, journalctl…) e devolve status, causa provável, evidências e ações sugeridas'],
+            ['Ações sugeridas',   'Cada uma só roda com sua confirmação; risco alto exige digitar CONFIRMO. O resultado fica no histórico do incidente'],
+            ['Trava de segurança', 'Comandos destrutivos (apagar tudo, formatar disco, reiniciar o servidor, firewall, apagar volumes/bancos) são recusados sempre, mesmo confirmados'],
+            ['Marcar resolvido',  'Fecha o incidente; um novo alerta do mesmo tipo abre outro'],
+          ]}/>
+          <Info>A aba <strong className="text-purple-200">Chat IA</strong> continua: ao abrir, analisa CPU/RAM/Disco, Docker, PM2 e logs com o provedor de IA padrão (depois que os dados terminam de carregar) e vira um chat livre.</Info>
         </div>
 
         <div className="space-y-2">
@@ -1046,18 +1057,52 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
 
         <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Níveis de autonomia</p>
+          <KV items={[
+            ['Assistido',      'Você libera cada tarefa com "Próxima"'],
+            ['Semi-autônomo',  'O loop avança sozinho, mas para antes de tarefa de risco alto (deploy, produção, dados, secrets, pagamentos, servidor) até você clicar "Liberar e continuar"'],
+            ['Autônomo',       'Avança por todas as tarefas sozinho'],
+          ]}/>
+          <Info>Nos três níveis, comando perigoso que o Hermes tenta rodar vira um cartão <strong className="text-purple-200">Autorizar / Negar</strong> — o Zeus nunca libera isso sozinho. O risco de cada tarefa é o maior entre o que o Hermes declara no plano e o que o Zeus detecta no texto.</Info>
+        </div>
+
+        <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">O que o modo Agent faz</p>
           <KV items={[
-            ['Manual / Autônomo',   'Manual avança tarefa a tarefa por clique; Autônomo roda o loop sozinho até concluir, bloquear ou precisar de decisão'],
+            ['Regras de desenvolvimento', 'Texto por projeto (botão "Usar modelo" traz 7 regras padrão) gravado no início do .hermes.md — o Hermes segue em toda execução'],
             ['Execução paralela',  'Tarefas marcadas pelo próprio Hermes como independentes rodam simultaneamente, cada uma isolada num git worktree'],
             ['Decision Request',   'Quando o Hermes precisa de uma decisão de negócio, o loop pausa e mostra opções + resposta livre'],
-            ['Definition of Done', 'Checklist de 7 itens (2 verificados automaticamente via SSH) — informativo, não trava o loop'],
-            ['Sincronizar contexto', 'Escreve a KB Global + memória do projeto em .hermes.md — o Hermes lê esse arquivo sozinho, sem configuração'],
+            ['Commit por tarefa',  'Cada tarefa termina com um commit local (Conventional Commits) — o histórico git é o caminho principal para desfazer'],
+            ['Checkpoints',        'Toda execução usa --checkpoints: cópia da pasta antes de cada alteração. Restaurar: rode hermes na pasta do projeto (Terminal) e use /rollback'],
+            ['Sincronizar contexto', 'Escreve regras + KB Global + memória do projeto em .hermes.md — o Hermes lê esse arquivo sozinho, sem configuração'],
             ['Automações (cron)',  'Em Automações, escolha o agente "Hermes" + um projeto para rodar um objetivo automaticamente, sem abrir o AI Hub'],
           ]}/>
         </div>
 
-        <Info>Se o app fechar (ou travar) no meio de uma sessão Hermes em andamento, na próxima abertura o NEX detecta a sessão órfã sozinho e mostra o botão <strong className="text-purple-200">Retomar sessão</strong> — ele continua de onde parou.</Info>
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Fechamento da entrega</p>
+          <p className="text-xs">Quando todas as tarefas terminam, aparece a seção <strong className="text-slate-100">Entrega</strong> (no Semi-autônomo e no Autônomo ela começa sozinha):</p>
+          <Step n={1}><span>O Hermes revisa o código e a segurança do que mudou no objetivo e roda build/testes — <strong className="text-slate-100">sem alterar nada</strong>.</span></Step>
+          <Step n={2}><span>O Zeus roda de novo, ele mesmo, os comandos de build/teste na VPS (só os de uma lista segura: npm/pnpm test, pytest…) e decide pelo resultado real.</span></Step>
+          <Step n={3}><span>A entrega só fica <strong className="text-emerald-300">Aprovada</strong> com build e testes passando, sem problema grave e com toda a <strong className="text-slate-100">Definition of Done</strong> marcada. Senão: <strong className="text-red-300">Bloqueada</strong> (com os motivos) ou <strong className="text-amber-300">Aprovada com ressalvas</strong>.</span></Step>
+          <Step n={4}><span>O que bloqueia vira tarefa de correção (automático no Semi/Autônomo, até 3 rodadas). <strong className="text-slate-100">Relatório final</strong> com botão Copiar.</span></Step>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Ao vivo · Quadro · Logs</p>
+          <KV items={[
+            ['Ao vivo', 'Saída do Hermes em tempo real + faixa de atividade (ferramentas usadas)'],
+            ['Quadro',  'Colunas Pendente / Em andamento / Bloqueada / Concluída + "Agentes em execução" (o que roda agora, tempo, ferramentas, erros)'],
+            ['Logs',    'Cada execução separada (tarefa, revisão, plano, diagnóstico), com erro, atividade e saída completa — clique num cartão do Quadro para abrir'],
+          ]}/>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Dentro da IDE</p>
+          <p className="text-xs">Na IDE de uma VPS, o botão <strong className="text-slate-100">Agent</strong> (barra do topo, ao lado de "IA") abre o mesmo painel ao lado do editor, já no projeto cuja pasta está aberta. Quando o Hermes termina uma execução, a árvore de arquivos e o Git são atualizados na hora — um arquivo já aberto no editor não é recarregado sozinho (feche e abra para ver a versão nova).</p>
+        </div>
+
+        <Info>Se o app fechar (ou travar) no meio de uma sessão Hermes em andamento, na próxima abertura o Zeus detecta a sessão órfã sozinho e mostra o botão <strong className="text-purple-200">Retomar sessão</strong> — ele continua de onde parou.</Info>
         <Tip>O Hermes autentica seus próprios provedores de IA dentro da VPS (<Code>hermes setup</Code>) — o NEX nunca guarda essas credenciais, mesmo isolamento já usado para o Claude Code.</Tip>
       </div>
     ),
@@ -1112,7 +1157,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.57.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS, com automações agendadas), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.69.2</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}

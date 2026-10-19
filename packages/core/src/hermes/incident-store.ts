@@ -14,7 +14,8 @@ export interface HermesIncident {
   createdAt: number
   updatedAt: number
   runId: string | null
-  error: string
+  /** Motivo da falha do diagnóstico. Não pode se chamar `error` — ver HermesRunSummary.failure. */
+  failure: string
   diagnosis: IncidentDiagnosis | null
 }
 
@@ -107,7 +108,7 @@ export class HermesIncidentStore {
       createdAt: Number(r['createdAt']),
       updatedAt: Number(r['updatedAt']),
       runId: r['runId'] == null ? null : String(r['runId']),
-      error: String(r['error'] ?? ''),
+      failure: String(r['error'] ?? ''),
       diagnosis,
     }
   }

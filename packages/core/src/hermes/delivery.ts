@@ -1,4 +1,5 @@
 import type { DodItem } from './hermes.types.js'
+import { extractJsonObject } from './json-loose.js'
 
 /**
  * Fechamento da entrega de um objetivo Hermes (ETAPAS 9, 24, 27, 40): revisão de código e de
@@ -24,6 +25,7 @@ export interface ReviewFinding {
 export interface HermesReview {
   /** false = o Hermes não devolveu o JSON esperado (a entrega não pode ser aprovada sem evidência). */
   parsed: boolean
+  parseError?: string
   build: ReviewCheck
   tests: ReviewCheck
   findings: ReviewFinding[]
@@ -84,13 +86,9 @@ export function parseReview(text: string): HermesReview {
     findings: [],
     summary: text.trim().slice(0, 1500),
   }
-  const fence = text.match(/```json\s*([\s\S]*?)```/i)
-  const raw = fence ? fence[1] : (text.match(/\{[\s\S]*\}/)?.[0] ?? null)
-  if (!raw) return empty
-  let obj: unknown
-  try { obj = JSON.parse(raw) } catch { return empty }
-  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return empty
-  const o = obj as Record<string, unknown>
+  const json = extractJsonObject(text)
+  if ('error' in json) return { ...empty, parseError: json.error }
+  const o = json.value
   const findings = (Array.isArray(o['findings']) ? o['findings'] : [])
     .filter((f): f is Record<string, unknown> => !!f && typeof f === 'object')
     .map(f => ({

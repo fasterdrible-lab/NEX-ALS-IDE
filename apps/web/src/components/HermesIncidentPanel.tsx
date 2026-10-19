@@ -163,13 +163,14 @@ export default function HermesIncidentPanel({ vpsId }: { vpsId: string }) {
               </div>
             )}
 
-            {sel.status === 'diagnosis_failed' && <p className="text-red-300 break-words">{sel.error}</p>}
+            {sel.status === 'diagnosis_failed' && <p className="text-red-300 break-words">{sel.failure}</p>}
 
             {d && (
               <div className="space-y-2">
                 <p><span className={`font-bold ${SEVERITY[d.status].cls}`}>{SEVERITY[d.status].label}</span>
                   <span className="text-slate-200"> — {d.summary || '(sem resumo)'}</span></p>
-                {!d.parsed && <p className="text-amber-300/90 text-[10px]">O Hermes não respondeu no formato esperado — acima está o texto bruto.</p>}
+                {!d.parsed && <p className="text-amber-300/90 text-[10px]">O Hermes não respondeu no formato esperado, nem depois de um pedido de correção — acima está o texto bruto. Use "Diagnosticar de novo".</p>}
+                {d.parsed && d.incomplete && <p className="text-amber-300/90 text-[10px]">As ações sugeridas não vieram no formato esperado, nem depois de um pedido de correção. Veja a resposta completa em Logs ou use "Diagnosticar de novo".</p>}
                 {d.rootCause && <p className="text-slate-300"><span className="text-slate-500">Causa provável:</span> {d.rootCause}</p>}
                 {d.evidence.length > 0 && (
                   <ul className="list-disc pl-4 space-y-0.5 text-slate-400">{d.evidence.map((e, i) => <li key={i}>{e}</li>)}</ul>

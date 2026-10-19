@@ -22,7 +22,11 @@ export interface HermesRunSummary {
   endedAt: number | null
   toolCount: number
   errorCount: number
-  error: string
+  /**
+   * Motivo da falha ('' se não falhou). NÃO pode se chamar `error`: o `invoke` do renderer
+   * (apps/web/src/lib/ipc.ts) trata qualquer resposta com chave `error` como falha do IPC.
+   */
+  failure: string
 }
 
 export interface HermesRun extends HermesRunSummary {
@@ -172,7 +176,7 @@ export class HermesRunLog {
       endedAt: r['endedAt'] == null ? null : Number(r['endedAt']),
       toolCount: live ? live.toolCount : Number(r['toolCount'] ?? 0),
       errorCount: live ? live.errorCount : Number(r['errorCount'] ?? 0),
-      error: String(r['error'] ?? ''),
+      failure: String(r['error'] ?? ''),
     }
   }
 }

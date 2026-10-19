@@ -84,20 +84,21 @@ export interface RepairAction {
   executed?: { at: number; success: boolean; output: string }
 }
 export interface IncidentDiagnosis {
-  parsed: boolean; status: 'ok' | 'degraded' | 'critical'
+  parsed: boolean; incomplete?: boolean; status: 'ok' | 'degraded' | 'critical'
   summary: string; rootCause: string; evidence: string[]; actions: RepairAction[]
 }
 export interface HermesIncident {
   id: string; vpsId: string; vpsName: string
   type: 'disk' | 'cpu' | 'ram' | 'manual'; value: number; threshold: number; title: string
   status: IncidentStatus; createdAt: number; updatedAt: number
-  runId: string | null; error: string; diagnosis: IncidentDiagnosis | null
+  runId: string | null; failure: string; diagnosis: IncidentDiagnosis | null
 }
 export interface HermesRunSummary {
   id: string; projectId: string; taskId: string | null
   kind: HermesRunKind; status: 'running' | 'done' | 'error'
   startedAt: number; endedAt: number | null
-  toolCount: number; errorCount: number; error: string
+  // `failure`, não `error`: invoke() abaixo trata qualquer resposta com chave `error` como falha do IPC.
+  toolCount: number; errorCount: number; failure: string
 }
 export interface HermesRun extends HermesRunSummary {
   text: string
@@ -357,6 +358,8 @@ export const ipc = {
         invoke<HermesDelivery>('hermes:delivery:close', { projectId, reviewText }),
       reevaluate: (projectId: string) =>
         invoke<HermesDelivery>('hermes:delivery:reevaluate', { projectId }),
+      checkReview: (reviewText: string) =>
+        invoke<{ parsed: boolean; fixPrompt: string }>('hermes:delivery:checkReview', { reviewText }),
     },
     parallel: {
       start: (projectId: string, taskId: string, objective: string) =>

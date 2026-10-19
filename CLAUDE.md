@@ -13,7 +13,7 @@
 
 ## Resumo do projeto
 
-**NEX-ALS IDE** é uma aplicação desktop Electron para gerenciar múltiplas VPS, múltiplos projetos remotos e múltiplas contas Claude Code. Substitui scripts .bat manuais por uma interface visual completa.
+**Zeus IDE** (antes NEX-ALS IDE) é uma aplicação desktop Electron para gerenciar múltiplas VPS, múltiplos projetos remotos e múltiplas contas Claude Code. Substitui scripts .bat manuais por uma interface visual completa.
 
 Duas camadas de uso:
 - **Gerenciador de ambientes** — abre VS Code Remote SSH na conta e VPS correta, evitando conflitos de autenticação entre contas Claude.
@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`3.50.0` — SQUAD-03: Expansão do SQUAD com 12 agentes especializados (ECC) — Natasha, Hank, Ghost, Rhodey, Bruce, Sam, Scott, Thor, Carol, Riri, Hope, Wanda; remote migrado para NEX-ALS-IDE
+`3.69.2` — app renomeado para **Zeus IDE** (3.64.0; appId e pasta de dados mantidos). Hermes: 3 níveis de autonomia + regras de desenvolvimento, fechamento da entrega (DoD como gate), Quadro/Logs por execução, painel Agent na IDE, FASE 7 (incidentes de VPS com diagnóstico e reparo confirmado). Ver `CHANGELOG.md`.
 
 ## Regras de desenvolvimento
 
@@ -74,6 +74,7 @@ Duas camadas de uso:
 | `Ctrl+G` | Ir para linha |
 | Botão **Claude** (roxo) | Abre painel de chat com Claude |
 | Botão **⊟** (Columns2) | Ativa/desativa split editor |
+| Botão **Agent** (modo remoto) | Abre o painel do Hermes ao lado do editor, no projeto da pasta aberta |
 | **TS LSP** na status bar | Conecta TypeScript LSP via túnel 6009 |
 | **⬡ DAP** na status bar | Abre Chrome DevTools via túnel 9229 |
 | Aba **Portas** (painel esq.) | Gerencia port forwarding SSH |
