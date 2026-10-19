@@ -1,5 +1,20 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.67.0] — 2026-10-18
+
+### Adicionado — Hermes: quadro de tarefas, painel de agentes e logs separados por execução (ETAPAS 12, 13, 37)
+
+A coluna direita do painel Agent ganha abas **Ao vivo / Quadro / Logs**:
+- **Quadro (ETAPA 12):** colunas Pendente / Em andamento / Bloqueada / Concluída; cada cartão mostra risco, "paralelo", número de execuções, duração e ferramentas da última, erros, e um indicador quando está rodando. Clicar abre os logs da tarefa.
+- **Agentes em execução (ETAPA 13):** faixa no topo do quadro com tudo que o Hermes está executando no projeto agora — tarefa, tarefa paralela, revisão da entrega ou plano/mensagem —, com tempo corrido, ferramentas usadas e erros.
+- **Logs (ETAPA 37):** cada execução do Hermes fica separada, filtrável por tarefa ou "plano, mensagens e revisões": lista à esquerda (status, início, duração, ferramentas, erros) e, à direita, o erro final, a atividade (ferramentas, falhas, comandos bloqueados) e a saída completa. Execução em andamento atualiza a cada 3s.
+
+**Como é gravado:** `HermesRunLog` (`packages/core/src/hermes/run-log.ts`) é alimentado pelo **main** em `wireHermesStream` — o registro continua certo mesmo se o painel for fechado e reaberto no meio. A execução é atribuída à tarefa pelo nome da sessão (`nex-task-<id>`; `nex-review-…` = revisão; sem nome = plano/mensagem) ou pelo `taskId` da tarefa paralela. Tabela `hermes_task_runs` (raw SQL): grava ao começar, atualiza a cada 15s e ao terminar; saída limitada aos últimos 200 mil caracteres e 400 eventos de atividade; execução que sobrevive a um restart do app é marcada como interrompida. IPC `hermes:runs:list` / `hermes:runs:get` (auth).
+
+**Achado no caminho:** datas em ms numa coluna `INTEGER` quebram o `$queryRawUnsafe` do Prisma (lê como i32 → `P2010`); a tabela usa `BIGINT`.
+
+**Verificado:** `pnpm typecheck` (5 pacotes); 20/20 testes no core (3 novos para a atribuição sessão → tarefa); teste de integração do `HermesRunLog` num SQLite temporário com o Prisma real (gravar, ler durante e depois, filtrar por tarefa, recuperar órfã). **Não testado pela UI contra a VPS.**
+
 ## [3.66.0] — 2026-10-18
 
 ### Adicionado — Hermes: fechamento da entrega (DoD como gate, revisão de código e segurança, checkpoints, relatório final — ETAPAS 9, 24, 27, 28, 40)

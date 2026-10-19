@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-18
-**Versão:** 3.66.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.67.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Hermes — quadro de tarefas, agentes e logs por execução (v3.67.0)
+
+Coluna direita do painel Agent com abas **Ao vivo / Quadro / Logs**. Quadro: colunas Pendente / Em andamento / Bloqueada / Concluída com risco, paralelo e estatística da última execução; faixa **Agentes em execução** (o que roda agora, tempo, ferramentas, erros). Logs: cada execução do Hermes (tarefa, paralela, revisão, plano/mensagem) gravada separada pelo main em `hermes_task_runs` — saída, atividade, duração, erro —, inclusive se o painel for fechado no meio. Não testado pela UI contra a VPS ainda.
 
 ## Hermes — fechamento da entrega (v3.66.0)
 

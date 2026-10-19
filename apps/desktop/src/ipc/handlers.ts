@@ -37,6 +37,9 @@ import {
   ScheduledJobsService,
   type ScheduledJobInput,
   HermesService,
+  HermesRunLog,
+  runKindFromSession,
+  type HermesRunKind,
 } from '@cwm/core'
 import { JobExecutor } from '../jobs/job-executor.js'
 import { LocalLspBridge } from '../lsp/local-lsp.js'
@@ -112,6 +115,9 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const sftpService = new SftpService()
   const sftpSessions = new Map<string, SftpSession>()
   const hermesSvc = new HermesService(terminal, sftpService, git, knowledgeSvc, memorySvc)
+  // Log separado por execução (ETAPA 37) — base do quadro de tarefas e do painel de agentes
+  const hermesRunLog = new HermesRunLog()
+  void hermesRunLog.ensureTable().catch((e: unknown) => console.error('[DB] hermes_task_runs:', e))
   const hermesStreams = new Map<string, HermesEventStream>()
   // Comandos que o Hermes teve bloqueados (dangerous em headless), aguardando Autorizar/Negar.
   // O renderer só referencia pelo id — o comando em si nunca vem da UI.
@@ -511,10 +517,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     targetWin: BrowserWindow | null,
     streamId: string,
     stream: HermesEventStream,
-    ctx: { projectId: string; workspace?: string },
+    ctx: { projectId: string; workspace?: string; run: { kind: HermesRunKind; taskId: string | null } },
     onSettled: (ok: boolean, lastError?: string) => void,
   ): void {
     hermesStreams.set(streamId, stream)
+    const runId = hermesRunLog.start({ projectId: ctx.projectId, ...ctx.run })
     let doneSent = false
     let hasData = false
     let lastChunkAt = Date.now()
@@ -526,12 +533,14 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       doneSent = true
       clearInterval(watchdog)
       hermesStreams.delete(streamId)
+      hermesRunLog.finish(runId, ok, lastError)
       onSettled(ok, lastError)
     }
 
     stream.on('data', (chunk: string) => {
       hasData = true
       lastChunkAt = Date.now()
+      hermesRunLog.appendText(runId, chunk)
       try { targetWin?.webContents.send('hermes:agent:chunk', { streamId, type: 'text_delta', delta: chunk }) } catch { /* janela fechada */ }
     })
     stream.on('event', (e: HermesEvent) => {
@@ -539,10 +548,17 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       const send = (payload: Record<string, unknown>) => {
         try { targetWin?.webContents.send('hermes:agent:chunk', { streamId, ...payload }) } catch { /* janela fechada */ }
       }
-      if (e.kind === 'tool_use') send({ type: 'activity', activity: { kind: 'tool', tool: e.tool, summary: e.summary } })
-      else if (e.kind === 'tool_result' && !e.ok) send({ type: 'activity', activity: { kind: 'tool_error', tool: e.tool, summary: e.summary } })
-      else if (e.kind === 'init') send({ type: 'activity', activity: { kind: 'init', tool: '', summary: e.model } })
-      else if (e.kind === 'blocked') {
+      if (e.kind === 'tool_use') {
+        hermesRunLog.appendActivity(runId, { kind: 'tool', tool: e.tool, summary: e.summary })
+        send({ type: 'activity', activity: { kind: 'tool', tool: e.tool, summary: e.summary } })
+      } else if (e.kind === 'tool_result' && !e.ok) {
+        hermesRunLog.appendActivity(runId, { kind: 'tool_error', tool: e.tool, summary: e.summary })
+        send({ type: 'activity', activity: { kind: 'tool_error', tool: e.tool, summary: e.summary } })
+      } else if (e.kind === 'init') {
+        hermesRunLog.appendActivity(runId, { kind: 'init', tool: '', summary: e.model })
+        send({ type: 'activity', activity: { kind: 'init', tool: '', summary: e.model } })
+      } else if (e.kind === 'blocked') {
+        hermesRunLog.appendActivity(runId, { kind: 'blocked', tool: e.tool, summary: `${e.command || e.tool} — ${e.reason}` })
         const approvalId = crypto.randomUUID()
         // execute_code (Python arbitrário) não é reexecutável com segurança pelo NEX — só informa.
         const executable = e.tool === 'terminal' && e.command.length > 0
@@ -608,7 +624,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         hermesActiveByProject.delete(projectId)
         throw e
       }
-      wireHermesStream(targetWin, streamId, stream, { projectId }, (ok, lastError) => {
+      wireHermesStream(targetWin, streamId, stream, { projectId, run: runKindFromSession(sessionName) }, (ok, lastError) => {
         if (hermesActiveByProject.get(projectId) === streamId) hermesActiveByProject.delete(projectId)
         void hermesSvc.markAgentActivity(projectId, {
           status: ok ? 'idle' : 'error',
@@ -687,6 +703,14 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('hermes:agent:setDevRules', (_, { projectId, devRules }: { projectId: string; devRules: unknown }) =>
     wrapHandler(() => { requireAdmin(); return hermesSvc.setDevRules(projectId, HermesDevRulesSchema.parse(devRules)) })
   )
+  // Quadro de tarefas / painel de agentes / logs por execução (ETAPAS 12, 13, 37 — v3.67.0)
+  ipcMain.handle('hermes:runs:list', (_, { projectId, taskId }: { projectId: string; taskId?: string }) =>
+    wrapHandler(() => { requireAuth(); return hermesRunLog.list(projectId, taskId) })
+  )
+  ipcMain.handle('hermes:runs:get', (_, { runId }: { runId: string }) =>
+    wrapHandler(() => { requireAuth(); return hermesRunLog.get(runId) })
+  )
+
   // Fechamento da entrega — revisão + checks reexecutados pelo NEX + DoD como gate + relatório (v3.66.0)
   ipcMain.handle('hermes:delivery:get', (_, { projectId }: { projectId: string }) =>
     wrapHandler(() => { requireAuth(); return hermesSvc.getDelivery(projectId) })
@@ -715,7 +739,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       const targetWin = BrowserWindow.fromWebContents(event.sender)
       const streamId = crypto.randomUUID()
       const { stream, worktreePath, branch } = await hermesSvc.startParallelTask(projectId, taskId, objective)
-      wireHermesStream(targetWin, streamId, stream, { projectId, workspace: worktreePath }, () => {
+      wireHermesStream(targetWin, streamId, stream, { projectId, workspace: worktreePath, run: { kind: 'parallel', taskId } }, () => {
         // status da tarefa é decidido pelo renderer via parsing das tags — nada a persistir aqui
       })
       return { streamId, worktreePath, branch }

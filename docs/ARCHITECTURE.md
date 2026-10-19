@@ -1287,3 +1287,26 @@ fim do loop (fila vazia, tudo DONE, algo executado nesta rodada) e policy.autoAd
 | `hermes:delivery:get` | auth | `{ projectId }` → `DeliveryResult \| null` |
 | `hermes:delivery:close` | admin | `{ projectId, reviewText }` → `DeliveryResult` |
 | `hermes:delivery:reevaluate` | admin | `{ projectId }` → `DeliveryResult` (gate com a DoD atual, sem nova revisão) |
+
+## Hermes — quadro de tarefas, agentes e logs por execução (v3.67.0+) — ETAPAS 12, 13, 37
+
+```
+wireHermesStream(win, streamId, stream, ctx{ projectId, workspace?, run{kind, taskId} })
+  run = runKindFromSession(sessionName)       hermes:agent:send
+          nex-task-<id> → task/<id> · nex-review-… → review · sem nome → project
+      | { kind:'parallel', taskId }           hermes:parallel:start
+  HermesRunLog.start → INSERT status 'running'
+  'data'  → appendText   (buffer em memória, últimos 200k chars)
+  'event' → appendActivity (init/tool/tool_error/blocked, últimos 400) — toolCount/errorCount
+  flush a cada 15s · finish(ok, error) → UPDATE status/endedAt/error/text/activity
+  boot: ensureTable() → runs 'running' viram 'error' "Interrompida"
+```
+
+Tabela `hermes_task_runs` (raw SQL, sem model Prisma): `id, projectId, taskId, kind, status, startedAt BIGINT, endedAt BIGINT, toolCount, errorCount, error, text, activity(JSON)`, índice `(projectId, startedAt)`. Datas em **BIGINT** de propósito: com `INTEGER` o `$queryRawUnsafe` do Prisma lê i32 e falha com P2010 em `Date.now()`. Escritas de um mesmo run são serializadas numa cadeia de promises. `get()` de execução em andamento devolve o buffer em memória (mais novo que o último flush).
+
+UI (`apps/web/src/components/HermesTaskBoard.tsx`): `useHermesRuns(projectId)` consulta `hermes:runs:list` a cada 4s só com a aba Quadro/Logs aberta; `HermesBoard` (4 colunas + faixa "Agentes em execução" = runs `running`); `HermesRunLogs` (filtro por tarefa / plano-mensagens-revisões, lista + detalhe com `hermes:runs:get`, 3s quando em andamento). A aba "Ao vivo" mantém o `<pre>` montado (oculto) para não perder a saída.
+
+| Canal | Auth | Descrição |
+|---|---|---|
+| `hermes:runs:list` | auth | `{ projectId, taskId? }` → `HermesRunSummary[]` (sem texto/atividade, últimos 200) |
+| `hermes:runs:get` | auth | `{ runId }` → `HermesRun \| null` (com texto e atividade) |

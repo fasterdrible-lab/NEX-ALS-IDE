@@ -7,7 +7,7 @@
 - [ ] **Hermes — próximas fases do brief (gap analysis 2026-10-17)**, em ordem:
   - [x] AutonomyPolicy + 3 níveis (ETAPAS 22/23) e tela Development Rules injetada via `.hermes.md` (ETAPA 21) — v3.62.0; falta validar pela UI na VPS-1 (Semi-autônomo parando numa tarefa de risco alto; regras aparecendo no `.hermes.md`)
   - [x] Qualidade: DoD como gate, review + security pass, `--checkpoints`, relatório final (ETAPAS 9, 24, 27, 28, 40) — v3.66.0; falta validar pela UI na VPS-1 (fechar a entrega de um objetivo real; ver bloqueio → correções → nova revisão)
-  - [ ] Task board/painel de agentes a partir dos eventos `stream-json` (ETAPAS 12/13); logs separados (ETAPA 37)
+  - [x] Task board/painel de agentes a partir dos eventos `stream-json` (ETAPAS 12/13); logs separados (ETAPA 37) — v3.67.0; falta ver pela UI na VPS-1 durante um loop real
   - [ ] Painel Agent na IDE (ETAPA 16)
   - [ ] FASE 7 — NotificationMonitor + Incident Mode (ETAPAS 31/32)
 

@@ -6,6 +6,10 @@ export type {
   HermesAgentStatus, HermesProjectAgentInfo, HermesAutonomyLevel, DodItem, HermesSkillInfo,
 } from './hermes.types.js'
 export {
+  HermesRunLog, runKindFromSession,
+  type HermesRunKind, type HermesRunStatus, type HermesRunSummary, type HermesRun, type HermesRunActivity,
+} from './run-log.js'
+export {
   MAX_DELIVERY_ROUNDS, correctionTasks,
   type DeliveryResult, type DeliveryVerdict, type ReviewFinding, type VerifiedCheck, type CheckResult,
 } from './delivery.js'

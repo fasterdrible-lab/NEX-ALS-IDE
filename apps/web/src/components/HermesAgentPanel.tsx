@@ -15,6 +15,7 @@ import {
 import {
   AUTONOMY_LEVELS, AUTONOMY_POLICIES, getAutonomyPolicy, classifyTaskRisk, needsRiskGate,
 } from '../lib/autonomy-policy'
+import { HermesBoard, HermesRunLogs, useHermesRuns } from './HermesTaskBoard'
 
 const HERMES_STATUS_LABEL: Record<HermesStatus, string> = {
   unknown: 'Desconhecido', not_installed: 'Não instalado', installed: 'Instalado (parado)',
@@ -268,6 +269,13 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
   const [reportOpen, setReportOpen] = useState(false)
   // runLoop é declarado antes do fechamento — chama a revisão automática por ref.
   const autoReviewRef = useRef<(() => void) | null>(null)
+
+  // ── Quadro / agentes / logs por execução (ETAPAS 12/13/37) ────────────────
+  const [rightTab, setRightTab] = useState<'live' | 'board' | 'logs'>('live')
+  const [logTaskFilter, setLogTaskFilter] = useState('')
+  // Só consulta enquanto o quadro ou os logs estão abertos.
+  const runs = useHermesRuns(rightTab === 'live' ? '' : projectId)
+  useEffect(() => { setLogTaskFilter('') }, [projectId])
 
   // ── Governança + activity feed (stream-json) ──────────────────────────────
   const [activity, setActivity] = useState<ActivityEntry[]>([])
@@ -1393,9 +1401,35 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
         )}
       </div>
 
-      {/* ═══ Coluna direita — atividade + saída ao vivo + mensagem livre ═══ */}
+      {/* ═══ Coluna direita — ao vivo | quadro | logs, + mensagem livre ═══ */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {activity.length > 0 && (
+        <div role="tablist" aria-label="Visão do Hermes" className="shrink-0 flex items-center gap-1 border-b border-slate-800 px-2 pt-1.5 bg-slate-900/40">
+          {([['live', 'Ao vivo'], ['board', 'Quadro'], ['logs', 'Logs']] as const).map(([id, label]) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={rightTab === id}
+              onClick={() => setRightTab(id)}
+              disabled={!projectId}
+              className={`px-3 py-1.5 text-[11px] rounded-t-md border-b-2 transition-colors disabled:opacity-40 ${rightTab === id ? 'border-purple-500 text-slate-100 bg-slate-800/60' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {rightTab === 'board' && projectId && (
+          <HermesBoard
+            tasks={tasks}
+            runs={runs}
+            onOpenLogs={(taskId) => { setLogTaskFilter(taskId); setRightTab('logs') }}
+          />
+        )}
+        {rightTab === 'logs' && projectId && (
+          <HermesRunLogs tasks={tasks} runs={runs} taskFilter={logTaskFilter} onTaskFilter={setLogTaskFilter} />
+        )}
+
+        {(rightTab === 'live' || !projectId) && activity.length > 0 && (
           <div className="shrink-0 max-h-40 overflow-y-auto border-b border-slate-800 bg-slate-900/60 px-3 py-2 space-y-0.5">
             <p className="text-[9px] text-slate-500 uppercase tracking-widest pb-1">Atividade</p>
             {activity.slice(-40).map((e, i) => (
@@ -1413,7 +1447,7 @@ export default function HermesAgentPanel({ initialProjectId }: { initialProjectI
             ))}
           </div>
         )}
-        <pre ref={outputRef} className="flex-1 overflow-auto p-4 text-xs font-mono whitespace-pre-wrap text-slate-300 bg-slate-950">
+        <pre ref={outputRef} className={`flex-1 overflow-auto p-4 text-xs font-mono whitespace-pre-wrap text-slate-300 bg-slate-950 ${rightTab === 'live' || !projectId ? '' : 'hidden'}`}>
           {output || (projectId ? '(nenhuma saída ainda)' : 'Selecione um projeto para começar.')}
         </pre>
 

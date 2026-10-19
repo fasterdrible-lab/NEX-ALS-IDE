@@ -74,6 +74,19 @@ export interface HermesProjectAgentInfo {
   baseCommit: string
 }
 
+// Log por execução do Hermes (espelha packages/core/src/hermes/run-log.ts)
+export type HermesRunKind = 'task' | 'parallel' | 'review' | 'project'
+export interface HermesRunSummary {
+  id: string; projectId: string; taskId: string | null
+  kind: HermesRunKind; status: 'running' | 'done' | 'error'
+  startedAt: number; endedAt: number | null
+  toolCount: number; errorCount: number; error: string
+}
+export interface HermesRun extends HermesRunSummary {
+  text: string
+  activity: { at: number; kind: 'init' | 'tool' | 'tool_error' | 'blocked'; tool: string; summary: string }[]
+}
+
 // Fechamento da entrega (espelha packages/core/src/hermes/delivery.ts)
 export type CheckResult = 'passed' | 'failed' | 'not_run'
 export interface DeliveryCheck { command: string; result: CheckResult; summary: string; source: 'nex' | 'hermes'; output: string }
@@ -299,6 +312,12 @@ export const ipc = {
         invoke<DodItem[]>('hermes:dod:toggle', { projectId, itemId, done }),
       runChecks: (projectId: string) =>
         invoke<DodItem[]>('hermes:dod:runChecks', { projectId }),
+    },
+    runs: {
+      list: (projectId: string, taskId?: string) =>
+        invoke<HermesRunSummary[]>('hermes:runs:list', { projectId, taskId }),
+      get: (runId: string) =>
+        invoke<HermesRun | null>('hermes:runs:get', { runId }),
     },
     delivery: {
       get: (projectId: string) =>
