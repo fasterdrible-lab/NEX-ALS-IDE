@@ -1311,6 +1311,42 @@ UI (`apps/web/src/components/HermesTaskBoard.tsx`): `useHermesRuns(projectId)` c
 | `hermes:runs:list` | auth | `{ projectId, taskId? }` → `HermesRunSummary[]` (sem texto/atividade, últimos 200) |
 | `hermes:runs:get` | auth | `{ runId }` → `HermesRun \| null` (com texto e atividade) |
 
+## Hermes — incidentes de VPS (v3.69.0+) — FASE 7, ETAPAS 31/32
+
+```
+NotificationMonitor.poll (60s) → alerta (disk|cpu|ram, cooldown 30min)
+  ouvintes (vários):
+    main.ts      → Notification; click → createIncidentWindow(vpsId)
+    handlers.ts  → HermesIncidentStore.recordAlert  (aberto do mesmo tipo/VPS? atualiza : cria)
+                   created && hermesInstance.status==='running' → diagnoseIncident(id)
+
+diagnoseIncident(id)   [main, sem janela; 1 por VPS — incidentDiagnosing]
+  HermesService.startIncidentDiagnosis(vpsId, buildIncidentPrompt(inc), 'nex-incident-<ts>')
+    mkdir -p "$HOME/.hermes-nex/incidents" → client.streamObjective(workspace '$HOME/…', sessão nomeada)
+  HermesRunLog kind 'incident' (projectId 'incident:<vpsId>', taskId = incidentId)
+  stream: texto acumulado; tool/tool_error/init/blocked → atividade (blocked NÃO vira aprovação)
+  close → parseDiagnosis(text) → status 'diagnosed' + diagnosis  |  'diagnosis_failed' + erro
+       → Notification "Diagnóstico pronto"; click → openIncidentWindow (registrado por main.ts)
+  watchdog 900s · broadcast 'hermes:incident:updated' {incidentId, vpsId} para todas as janelas
+
+hermes:incident:runAction {incidentId, actionIndex}   [admin]
+  comando = diagnosis.actions[actionIndex].command (do banco, não do renderer)
+  allowed (isForbiddenRepair no parse) → HermesService.runIncidentRepair (checa de novo)
+    → client.runApprovedCommand(vpsId, '$HOME', cmd) → toolExecutor.logExecution('hermes:incident_repair')
+  → actions[i].executed = {at, success, output}
+```
+
+Tabela `hermes_incidents` (raw SQL): `id, vpsId, vpsName, type, value, threshold, title, status (open|diagnosing|diagnosed|diagnosis_failed|resolved), createdAt BIGINT, updatedAt BIGINT, runId, error, diagnosis(JSON)`; boot marca `diagnosing` órfão como `diagnosis_failed`. Confirmação na UI (`HermesIncidentPanel`): toda ação pede confirmar; risco alto exige digitar CONFIRMO — mesma convenção do ToolExecutor (v3.3.0).
+
+| Canal | Auth | Descrição |
+|---|---|---|
+| `hermes:incident:list` | auth | `{ vpsId }` → `HermesIncident[]` (últimos 30) |
+| `hermes:incident:get` | auth | `{ incidentId }` → `HermesIncident \| null` |
+| `hermes:incident:diagnose` | admin | `{ vpsId, incidentId? }` — sem id cria incidente `manual` (diagnóstico geral) |
+| `hermes:incident:runAction` | admin | `{ incidentId, actionIndex }` → `{ success, output }` |
+| `hermes:incident:resolve` | admin | `{ incidentId }` |
+| `hermes:incident:updated` | evento | main → renderer quando um incidente muda |
+
 ## Hermes — painel Agent na IDE (v3.68.0+) — ETAPA 16
 
 ```

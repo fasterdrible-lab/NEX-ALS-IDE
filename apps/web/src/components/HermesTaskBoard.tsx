@@ -17,6 +17,7 @@ const COLUMNS: { status: TaskStatus; label: string; cls: string }[] = [
 
 const RUN_KIND_LABEL: Record<HermesRunKind, string> = {
   task: 'Tarefa', parallel: 'Tarefa paralela', review: 'Revisão da entrega', project: 'Plano / mensagem',
+  incident: 'Diagnóstico de incidente',
 }
 
 export function formatDuration(ms: number): string {

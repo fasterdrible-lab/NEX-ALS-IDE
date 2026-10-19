@@ -40,7 +40,15 @@ import {
   HermesRunLog,
   runKindFromSession,
   type HermesRunKind,
+  HermesIncidentStore,
+  buildIncidentPrompt,
+  parseDiagnosis,
+  type IncidentType,
 } from '@cwm/core'
+
+/** main.ts registra como abrir a janela do Incident Mode (para o clique na notificação de diagnóstico pronto). */
+let openIncidentWindow: ((vpsId: string, vpsName: string) => void) | null = null
+export function setIncidentWindowOpener(fn: (vpsId: string, vpsName: string) => void): void { openIncidentWindow = fn }
 import { JobExecutor } from '../jobs/job-executor.js'
 import { LocalLspBridge } from '../lsp/local-lsp.js'
 
@@ -709,6 +717,157 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   )
   ipcMain.handle('hermes:runs:get', (_, { runId }: { runId: string }) =>
     wrapHandler(() => { requireAuth(); return hermesRunLog.get(runId) })
+  )
+
+  // ── FASE 7 — incidentes: alerta do NotificationMonitor → incidente → diagnóstico do Hermes ──
+  // O diagnóstico roda inteiro no main (sem janela): o alerta pode chegar com o app minimizado.
+  const incidentStore = new HermesIncidentStore()
+  void incidentStore.ensureTable().catch((e: unknown) => console.error('[DB] hermes_incidents:', e))
+  const incidentDiagnosing = new Set<string>()   // vpsIds com diagnóstico em andamento (um por VPS)
+  const broadcastIncident = (incidentId: string, vpsId: string) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      try { w.webContents.send('hermes:incident:updated', { incidentId, vpsId }) } catch { /* janela fechada */ }
+    }
+  }
+
+  async function diagnoseIncident(incidentId: string): Promise<void> {
+    const inc = await incidentStore.get(incidentId)
+    if (!inc) throw new Error('Incidente não encontrado')
+    if (incidentDiagnosing.has(inc.vpsId)) throw new Error('Já há um diagnóstico do Hermes rodando nesta VPS — aguarde terminar.')
+    incidentDiagnosing.add(inc.vpsId)
+    let stream: HermesEventStream
+    try {
+      stream = await hermesSvc.startIncidentDiagnosis(inc.vpsId, buildIncidentPrompt(inc), `nex-incident-${Date.now()}`)
+    } catch (e) {
+      incidentDiagnosing.delete(inc.vpsId)
+      await incidentStore.update(incidentId, { status: 'diagnosis_failed', error: e instanceof Error ? e.message : String(e) })
+      broadcastIncident(incidentId, inc.vpsId)
+      throw e
+    }
+    const runId = hermesRunLog.start({ projectId: `incident:${inc.vpsId}`, taskId: incidentId, kind: 'incident' })
+    await incidentStore.update(incidentId, { status: 'diagnosing', runId, error: '', diagnosis: null })
+    broadcastIncident(incidentId, inc.vpsId)
+
+    let text = ''
+    let settled = false
+    let lastAt = Date.now()
+    // eslint-disable-next-line prefer-const
+    let watchdog: ReturnType<typeof setInterval>
+    const end = async (ok: boolean, error?: string) => {
+      if (settled) return
+      settled = true
+      clearInterval(watchdog)
+      hermesRunLog.finish(runId, ok, error)
+      incidentDiagnosing.delete(inc.vpsId)
+      if (!ok) {
+        await incidentStore.update(incidentId, { status: 'diagnosis_failed', error: error ?? 'falha no diagnóstico' }).catch(() => {})
+      } else {
+        const diagnosis = parseDiagnosis(text)
+        await incidentStore.update(incidentId, { status: 'diagnosed', diagnosis }).catch(() => {})
+        if (notificationsEnabled && Notification.isSupported()) {
+          const label = { ok: 'OK', degraded: 'degradado', critical: 'CRÍTICO' }[diagnosis.status]
+          const n = new Notification({
+            title: `Diagnóstico pronto — ${inc.vpsName} (${label})`,
+            body: `${diagnosis.summary || inc.title}`.slice(0, 200) + (diagnosis.actions.length ? ` · ${diagnosis.actions.length} ação(ões) sugerida(s)` : ''),
+          })
+          n.on('click', () => openIncidentWindow?.(inc.vpsId, inc.vpsName))
+          n.show()
+        }
+      }
+      broadcastIncident(incidentId, inc.vpsId)
+    }
+    stream.on('data', (chunk: string) => {
+      lastAt = Date.now()
+      if (text.length < 400_000) text += chunk
+      hermesRunLog.appendText(runId, chunk)
+    })
+    stream.on('event', (e: HermesEvent) => {
+      lastAt = Date.now()
+      if (e.kind === 'tool_use') hermesRunLog.appendActivity(runId, { kind: 'tool', tool: e.tool, summary: e.summary })
+      else if (e.kind === 'tool_result' && !e.ok) hermesRunLog.appendActivity(runId, { kind: 'tool_error', tool: e.tool, summary: e.summary })
+      else if (e.kind === 'init') hermesRunLog.appendActivity(runId, { kind: 'init', tool: '', summary: e.model })
+      // Diagnóstico é só leitura: comando bloqueado pelo Hermes não vira Autorizar/Negar, só fica no log.
+      else if (e.kind === 'blocked') hermesRunLog.appendActivity(runId, { kind: 'blocked', tool: e.tool, summary: `${e.command || e.tool} — ${e.reason}` })
+    })
+    stream.on('close', (code: number | null) => {
+      const r = stream.result
+      const ok = r ? r.ok : (code === 0 && text.length > 0)
+      void end(ok, ok ? undefined : (r?.error || `hermes encerrou sem resultado (código ${code})`))
+    })
+    stream.on('error', (err: Error) => { void end(false, err.message) })
+    watchdog = setInterval(() => {
+      if (Date.now() - lastAt > 900_000) { stream.kill(); void end(false, 'Timeout: Hermes não respondeu em 900s.') }
+    }, 15_000)
+  }
+
+  notifMonitor?.onAlert(alert => {
+    void (async () => {
+      const { incident, created } = await incidentStore.recordAlert({
+        vpsId: alert.vpsId, vpsName: alert.vpsName, type: alert.type, value: alert.value, threshold: alert.threshold, title: alert.title,
+      })
+      broadcastIncident(incident.id, incident.vpsId)
+      // Só o primeiro alerta de um incidente dispara diagnóstico automático — e só com o Hermes rodando na VPS.
+      if (!created) return
+      const instance = await db.hermesInstance.findUnique({ where: { vpsServerId: alert.vpsId } }).catch(() => null)
+      if (instance?.status === 'running') await diagnoseIncident(incident.id).catch((e: unknown) => console.error('[Incident] diagnóstico automático:', e))
+    })().catch((e: unknown) => console.error('[Incident] registro do alerta:', e))
+  })
+
+  const assertId = (v: unknown, name: string): string => {
+    if (typeof v !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(v)) throw new Error(`${name} inválido`)
+    return v
+  }
+
+  ipcMain.handle('hermes:incident:list', (_, { vpsId }: { vpsId: unknown }) =>
+    wrapHandler(() => { requireAuth(); return incidentStore.listForVps(assertId(vpsId, 'vpsId')) })
+  )
+  ipcMain.handle('hermes:incident:get', (_, { incidentId }: { incidentId: unknown }) =>
+    wrapHandler(() => { requireAuth(); return incidentStore.get(assertId(incidentId, 'incidentId')) })
+  )
+  /** Sem incidentId: cria um incidente "manual" (diagnóstico geral pedido no Incident Mode). */
+  ipcMain.handle('hermes:incident:diagnose', (_, { incidentId, vpsId }: { incidentId?: unknown; vpsId: unknown }) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      let id: string
+      if (incidentId !== undefined) id = assertId(incidentId, 'incidentId')
+      else {
+        const vps = await db.vpsServer.findUnique({ where: { id: assertId(vpsId, 'vpsId') } })
+        if (!vps) throw new Error('VPS não encontrada')
+        const type: IncidentType = 'manual'
+        id = (await incidentStore.recordAlert({ vpsId: vps.id, vpsName: vps.name, type, value: 0, threshold: 0, title: `Diagnóstico manual — ${vps.name}` })).incident.id
+      }
+      await diagnoseIncident(id)
+      return incidentStore.get(id)
+    })
+  )
+  /** Reparo sugerido: o comando vem do diagnóstico guardado, nunca do renderer; destrutivo é recusado. */
+  ipcMain.handle('hermes:incident:runAction', (_, { incidentId, actionIndex }: { incidentId: unknown; actionIndex: unknown }) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      const id = assertId(incidentId, 'incidentId')
+      if (typeof actionIndex !== 'number' || !Number.isInteger(actionIndex) || actionIndex < 0) throw new Error('Ação inválida')
+      const inc = await incidentStore.get(id)
+      const action = inc?.diagnosis?.actions[actionIndex]
+      if (!inc || !inc.diagnosis || !action) throw new Error('Ação não encontrada no diagnóstico')
+      if (!action.allowed) throw new Error('Ação recusada: comando destrutivo ou irreversível não é executado pelo NEX.')
+      const r = await hermesSvc.runIncidentRepair(inc.vpsId, id, action.command)
+      const actions = inc.diagnosis.actions.map((a, i) => i === actionIndex ? { ...a, executed: { at: Date.now(), success: r.success, output: r.output.slice(-4000) } } : a)
+      await incidentStore.update(id, { diagnosis: { ...inc.diagnosis, actions } })
+      broadcastIncident(id, inc.vpsId)
+      return r
+    })
+  )
+  ipcMain.handle('hermes:incident:resolve', (_, { incidentId }: { incidentId: unknown }) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      const id = assertId(incidentId, 'incidentId')
+      const inc = await incidentStore.get(id)
+      if (!inc) throw new Error('Incidente não encontrado')
+      if (inc.status === 'diagnosing') throw new Error('Aguarde o diagnóstico terminar antes de marcar como resolvido.')
+      await incidentStore.update(id, { status: 'resolved' })
+      broadcastIncident(id, inc.vpsId)
+      return incidentStore.get(id)
+    })
   )
 
   // Fechamento da entrega — revisão + checks reexecutados pelo NEX + DoD como gate + relatório (v3.66.0)

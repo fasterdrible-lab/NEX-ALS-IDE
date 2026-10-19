@@ -28,4 +28,5 @@ export {
   type HermesAgentStatus, type HermesProjectAgentInfo, type HermesAutonomyLevel, type DodItem,
   type HermesSkillInfo, HermesEventStream, type HermesEvent,
   HermesRunLog, runKindFromSession, type HermesRunKind, type HermesRunSummary, type HermesRun,
+  HermesIncidentStore, buildIncidentPrompt, parseDiagnosis, type HermesIncident, type IncidentType,
 } from './hermes/index.js'

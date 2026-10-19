@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-18
-**Versão:** 3.68.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.69.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Hermes — incidentes de VPS: diagnóstico + reparo confirmado (FASE 7, v3.69.0)
+
+Alerta do NotificationMonitor (disco/CPU/RAM) vira **incidente** registrado (alerta repetido atualiza o mesmo); clicar na notificação abre o Incident Mode. Com o Hermes rodando na VPS, o **diagnóstico começa sozinho** no main (somente leitura) e avisa quando fica pronto. No Incident Mode, aba **Hermes**: incidentes da VPS, diagnóstico geral sob demanda, status/causa/evidências e **ações sugeridas** — cada uma só roda com sua confirmação (risco alto: digitar CONFIRMO), destrutivas são recusadas sempre, tudo auditado. Validado com diagnóstico real na VPS-1.
 
 ## Hermes — painel Agent dentro da IDE (v3.68.0)
 

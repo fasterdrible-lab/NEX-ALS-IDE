@@ -75,7 +75,7 @@ Primeiro teste de ponta a ponta, na VPS-1. Corrigiu 3 bugs (ver CHANGELOG 3.57.6
 | **5 — Memory + Skills** | Visibilidade só-leitura de skills (`SKILL.md`) e sessões; adapter de contexto NEX→Hermes via `.hermes.md` (auto-injetado pelo Hermes, sem flag) | ✅ v3.56.0 |
 | **6 — Automação** | Cron (`scheduled_jobs`+`projectId`), execução não-assistida (`runObjectiveUnattended`), recovery de sessão interrompida (`recoverInterruptedSessions`) | ✅ v3.57.0 |
 | **A — Governança + eventos** | `stream-json` → activity feed estruturado; comandos bloqueados pelo Hermes viram Autorizar/Negar no NEX (execução pelo NEX, auditada em `tool_execution_log`); erro real do Hermes exibido | ✅ v3.58.0 |
-| 7 — Monitoramento | Integração com `NotificationMonitor`, incident diagnostics, auto-repair seguro | ⏳ pendente |
+| 7 — Monitoramento | Alerta do `NotificationMonitor` → incidente (`hermes_incidents`); diagnóstico do Hermes somente leitura no main (automático com Hermes rodando); reparo sugerido executado só com confirmação, destrutivo sempre recusado (`isForbiddenRepair`) | ✅ v3.69.0 |
 
 ## FASE 1 — o que foi entregue
 

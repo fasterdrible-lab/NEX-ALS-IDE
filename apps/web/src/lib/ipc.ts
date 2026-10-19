@@ -75,7 +75,24 @@ export interface HermesProjectAgentInfo {
 }
 
 // Log por execução do Hermes (espelha packages/core/src/hermes/run-log.ts)
-export type HermesRunKind = 'task' | 'parallel' | 'review' | 'project'
+export type HermesRunKind = 'task' | 'parallel' | 'review' | 'project' | 'incident'
+
+// Incidentes de VPS (espelha packages/core/src/hermes/incident.ts + incident-store.ts)
+export type IncidentStatus = 'open' | 'diagnosing' | 'diagnosed' | 'diagnosis_failed' | 'resolved'
+export interface RepairAction {
+  title: string; command: string; risk: 'low' | 'medium' | 'high'; why: string; allowed: boolean
+  executed?: { at: number; success: boolean; output: string }
+}
+export interface IncidentDiagnosis {
+  parsed: boolean; status: 'ok' | 'degraded' | 'critical'
+  summary: string; rootCause: string; evidence: string[]; actions: RepairAction[]
+}
+export interface HermesIncident {
+  id: string; vpsId: string; vpsName: string
+  type: 'disk' | 'cpu' | 'ram' | 'manual'; value: number; threshold: number; title: string
+  status: IncidentStatus; createdAt: number; updatedAt: number
+  runId: string | null; error: string; diagnosis: IncidentDiagnosis | null
+}
 export interface HermesRunSummary {
   id: string; projectId: string; taskId: string | null
   kind: HermesRunKind; status: 'running' | 'done' | 'error'
@@ -312,6 +329,20 @@ export const ipc = {
         invoke<DodItem[]>('hermes:dod:toggle', { projectId, itemId, done }),
       runChecks: (projectId: string) =>
         invoke<DodItem[]>('hermes:dod:runChecks', { projectId }),
+    },
+    incident: {
+      list: (vpsId: string) => invoke<HermesIncident[]>('hermes:incident:list', { vpsId }),
+      get: (incidentId: string) => invoke<HermesIncident | null>('hermes:incident:get', { incidentId }),
+      /** Sem incidentId: diagnóstico geral (cria um incidente "manual"). */
+      diagnose: (vpsId: string, incidentId?: string) =>
+        invoke<HermesIncident | null>('hermes:incident:diagnose', { vpsId, incidentId }),
+      runAction: (incidentId: string, actionIndex: number) =>
+        invoke<{ success: boolean; output: string }>('hermes:incident:runAction', { incidentId, actionIndex }),
+      resolve: (incidentId: string) => invoke<HermesIncident | null>('hermes:incident:resolve', { incidentId }),
+      onUpdated: (cb: (e: { incidentId: string; vpsId: string }) => void) => {
+        if (!window.electron) return () => {}
+        return window.electron.on('hermes:incident:updated', cb as (...args: unknown[]) => void)
+      },
     },
     runs: {
       list: (projectId: string, taskId?: string) =>

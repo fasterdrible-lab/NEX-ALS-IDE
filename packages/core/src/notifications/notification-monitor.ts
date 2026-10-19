@@ -19,11 +19,13 @@ export class NotificationMonitor {
   private terminal = new TerminalService()
   private cooldowns = new Map<string, number>()
   private intervalId: ReturnType<typeof setInterval> | null = null
-  private alertCb: ((alert: NotificationAlert) => void) | null = null
+  // Vários ouvintes: a notificação do Windows (main.ts) e o registro de incidente + diagnóstico do
+  // Hermes (handlers.ts, FASE 7). Antes um onAlert substituía o outro.
+  private alertCbs: ((alert: NotificationAlert) => void)[] = []
   private enabled = true
 
   onAlert(cb: (alert: NotificationAlert) => void): void {
-    this.alertCb = cb
+    this.alertCbs.push(cb)
   }
 
   setEnabled(enabled: boolean): void {
@@ -53,7 +55,9 @@ export class NotificationMonitor {
   }
 
   private emit(alert: NotificationAlert): void {
-    if (this.alertCb) this.alertCb(alert)
+    for (const cb of this.alertCbs) {
+      try { cb(alert) } catch (e) { console.error('[NotificationMonitor] ouvinte falhou:', e) }
+    }
   }
 
   private async poll(): Promise<void> {

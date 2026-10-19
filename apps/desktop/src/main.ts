@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, Notification, session } from 'electron'
 import path from 'node:path'
-import { setupIpcHandlers } from './ipc/handlers'
+import { setupIpcHandlers, setIncidentWindowOpener } from './ipc/handlers'
 
 // Ícone das janelas/barra de tarefas — instalado vai em resources/ (extraResources), em dev fica em build/
 const APP_ICON = app.isPackaged
@@ -209,13 +209,18 @@ app.whenReady().then(async () => {
   await initializeDatabase()
   createWindow()
   setupIpcHandlers(ipcMain, mainWindow ?? undefined, notifMonitor)
+  setIncidentWindowOpener(createIncidentWindow)
 
+  // FASE 7: o alerta também vira incidente + diagnóstico do Hermes (handlers.ts) — por isso o
+  // monitor roda mesmo sem suporte a notificação; o clique na notificação abre o Incident Mode.
   if (Notification.isSupported()) {
     notifMonitor.onAlert(alert => {
-      new Notification({ title: alert.title, body: alert.body }).show()
+      const n = new Notification({ title: alert.title, body: `${alert.body} — clique para abrir o Incident Mode` })
+      n.on('click', () => createIncidentWindow(alert.vpsId, alert.vpsName))
+      n.show()
     })
-    notifMonitor.start()
   }
+  notifMonitor.start()
 
   ipcMain.handle('window:openIde', (_, data: { vpsId: string; vpsName: string }) => {
     createIdeWindow(data.vpsId, data.vpsName)

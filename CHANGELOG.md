@@ -1,5 +1,23 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.69.0] — 2026-10-18
+
+### Adicionado — Hermes FASE 7: incidentes de VPS com diagnóstico do Hermes e reparo confirmado (ETAPAS 31/32)
+
+**Alerta → incidente:** cada alerta do NotificationMonitor (disco ≥ 85%, CPU ≥ 90%, RAM ≥ 90%) vira um incidente gravado (`hermes_incidents`). Alerta repetido do mesmo tipo na mesma VPS, com o incidente ainda aberto, atualiza o valor em vez de duplicar. **Clicar na notificação abre o Incident Mode** daquela VPS (antes o clique não fazia nada).
+
+**Diagnóstico automático:** se o Hermes está rodando na VPS, o primeiro alerta do incidente dispara um diagnóstico **no main, sem depender de janela aberta** — o alerta pode chegar com o app minimizado. Ao terminar, notificação "Diagnóstico pronto — VPS (CRÍTICO/degradado/OK)" com resumo e quantidade de ações; clique abre o Incident Mode. Um diagnóstico por VPS por vez; o que estava rodando quando o app fechou é marcado como interrompido.
+
+**Somente leitura:** o Hermes roda numa pasta própria (`~/.hermes-nex/incidents`, fora de qualquer projeto), com prompt que proíbe alterar/apagar/reiniciar/instalar e lista comandos de inspeção (`df`, `du`, `free`, `ps`, `docker ps/system df`, `journalctl -p err`, `systemctl --failed`…). Comando bloqueado pelo Hermes vai para o log, não vira Autorizar/Negar. Resposta em JSON: status (ok/degradado/crítico), resumo, causa provável, evidências e ações sugeridas.
+
+**Reparo seguro ("auto-repair" sempre com o usuário):** no Incident Mode, cada ação sugerida tem "Executar…" com confirmação; **risco alto exige digitar CONFIRMO**. O renderer manda só o índice da ação — o comando vem do diagnóstico guardado no main. `isForbiddenRepair` recusa sempre (mesmo confirmado) `rm -rf` amplo, `mkfs`/`dd` em disco, `reboot`/`shutdown`, firewall, usuários, `chmod -R 777 /`, `docker volume rm`/`prune --volumes`/`compose down -v`, `DROP DATABASE`, `curl | sh`, `git reset --hard`, `killall`… Execução auditada em `tool_execution_log` (`hermes:incident_repair`) e o resultado fica no histórico do incidente.
+
+**Incident Mode:** a célula de diagnóstico ganha as abas **Hermes** (incidentes da VPS, "Diagnóstico geral" sob demanda, diagnóstico ao vivo, ações, "Marcar resolvido") e **Chat IA** (a de antes). Corrigido: o diagnóstico automático do Chat IA rodava 1,5s após abrir com os painéis ainda vazios (lia o estado do primeiro render); agora espera a primeira carga de stats/Docker/PM2/logs.
+
+**Outras mudanças:** `NotificationMonitor` aceita vários ouvintes (antes um `onAlert` substituía o outro) e passa a rodar mesmo sem suporte a notificação do sistema; nova execução `incident` no log por execução (aparece nos Logs). IPC `hermes:incident:list|get|diagnose|runAction|resolve` + evento `hermes:incident:updated`.
+
+**Verificado:** `pnpm typecheck` (5 pacotes); 25/25 testes no core (5 novos: prompt, leitura do diagnóstico, trava de reparo com 10 comandos permitidos e 21 recusados); armazenamento testado num SQLite temporário com o Prisma real (registro, dedupe, resolvido → novo incidente, órfão); **diagnóstico real na VPS-1** com o prompt gerado pelo código e o mesmo formato de comando do NEX — o Hermes usou só comandos de leitura e o `parseDiagnosis` leu status, 9 evidências e 3 ações (todas liberadas pela trava). Não testado pela UI (clique na notificação, executar ação).
+
 ## [3.68.0] — 2026-10-18
 
 ### Adicionado — painel Agent (Hermes) dentro da IDE (ETAPA 16)

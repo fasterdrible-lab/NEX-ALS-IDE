@@ -6,6 +6,11 @@ export type {
   HermesAgentStatus, HermesProjectAgentInfo, HermesAutonomyLevel, DodItem, HermesSkillInfo,
 } from './hermes.types.js'
 export {
+  buildIncidentPrompt, parseDiagnosis, isForbiddenRepair,
+  type IncidentType, type IncidentStatus, type IncidentDiagnosis, type RepairAction,
+} from './incident.js'
+export { HermesIncidentStore, type HermesIncident } from './incident-store.js'
+export {
   HermesRunLog, runKindFromSession,
   type HermesRunKind, type HermesRunStatus, type HermesRunSummary, type HermesRun, type HermesRunActivity,
 } from './run-log.js'

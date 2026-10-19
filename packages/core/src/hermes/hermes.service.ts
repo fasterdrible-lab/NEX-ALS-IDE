@@ -16,6 +16,7 @@ import {
   parseReview, isSafeCheckCommand, evaluateDelivery, buildDeliveryReport, correctionTasks,
   type DeliveryResult, type ReviewCheck, type VerifiedCheck,
 } from './delivery.js'
+import { isForbiddenRepair } from './incident.js'
 
 function parseSkillFiles(raw: string): HermesSkillInfo[] {
   const chunks = raw.split('@@@FILE:').slice(1)
@@ -577,6 +578,46 @@ export class HermesService {
     await toolExecutor.logExecution({
       toolName: 'hermes:approved_command',
       input: { projectId, workspace: cwd, command },
+      output,
+      tier: 'exec_dangerous',
+      confirmed: true,
+    })
+    return { success, output }
+  }
+
+  /**
+   * FASE 7 — diagnóstico de incidente: o Hermes investiga a VPS (somente leitura, pelo prompt) numa
+   * pasta própria (`~/.hermes-nex/incidents`), fora de qualquer projeto. `$HOME` vai entre aspas
+   * duplas no comando do client, então o shell remoto expande.
+   */
+  async startIncidentDiagnosis(vpsId: string, objective: string, sessionName: string): Promise<HermesEventStream> {
+    const instance = await this.db.hermesInstance.findUnique({ where: { vpsServerId: vpsId } })
+    if (!instance || instance.status !== 'running') {
+      throw new Error('Hermes não está rodando nesta VPS — abra a tela Hermes da VPS e clique em Iniciar para usar o diagnóstico.')
+    }
+    await this.terminal.exec(vpsId, 'mkdir -p "$HOME/.hermes-nex/incidents"', 15000)
+    return this.client.streamObjective(vpsId, { workspace: '$HOME/.hermes-nex/incidents', objective, resume: false, sessionName })
+  }
+
+  /**
+   * Executa uma ação de reparo sugerida no diagnóstico — chamado só depois da confirmação do
+   * usuário, com o comando lido do diagnóstico guardado (nunca vindo da tela). Destrutivo é recusado
+   * aqui de novo (defesa em profundidade) e tudo fica em tool_execution_log.
+   */
+  async runIncidentRepair(vpsId: string, incidentId: string, command: string): Promise<HermesCommandResult> {
+    if (isForbiddenRepair(command)) throw new Error('Ação recusada: comando destrutivo ou irreversível não é executado pelo NEX.')
+    let output: string
+    let success: boolean
+    try {
+      output = await this.client.runApprovedCommand(vpsId, '$HOME', command)
+      success = /\[exit 0\]\s*$/.test(output)
+    } catch (err) {
+      output = err instanceof Error ? err.message : String(err)
+      success = false
+    }
+    await toolExecutor.logExecution({
+      toolName: 'hermes:incident_repair',
+      input: { vpsId, incidentId, command },
       output,
       tier: 'exec_dangerous',
       confirmed: true,

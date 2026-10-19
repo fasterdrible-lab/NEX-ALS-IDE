@@ -5,6 +5,7 @@ import {
   Terminal, Box, Cpu, Activity,
 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
+import HermesIncidentPanel from '../components/HermesIncidentPanel'
 
 interface VpsStats { cpu: number; ram: number; disk: number; uptime: string }
 interface DockerContainer { id: string; name: string; image: string; status: string; state: string }
@@ -37,6 +38,8 @@ export default function IncidentModePage() {
   const [streamContent, setStreamContent] = useState('')
   const [activeStreamId, setActiveStreamId] = useState<string | null>(null)
   const [diagnosing, setDiagnosing] = useState(false)
+  // FASE 7: diagnóstico do Hermes (incidentes + reparo confirmado) ao lado do chat IA genérico
+  const [diagTab, setDiagTab] = useState<'hermes' | 'chat'>('hermes')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const logsRef = useRef<HTMLPreElement>(null)
   const termEndRef = useRef<HTMLDivElement>(null)
@@ -98,10 +101,12 @@ export default function IncidentModePage() {
     return () => clearInterval(t)
   }, [loadStats, loadDocker, loadPm2])
 
-  // ── Diagnóstico automático ao abrir ────────────────────────────────────────
+  // ── Diagnóstico automático do chat IA ao abrir ─────────────────────────────
+  // Espera os 4 painéis terminarem a primeira carga. Antes rodava com timer de 1.5s e deps [] —
+  // lia stats/docker/pm2/logs ainda vazios (estado do primeiro render) e diagnosticava sem dados.
+  const initialLoadDone = !statsLoading && !dockerLoading && !pm2Loading && !logsLoading
   useEffect(() => {
-    if (diagnosing) return
-    // Aguarda dados iniciais carregarem (1.5s)
+    if (diagnosing || !initialLoadDone) return
     const t = setTimeout(async () => {
       setDiagnosing(true)
       setChatLoading(true)
@@ -128,10 +133,10 @@ export default function IncidentModePage() {
         setChatLoading(false)
         setChatMsgs([{ role: 'assistant', text: `❌ Não foi possível conectar ao provedor de IA: ${String(e)}` }])
       }
-    }, 1500)
+    }, 0)
     return () => clearTimeout(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // executa apenas uma vez ao montar
+  }, [initialLoadDone]) // uma vez, quando a primeira carga termina (diagnosing trava repetições)
 
   // ── Listener de streaming ─────────────────────────────────────────────────
   useEffect(() => {
@@ -228,12 +233,20 @@ export default function IncidentModePage() {
       {/* ═══ GRID PRINCIPAL ═══ */}
       <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-0.5 bg-slate-800/30 overflow-hidden">
 
-        {/* [0,0] Chat IA — top-left */}
+        {/* [0,0] Diagnóstico — Hermes (incidentes + reparo confirmado) | Chat IA — top-left */}
         <div className="flex flex-col bg-slate-950 border-r border-b border-slate-800/50 overflow-hidden">
-          <PanelHeader icon={<Activity size={11}/>} title="Diagnóstico IA" extra={
-            chatLoading && <span className="flex items-center gap-1 text-[9px] text-purple-400"><Loader2 size={8} className="animate-spin"/> analisando…</span>
+          <PanelHeader icon={<Activity size={11}/>} title="Diagnóstico" extra={
+            <div role="tablist" aria-label="Diagnóstico" className="flex items-center gap-1">
+              {([['hermes', 'Hermes'], ['chat', 'Chat IA']] as const).map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={diagTab === id} onClick={() => setDiagTab(id)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] ${diagTab === id ? 'bg-purple-700 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+                  {label}{id === 'chat' && chatLoading && <Loader2 size={8} className="inline animate-spin ml-1"/>}
+                </button>
+              ))}
+            </div>
           }/>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 text-xs">
+          {diagTab === 'hermes' && <HermesIncidentPanel vpsId={vpsId}/>}
+          <div className={`flex-1 overflow-y-auto p-3 space-y-2 text-xs ${diagTab === 'chat' ? '' : 'hidden'}`}>
             {chatMsgs.length === 0 && !streamContent && !chatLoading && (
               <p className="text-slate-600 text-center pt-4">Aguardando diagnóstico inicial…</p>
             )}
@@ -249,7 +262,7 @@ export default function IncidentModePage() {
             )}
             <div ref={chatEndRef}/>
           </div>
-          <div className="border-t border-slate-800 px-2 py-2 flex gap-1.5 shrink-0">
+          <div className={`border-t border-slate-800 px-2 py-2 flex gap-1.5 shrink-0 ${diagTab === 'chat' ? '' : 'hidden'}`}>
             <input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}

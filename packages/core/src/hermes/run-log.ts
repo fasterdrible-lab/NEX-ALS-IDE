@@ -7,7 +7,7 @@ import { getPrismaClient } from '@cwm/db'
  * BIGINT: no $queryRawUnsafe o Prisma lê coluna INTEGER como i32 e falha (P2010) com Date.now().
  */
 
-export type HermesRunKind = 'task' | 'parallel' | 'review' | 'project'
+export type HermesRunKind = 'task' | 'parallel' | 'review' | 'project' | 'incident'
 export type HermesRunStatus = 'running' | 'done' | 'error'
 
 export interface HermesRunActivity { at: number; kind: 'init' | 'tool' | 'tool_error' | 'blocked'; tool: string; summary: string }

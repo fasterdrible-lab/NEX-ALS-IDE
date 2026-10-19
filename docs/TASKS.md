@@ -9,7 +9,7 @@
   - [x] Qualidade: DoD como gate, review + security pass, `--checkpoints`, relatório final (ETAPAS 9, 24, 27, 28, 40) — v3.66.0; falta validar pela UI na VPS-1 (fechar a entrega de um objetivo real; ver bloqueio → correções → nova revisão)
   - [x] Task board/painel de agentes a partir dos eventos `stream-json` (ETAPAS 12/13); logs separados (ETAPA 37) — v3.67.0; falta ver pela UI na VPS-1 durante um loop real
   - [x] Painel Agent na IDE (ETAPA 16) — v3.68.0; falta ver pela UI na VPS-1 (abrir a IDE na pasta de um projeto e rodar uma tarefa pelo painel)
-  - [ ] FASE 7 — NotificationMonitor + Incident Mode (ETAPAS 31/32)
+  - [x] FASE 7 — NotificationMonitor + Incident Mode (ETAPAS 31/32) — v3.69.0; diagnóstico validado na VPS-1 fora da UI; falta ver pela UI (clique na notificação, executar uma ação sugerida)
 
 ## Concluídas recentemente (v3.56.0 → v3.57.0)
 
