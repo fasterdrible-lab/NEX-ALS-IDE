@@ -54,8 +54,15 @@ export default function IncidentModePage() {
     try {
       const r = await ipc.monitor.getStats(vpsId)
       if (r.success && r.stats) {
-        const s = r.stats as { cpu?: number; ram?: number; disk?: number; uptime?: string }
-        setStats({ cpu: s.cpu ?? 0, ram: s.ram ?? 0, disk: s.disk ?? 0, uptime: s.uptime ?? '—' })
+        // monitor:getStats devolve cpu/ram/disk como objetos ({ usagePercent, … }). Antes eram lidos
+        // como número e o objeto ia direto para o JSX → React #31 derrubava a página quando os dados chegavam.
+        type Metric = number | { usagePercent?: number } | undefined
+        const s = r.stats as { cpu?: Metric; ram?: Metric; disk?: Metric; uptime?: unknown }
+        const pctOf = (m: Metric) => typeof m === 'number' ? m : Number(m?.usagePercent ?? 0) || 0
+        setStats({
+          cpu: pctOf(s.cpu), ram: pctOf(s.ram), disk: pctOf(s.disk),
+          uptime: typeof s.uptime === 'string' && s.uptime ? s.uptime : '—',
+        })
       }
     } catch { /* silencioso */ }
     setStatsLoading(false)

@@ -197,8 +197,11 @@ export default function AIHubPage() {
         if (ctxVpsId && ctxSel.has('vpsStats')) {
           const r = await ipc.monitor.getStats(ctxVpsId).catch(() => null)
           if (r?.success && r.stats) {
-            const s = r.stats as { cpu?: number; ram?: number; disk?: number; uptime?: string }
-            parts.push(`## Métricas da VPS\nCPU: ${s.cpu}% | RAM: ${s.ram}% | Disco: ${s.disk}% | Uptime: ${s.uptime}`)
+            // cpu/ram/disk vêm como objetos ({ usagePercent, … }) — antes ia "[object Object]%" para a IA
+            type Metric = number | { usagePercent?: number } | undefined
+            const s = r.stats as { cpu?: Metric; ram?: Metric; disk?: Metric; uptime?: string }
+            const pctOf = (m: Metric) => typeof m === 'number' ? m : Number(m?.usagePercent ?? 0) || 0
+            parts.push(`## Métricas da VPS\nCPU: ${pctOf(s.cpu)}% | RAM: ${pctOf(s.ram)}% | Disco: ${pctOf(s.disk)}% | Uptime: ${s.uptime ?? '—'}`)
           }
         }
         if (ctxVpsId && ctxSel.has('docker')) {

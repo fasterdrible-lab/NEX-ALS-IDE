@@ -1,5 +1,15 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.69.1] — 2026-10-19
+
+### Corrigido — Incident Mode caía com "Minified React error #31" ao carregar as métricas
+
+**Sintoma reportado:** "Algo deu errado nesta página" no Incident Mode, logo depois de abrir.
+
+**Causa (antiga, não da 3.69.0):** `monitor:getStats` devolve `cpu`, `ram` e `disk` como objetos (`{ usagePercent, loadAvg1, cores… }`), mas o Incident Mode lia como número (`s.cpu ?? 0`) e jogava o objeto no JSX (`CPU {stats.cpu}%`) — o React derruba a página ao tentar renderizar um objeto, assim que as métricas chegam. A tela só abria porque o erro acontecia depois da primeira carga.
+
+**Fix:** `IncidentModePage` e o contexto "Métricas da VPS" do AI Hub passam a ler `usagePercent` (aceitando número também). No AI Hub não havia queda, mas a IA recebia `CPU: [object Object]%` como contexto.
+
 ## [3.69.0] — 2026-10-18
 
 ### Adicionado — Hermes FASE 7: incidentes de VPS com diagnóstico do Hermes e reparo confirmado (ETAPAS 31/32)
