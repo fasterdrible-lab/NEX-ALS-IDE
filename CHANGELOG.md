@@ -1,5 +1,20 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.73.0] — 2026-10-19
+
+### Adicionado — Git na IDE local
+
+O painel **Git** (Source Control) só existia na IDE da VPS; os projetos locais já nascem com git (Novo projeto), mas commit/push exigiam outro programa.
+
+- Aba **Git** na IDE local, com o git do PC: branch e ↑/↓ em relação ao remoto, preparados / não preparados / novos, diff no editor, preparar/despreparar (por arquivo ou todos), descartar alteração, commit, push e pull; branch e contagem na barra de status; badges M/A/D/? na árvore. Atualiza ao salvar um arquivo e depois de "Trazer alterações" do Hermes.
+- Funciona em **projeto sem nenhum commit** (branch via `git branch --show-current`; despreparar usa `git rm --cached` quando não há HEAD), com **nomes acentuados** (`core.quotepath=off`), renomeados e pasta aberta **dentro** de um repositório maior (caminhos relativos à pasta).
+- Mensagens do git que pedem ação viram instrução em português: identidade não configurada, branch sem upstream (`git push -u …`), repositório sem remoto, login do GitHub. Push/pull nunca travam esperando senha no terminal (`GIT_TERMINAL_PROMPT=0`; o Git Credential Manager do Windows usa a própria janela).
+- **Repositório na pasta pessoal é ignorado.** Achado nesta máquina: `C:\Users\phpos` é um repositório git (324 arquivos de outro projeto, remoto apontando para o GitHub do Zeus). Toda pasta do OneDrive sem git próprio ficava "dentro" dele — o painel varreria a pasta pessoal inteira e um push iria para esse remoto. Agora essa pasta aparece como "sem repositório", com a explicação, e commit/push/pull são recusados nela.
+
+**Como funciona:** `LocalGitService` (`packages/core/src/git/local-git.service.ts`) — `execFile('git', [...])` com argumentos em lista, sem shell (caminhos e mensagem sem escape); `parsePorcelain` e `explainGitError` puros. IPC `git:local:status|diff|add|restore|commit|push|pull` (Zod `LocalGitRequestSchema`; leitura com `requireAuth`, alteração com `requireAdmin`). IDEPage usa um adaptador `gitApi` (local ou VPS) no mesmo painel. `GitStatus.outerRepo` (opcional) explica o caso da pasta pessoal.
+
+**Verificado:** 5 testes unitários novos (leitura do status, renomeado/acentos/aspas, prefixo de subpasta, mensagens) — core 49/49; integração com o git real num repositório descartável (12 casos: repo sem commits, add, despreparar sem HEAD, commit com aspas e `$`, diff, descartar, push sem remoto, subpasta, pasta no repositório pessoal ignorada e commit bloqueado, cwd inválido); `pnpm typecheck` (5 pacotes).
+
 ## [3.72.0] — 2026-10-19
 
 ### Alterado — Projetos: "Novo projeto" cria a pasta no PC; VPS é opcional

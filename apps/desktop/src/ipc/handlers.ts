@@ -1,7 +1,7 @@
 import { getPrismaClient } from '@cwm/db'
 import {
   HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesReviewTextSchema,
-  HermesLocalPathSchema, HermesLocalPublishSchema, HermesLocalSyncApplySchema,
+  HermesLocalPathSchema, HermesLocalPublishSchema, HermesLocalSyncApplySchema, LocalGitRequestSchema,
 } from '@cwm/config'
 import type { IpcMain } from 'electron'
 import { BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
@@ -21,6 +21,7 @@ import {
   SftpService,
   SftpSession,
   GitService,
+  LocalGitService,
   TunnelService,
   AiService,
   ProjectMemoryService,
@@ -469,6 +470,29 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   })
 
   // Git
+  // Git da IDE local (pasta do PC) — mesmo contrato dos canais git:* remotos
+  const localGit = new LocalGitService()
+  const lg = (data: unknown) => {
+    const r = LocalGitRequestSchema.safeParse(data)
+    if (!r.success) throw new Error(r.error.issues[0]?.message ?? 'Dados inválidos')
+    return r.data
+  }
+  ipcMain.handle('git:local:status', (_, data: unknown) => wrapHandler(async () => { requireAuth(); return localGit.status(lg(data).cwd) }))
+  ipcMain.handle('git:local:diff', (_, data: unknown) => wrapHandler(async () => {
+    requireAuth(); const d = lg(data); return localGit.diff(d.cwd, d.filePath ?? '', !!d.staged)
+  }))
+  ipcMain.handle('git:local:add', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); const d = lg(data); return localGit.add(d.cwd, d.files ?? []) }))
+  ipcMain.handle('git:local:restore', (_, data: unknown) => wrapHandler(async () => {
+    requireAdmin(); const d = lg(data); return localGit.restore(d.cwd, d.files ?? [], !!d.staged)
+  }))
+  ipcMain.handle('git:local:commit', (_, data: unknown) => wrapHandler(async () => {
+    requireAdmin(); const d = lg(data)
+    if (!d.message?.trim()) throw new Error('Digite uma mensagem de commit')
+    return localGit.commit(d.cwd, d.message.trim())
+  }))
+  ipcMain.handle('git:local:push', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); return localGit.push(lg(data).cwd) }))
+  ipcMain.handle('git:local:pull', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); return localGit.pull(lg(data).cwd) }))
+
   ipcMain.handle('git:status', (_, { vpsId, cwd }: { vpsId: string; cwd: string }) =>
     wrapHandler(() => git.status(vpsId, cwd))
   )

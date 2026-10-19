@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-19
-**Versão:** 3.72.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.73.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Git na IDE local (v3.73.0)
+
+O painel Git (Source Control) funciona na IDE local com o git do PC: status, diff, preparar/despreparar, descartar, commit, push/pull, branch e badges na árvore — inclusive em projeto sem nenhum commit. Repositório na pasta pessoal (`C:Users<você>.git`) é ignorado: pasta sem git próprio aparece como sem repositório, com explicação, e commit/push ficam bloqueados.
 
 ## Projetos locais em janelas próprias, como no VS Code (v3.71.0)
 
@@ -154,7 +158,7 @@ Primeira fase da integração com o runtime agentic externo **Hermes Agent** (No
 ### Dois modos de operação
 
 - **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat IA (API direta ou claude -p); badge vermelho "Produção" na top bar.
-- **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; sem terminal/Git; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
+- **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; Git com o git do PC (v3.73.0), sem terminal; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
 
 ## Phase C — Planning Mode (v3.47.0)
 

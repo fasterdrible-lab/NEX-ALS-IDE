@@ -287,6 +287,16 @@ export const ipc = {
       invoke<string>('git:pull', { vpsId, cwd }),
     log: (vpsId: string, cwd: string, n?: number) =>
       invoke<GitCommit[]>('git:log', { vpsId, cwd, n }),
+    /** Git da IDE local (pasta do PC, git do Windows). `cwd` = pasta aberta. */
+    local: {
+      status: (cwd: string) => invoke<GitStatus>('git:local:status', { cwd }),
+      diff: (cwd: string, filePath: string, staged: boolean) => invoke<string>('git:local:diff', { cwd, filePath, staged }),
+      add: (cwd: string, files: string[]) => invoke<void>('git:local:add', { cwd, files }),
+      restore: (cwd: string, files: string[], staged: boolean) => invoke<void>('git:local:restore', { cwd, files, staged }),
+      commit: (cwd: string, message: string) => invoke<void>('git:local:commit', { cwd, message }),
+      push: (cwd: string) => invoke<string>('git:local:push', { cwd }),
+      pull: (cwd: string) => invoke<string>('git:local:pull', { cwd }),
+    },
   },
   hermes: {
     status: (vpsId: string) =>

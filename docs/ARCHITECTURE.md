@@ -560,6 +560,20 @@ Fluxo reabrir:
 Preserva: conteúdo, savedContent, language, imageDataUrl — estado completo da aba
 ```
 
+### Git — Modo Local (v3.73.0)
+
+```
+IDEPage.gitApi (adaptador): isLocal ? ipc.git.local.*(localRoot) : ipc.git.*(vpsId, activeDir)
+  → git:local:status|diff|add|restore|commit|push|pull  (Zod LocalGitRequestSchema)
+  → LocalGitService [packages/core/src/git/local-git.service.ts]
+      execFile('git', ['-c','core.quotepath=off', ...args], { cwd, env: GIT_TERMINAL_PROMPT=0 })   ← sem shell
+      status: rev-parse --is-inside-work-tree → homeRepoAbove (toplevel == homedir e cwd != homedir → isRepo:false + outerRepo)
+              → branch --show-current (funciona sem commits) → rev-list @{u}...HEAD → rev-parse --show-prefix
+              → status --porcelain=v1 -uall → parsePorcelain(out, prefix)   (renomeado, aspas, subpasta)
+      add/restore/commit/push/pull/diff: assertOwnRepo(cwd) antes (recusa a pasta que só está no repo pessoal)
+      restore --staged sem HEAD → rm --cached;  erros → explainGitError (identidade, upstream, sem remoto, login)
+```
+
 ### Busca em arquivos — Modo Local (Ctrl+Shift+F)
 
 ```

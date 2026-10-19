@@ -484,5 +484,5 @@ Agente gera um bloco de ação
 
 ---
 
-*Zeus IDE v3.72.0 — NEX-ALS*
+*Zeus IDE v3.73.0 — NEX-ALS*
 *github.com/fasterdrible-lab/NEX-ALS-IDE*

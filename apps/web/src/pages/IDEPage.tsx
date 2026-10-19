@@ -586,13 +586,25 @@ export default function IDEPage() {
     }
   }, [expandedFolders, folderChildren, fsReaddir])
 
+  // ── git: local (git do PC, na pasta aberta) ou remoto (VPS, na pasta ativa) — mesmo painel ──
+  const canGit = isLocal ? !!localRootRef.current : !!vpsId
+  const gitApi = {
+    status: (cwd?: string) => isLocal ? ipc.git.local.status(localRootRef.current) : ipc.git.status(vpsId!, cwd ?? activeDir),
+    diff: (file: string, staged: boolean) => isLocal ? ipc.git.local.diff(localRootRef.current, file, staged) : ipc.git.diff(vpsId!, activeDir, file, staged),
+    add: (files: string[]) => isLocal ? ipc.git.local.add(localRootRef.current, files) : ipc.git.add(vpsId!, activeDir, files),
+    restore: (files: string[], staged: boolean) => isLocal ? ipc.git.local.restore(localRootRef.current, files, staged) : ipc.git.restore(vpsId!, activeDir, files, staged),
+    commit: (msg: string) => isLocal ? ipc.git.local.commit(localRootRef.current, msg) : ipc.git.commit(vpsId!, activeDir, msg),
+    push: () => isLocal ? ipc.git.local.push(localRootRef.current) : ipc.git.push(vpsId!, activeDir),
+    pull: () => isLocal ? ipc.git.local.pull(localRootRef.current) : ipc.git.pull(vpsId!, activeDir),
+  }
+
   // ── git status ────────────────────────────────────────────────────────
 
   const loadGitStatus = useCallback(async (cwd?:string) => {
-    if (!vpsId) return
+    if (isLocal ? !localRootRef.current : !vpsId) return
     setGitLoading(true)
     try {
-      const s = await ipc.git.status(vpsId, cwd ?? activeDir)
+      const s = await gitApi.status(cwd)
       setGitStatus(s)
     } catch (e) {
       showToast(false, `Git: ${e instanceof Error ? e.message : String(e)}`)
@@ -600,7 +612,7 @@ export default function IDEPage() {
       setGitLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vpsId, activeDir])
+  }, [vpsId, activeDir, isLocal, localRoot])
 
   useEffect(() => {
     if (leftPanel === 'git' && !gitStatus && !gitLoading) loadGitStatus()
@@ -640,6 +652,7 @@ export default function IDEPage() {
     expandedFoldersRef.current.forEach(p => {
       void fsReaddir(p).then(r => { if (r.success) setFolderChildren(m => new Map([...m, [p, r.entries]])) })
     })
+    void loadGitStatus()
     void Promise.all(openFiles.filter(f => !f.loading && !f.imageDataUrl).map(async f => {
       const r = await fsReadFile(f.path)
       return r.success && r.content !== f.savedContent ? { f, content: r.content } : null
@@ -665,7 +678,7 @@ export default function IDEPage() {
 
   // Auto-fetch git status when tree first loads (VPS mode only)
   useEffect(() => {
-    if (!isLocal && rootEntries.length > 0 && !gitStatus && !gitLoading) loadGitStatus()
+    if (rootEntries.length > 0 && !gitStatus && !gitLoading) loadGitStatus()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootEntries.length, isLocal])
 
@@ -938,6 +951,8 @@ export default function IDEPage() {
     if (r.success) {
       setOpenFiles(f=>f.map(fl=>fl.path===filePath?{...fl,savedContent:fl.content}:fl))
       showToast(true, `${file.name} salvo`)
+      // Arquivo salvo mudou o status do git: atualiza badges e painel (se já foi carregado)
+      if (gitStatus?.isRepo) void loadGitStatus()
       // IDE-14: refresh da pasta após salvar
       const parentDir = filePath.split('/').slice(0,-1).join('/')
       reloadDir(parentDir || (isLocal ? localRootRef.current : remoteRoot)).catch(() => {})
@@ -1167,44 +1182,44 @@ export default function IDEPage() {
   // ── git operations ────────────────────────────────────────────────────
 
   const handleGitAdd = async (f:GitFileStatus) => {
-    if (!vpsId) return; setGitOp('add:'+f.path)
-    try { await ipc.git.add(vpsId, activeDir, [f.path]); await loadGitStatus() }
+    if (!canGit) return; setGitOp('add:'+f.path)
+    try { await gitApi.add([f.path]); await loadGitStatus() }
     catch (e) { showToast(false, `git add: ${e instanceof Error?e.message:String(e)}`) }
     finally { setGitOp(null) }
   }
 
   const handleGitRestore = async (f:GitFileStatus, staged:boolean) => {
-    if (!vpsId) return; setGitOp('restore:'+f.path)
-    try { await ipc.git.restore(vpsId, activeDir, [f.path], staged); await loadGitStatus() }
+    if (!canGit) return; setGitOp('restore:'+f.path)
+    try { await gitApi.restore([f.path], staged); await loadGitStatus() }
     catch (e) { showToast(false, `git restore: ${e instanceof Error?e.message:String(e)}`) }
     finally { setGitOp(null) }
   }
 
   const handleGitCommit = async () => {
-    if (!vpsId||!commitMsg.trim()) { showToast(false,'Digite uma mensagem de commit'); return }
+    if (!canGit||!commitMsg.trim()) { showToast(false,'Digite uma mensagem de commit'); return }
     setGitOp('commit')
-    try { await ipc.git.commit(vpsId, activeDir, commitMsg.trim()); setCommitMsg(''); await loadGitStatus(); showToast(true,'Commit criado') }
+    try { await gitApi.commit(commitMsg.trim()); setCommitMsg(''); await loadGitStatus(); showToast(true,'Commit criado') }
     catch (e) { showToast(false, `git commit: ${e instanceof Error?e.message:String(e)}`) }
     finally { setGitOp(null) }
   }
 
   const handleGitPush = async () => {
-    if (!vpsId) return; setGitOp('push')
-    try { const out = await ipc.git.push(vpsId, activeDir); await loadGitStatus(); showToast(true, out.split('\n').slice(-2).join(' ').trim()||'Push concluído') }
+    if (!canGit) return; setGitOp('push')
+    try { const out = await gitApi.push(); await loadGitStatus(); showToast(true, out.split('\n').slice(-2).join(' ').trim()||'Push concluído') }
     catch (e) { showToast(false, `git push: ${e instanceof Error?e.message:String(e)}`) }
     finally { setGitOp(null) }
   }
 
   const handleGitPull = async () => {
-    if (!vpsId) return; setGitOp('pull')
-    try { const out = await ipc.git.pull(vpsId, activeDir); await loadGitStatus(); showToast(true, out.split('\n').filter(Boolean).slice(-1)[0]||'Pull concluído') }
+    if (!canGit) return; setGitOp('pull')
+    try { const out = await gitApi.pull(); await loadGitStatus(); showToast(true, out.split('\n').filter(Boolean).slice(-1)[0]||'Pull concluído') }
     catch (e) { showToast(false, `git pull: ${e instanceof Error?e.message:String(e)}`) }
     finally { setGitOp(null) }
   }
 
   const handleGitDiff = async (f:GitFileStatus) => {
-    if (!vpsId) return
-    const content = await ipc.git.diff(vpsId, activeDir, f.path, f.type==='staged')
+    if (!canGit) return
+    const content = await gitApi.diff(f.path, f.type==='staged')
     setGitDiff({ content, filePath:f.path, staged:f.type==='staged' })
     setActiveTab(null)
   }
@@ -2008,7 +2023,7 @@ export default function IDEPage() {
               { id:'files',   icon:<Folder size={11}/>,     label:'Arquivos' },
               { id:'search',  icon:<Search size={11}/>,     label:'Busca' },
               { id:'outline', icon:<List size={11}/>,       label:'Outline' },
-              ...(!isLocal ? [{ id:'git',    icon:<GitBranch size={11}/>, label:'Git',    badge: totalGitChanges }] : []),
+              { id:'git',    icon:<GitBranch size={11}/>, label:'Git',    badge: totalGitChanges },
               ...(!isLocal ? [{ id:'ports',  icon:<Network size={11}/>,   label:'Portas', badge: tunnels.length }] : []),
               ...(!isLocal ? [{ id:'docker', icon:<Box size={11}/>,       label:'Docker', badge: dockerContainers.filter(c=>c.state==='running').length || undefined }] : []),
               ...(!isLocal ? [{ id:'pm2',    icon:<Cpu size={11}/>,       label:'PM2',    badge: pm2Processes.filter(p=>p.status==='online').length || undefined }] : []),
@@ -2427,6 +2442,15 @@ export default function IDEPage() {
                 </button>
               </div>
 
+              {gitStatus && !gitStatus.isRepo && isLocal && (
+                <p className="px-2 py-2 text-[10px] leading-relaxed text-slate-500 border-b border-slate-800">
+                  {gitStatus.outerRepo
+                    ? <>Esta pasta não tem git próprio. Ela fica dentro do repositório da sua pasta pessoal (<span className="font-mono text-slate-400">{gitStatus.outerRepo}</span>), que o Zeus ignora — provavelmente criado sem querer.</>
+                    : <>Esta pasta não tem repositório git.</>}
+                  {' '}Para versionar este projeto, rode <span className="font-mono text-slate-400">git init</span> na pasta (projetos criados em Projetos → Novo projeto já vêm com git).
+                </p>
+              )}
+
               {gitStatus?.isRepo && (
                 <div className="flex gap-1 px-2 py-1.5 border-b border-slate-800 shrink-0">
                   <button onClick={handleGitPull} disabled={!!gitOp}
@@ -2455,7 +2479,7 @@ export default function IDEPage() {
                       <div>
                         <div className="flex items-center justify-between px-2 py-1 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-800/50">
                           <span>Staged ({gitStatus.staged.length})</span>
-                          <button onClick={()=>ipc.git.restore(vpsId!,activeDir,gitStatus.staged.map((f:GitFileStatus)=>f.path),true).then(()=>loadGitStatus())}
+                          <button onClick={()=>gitApi.restore(gitStatus.staged.map((f:GitFileStatus)=>f.path),true).then(()=>loadGitStatus())}
                             className="text-slate-600 hover:text-slate-300 text-[10px]">Unstage all</button>
                         </div>
                         {gitStatus.staged.map(f=>(
@@ -2468,7 +2492,7 @@ export default function IDEPage() {
                       <div>
                         <div className="flex items-center justify-between px-2 py-1 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-800/50">
                           <span>Alterações ({gitStatus.unstaged.length})</span>
-                          <button onClick={()=>ipc.git.add(vpsId!,activeDir,gitStatus.unstaged.map((f:GitFileStatus)=>f.path)).then(()=>loadGitStatus())}
+                          <button onClick={()=>gitApi.add(gitStatus.unstaged.map((f:GitFileStatus)=>f.path)).then(()=>loadGitStatus())}
                             className="text-slate-600 hover:text-slate-300 text-[10px]">Stage all</button>
                         </div>
                         {gitStatus.unstaged.map(f=>(

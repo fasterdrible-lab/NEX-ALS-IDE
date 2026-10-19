@@ -76,6 +76,14 @@ export const HermesLocalPublishSchema = z.object({
   remotePath: z.string().min(2, 'Caminho na VPS é obrigatório').max(512),
   name: z.string().max(200).default(''),
 })
+// Git da IDE local — caminhos de arquivo vão depois de `--` (execFile, sem shell); cwd é conferido no core
+export const LocalGitRequestSchema = z.object({
+  cwd: z.string().min(3).max(1024),
+  files: z.array(z.string().min(1).max(1024)).max(5000).optional(),
+  filePath: z.string().min(1).max(1024).optional(),
+  staged: z.boolean().optional(),
+  message: z.string().max(5000).optional(),
+})
 export const HermesLocalSyncApplySchema = z.object({
   localPath: HermesLocalPathSchema,
   paths: z.array(z.string().min(1).max(1024)).max(5000, 'Arquivos demais de uma vez'),
@@ -179,6 +187,8 @@ export interface GitStatus {
   unstaged: GitFileStatus[]
   untracked: GitFileStatus[]
   isRepo: boolean
+  /** IDE local: a pasta não tem git próprio e está dentro do repositório da pasta pessoal do usuário — ignorado. */
+  outerRepo?: string
 }
 
 export interface GitCommit {

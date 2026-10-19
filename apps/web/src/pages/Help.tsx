@@ -162,7 +162,7 @@ const sections: Section[] = [
               <p className="text-slate-300">✓ Chat IA com contexto do projeto</p>
               <p className="text-slate-300">✓ Agente autônomo — cria arquivos e roda comandos</p>
               <p className="text-slate-300">✓ Busca em arquivos (rg/findstr) — Ctrl+Shift+F</p>
-              <p className="text-slate-300">✓ Git diff do arquivo ativo — botão Diff na top bar</p>
+              <p className="text-slate-300">✓ Git (painel Source Control): status, diff, preparar, commit, push/pull e branch na barra de status</p>
               <p className="text-slate-300">✓ F2 rename inline, Ctrl+Shift+T reabrir aba</p>
               <p className="text-slate-500">✗ Sem terminal SSH</p>
               <p className="text-emerald-400">✓ Seguro — sem risco de produção</p>
@@ -1209,7 +1209,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.72.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.73.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}
