@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useWindowExit } from '../lib/useWindowExit'
+import { useParams } from 'react-router-dom'
 import {
   Bot, X, RefreshCw, Download, ArrowUpCircle, Play, Square, RotateCw,
   Send, Loader2, Terminal as TerminalIcon, Sparkles, History,
@@ -29,7 +30,7 @@ type BusyAction = 'status' | 'install' | 'update' | 'start' | 'stop' | 'restart'
 export default function HermesPage() {
   const { vpsId = '', vpsName: encodedName = '' } = useParams()
   const vpsName = decodeURIComponent(encodedName)
-  const navigate = useNavigate()
+  const { leave } = useWindowExit()
 
   const [info, setInfo] = useState<HermesInstanceInfo | null>(null)
   const [busy, setBusy] = useState<BusyAction>(null)
@@ -137,7 +138,7 @@ export default function HermesPage() {
           >
             {busy === 'status' ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
           </button>
-          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-100" title="Fechar">
+          <button onClick={() => leave()} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-slate-100" title="Fechar">
             <X size={14} />
           </button>
         </div>

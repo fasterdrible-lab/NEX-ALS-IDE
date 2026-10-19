@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useWindowExit } from '../lib/useWindowExit'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ClipboardList, Timer, Brain, Plus, Trash2,
@@ -131,6 +132,7 @@ function TaskModal({ onClose, onCreated }: { onClose: () => void; onCreated: () 
 
 export default function PlanningPage() {
   const navigate = useNavigate()
+  const { leave } = useWindowExit()
 
   const [tasks,       setTasks]       = useState<AgentTask[]>([])
   const [jobs,        setJobs]        = useState<ScheduledJob[]>([])
@@ -204,7 +206,7 @@ export default function PlanningPage() {
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-3 shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#08111F' }}>
-        <button onClick={() => navigate(-1)}
+        <button onClick={() => leave()}
           className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
           <ArrowLeft size={13} /> Voltar
         </button>

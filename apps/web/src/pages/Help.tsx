@@ -172,7 +172,7 @@ const sections: Section[] = [
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Como abrir cada modo</p>
           <KV items={[
             ['Modo Remoto', 'Lançador → botão IDE (ícone Code2) em qualquer VPS'],
-            ['Nova janela remota', 'Lançador → ícone ⎋ (ExternalLink) ao lado de IDE — abre em janela independente'],
+            ['Nova janela', 'Ícone ⎋ no Lançador ou na barra da IDE (remota ou local) — abre a mesma pasta numa janela independente; na página do projeto, IDE já abre em janela própria'],
             ['Modo Local', 'Lançador → botão "Abrir pasta local no IDE" (canto inferior)'],
           ]}/>
         </div>
@@ -407,7 +407,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
           <KV items={[
             ['🔴 PRODUÇÃO / 🟢 LOCAL', 'Badge de modo — vermelho = VPS real, verde = local seguro'],
             ['Diff (modo Local)', 'Aparece apenas em modo Local quando um arquivo está aberto — executa git diff do arquivo ativo e abre o diff viewer Monaco'],
-            ['⎋ (ExternalLink)', 'Abre esta VPS em nova janela independente (multi-monitor)'],
+            ['⎋ (ExternalLink)', 'Abre esta pasta em nova janela independente (multi-monitor). Numa janela própria, "Fechar janela" fecha só ela e 🏠 traz a janela principal'],
             ['🚨 (Siren)', 'Abre Incident Mode para esta VPS'],
             ['🚀 (Rocket)', 'Abre Deploy Assistant para esta VPS'],
             ['Claude (roxo)', 'Painel de chat + Modo Agente'],
@@ -514,7 +514,9 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         <p>Abra múltiplas VPS em janelas Electron completamente independentes — cada uma com seus próprios terminais, sessões SSH/SFTP, Git e chat IA.</p>
         <KV items={[
           ['⎋ Lançador', 'Botão ExternalLink ao lado do botão IDE em cada VPS'],
-          ['⎋ IDE top bar', 'Ícone ExternalLink ao lado do nome da VPS'],
+          ['⎋ IDE top bar', 'Ícone ExternalLink ao lado de Sair — mesma pasta (remota ou local) em outra janela'],
+          ['Página do projeto', 'IDE abre em janela própria; "IDE nesta janela" para abrir no lugar'],
+          ['Abrir o Zeus de novo', 'Não cria um segundo app: traz a janela principal para frente (reabre se estiver fechada)'],
           ['Independência total', 'Estado React, SFTP, terminais e chat são isolados por janela'],
           ['Título da janela', 'Mostra "Zeus IDE — {nome da VPS}" para identificação fácil'],
         ]}/>
@@ -1166,7 +1168,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.70.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.70.1</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}

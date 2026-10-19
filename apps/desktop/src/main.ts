@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, Notification, session } from 'electron'
 import path from 'node:path'
+import fs from 'node:fs'
 import { setupIpcHandlers, setIncidentWindowOpener } from './ipc/handlers'
 
 // Ícone das janelas/barra de tarefas — instalado vai em resources/ (extraResources), em dev fica em build/
@@ -166,10 +167,15 @@ function createIncidentWindow(vpsId: string, vpsName: string): void {
   }
 }
 
-function createIdeWindow(vpsId: string, vpsName: string): void {
+/** IDE em janela própria. Remoto: `path` = pasta do projeto na VPS. Local: `folder` = pasta do PC (sem abrir o seletor). */
+interface IdeWindowTarget { vpsId?: string; vpsName: string; path?: string; folder?: string }
+
+function createIdeWindow({ vpsId, vpsName, path: remotePath, folder }: IdeWindowTarget): void {
   const rendererUrl = process.env['ELECTRON_RENDERER_URL']
   const encodedName = encodeURIComponent(vpsName)
-  const hashPath = `/ide/${vpsId}/${encodedName}`
+  const hashPath = folder
+    ? `/ide/local?folder=${encodeURIComponent(folder)}`
+    : `/ide/${vpsId}/${encodedName}${remotePath ? `?path=${encodeURIComponent(remotePath)}` : ''}`
 
   const win = new BrowserWindow({
     icon: APP_ICON,
@@ -183,7 +189,7 @@ function createIdeWindow(vpsId: string, vpsName: string): void {
       nodeIntegration: false,
       sandbox: false,
     },
-    title: `Zeus IDE — ${vpsName}`,
+    title: `Zeus IDE — ${folder ? path.basename(folder) : vpsName}`,
     show: false,
     backgroundColor: '#0f172a',
   })
@@ -200,10 +206,50 @@ function createIdeWindow(vpsId: string, vpsName: string): void {
   }
 }
 
+/** Traz a janela principal para frente — ou a recria, se o usuário a fechou deixando outras janelas abertas. */
+function focusMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) { createWindow(); return }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+/** Valida o pedido de nova janela de IDE vindo do renderer (rota montada aqui, não pela UI). */
+function parseIdeTarget(data: unknown): IdeWindowTarget {
+  const d = (data ?? {}) as Record<string, unknown>
+  const vpsName = typeof d['vpsName'] === 'string' ? d['vpsName'].slice(0, 200) : ''
+  if (typeof d['folder'] === 'string') {
+    const folder = d['folder']
+    if (!path.isAbsolute(folder) || !fs.statSync(folder, { throwIfNoEntry: false })?.isDirectory()) throw new Error('Pasta local inválida')
+    return { vpsName, folder }
+  }
+  const vpsId = d['vpsId']
+  if (typeof vpsId !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/.test(vpsId)) throw new Error('VPS inválida')
+  let remotePath: string | undefined
+  if (typeof d['path'] === 'string' && d['path']) {
+    const p = d['path']
+    if (!p.startsWith('/') || p.length > 1024 || p.split('/').includes('..') || /[\u0000-\u001f'"`]/.test(p)) throw new Error('Caminho remoto inválido')
+    remotePath = p
+  }
+  return { vpsId, vpsName, path: remotePath }
+}
+
 // Agrupa as janelas na barra de tarefas sob o mesmo ícone do atalho instalado (appId do electron-builder)
 if (process.platform === 'win32') app.setAppUserModelId('com.nexals.ide')
 
+// Uma instância só: um segundo processo no mesmo banco rodaria a recuperação de boot (marcando como
+// interrompidas as sessões do Hermes que o primeiro está executando), outro monitor de alertas e outro
+// agendador (automações em dobro). Abrir o Zeus de novo só traz a janela principal para frente.
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  console.log('[main] o Zeus IDE já está aberto — trazendo a janela existente para frente')
+  app.quit()
+} else {
+  app.on('second-instance', () => { if (app.isReady()) focusMainWindow() })
+}
+
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return
   if (app.isPackaged) setupCSP()
   setDatabasePath()
   await initializeDatabase()
@@ -222,10 +268,19 @@ app.whenReady().then(async () => {
   }
   notifMonitor.start()
 
-  ipcMain.handle('window:openIde', (_, data: { vpsId: string; vpsName: string }) => {
-    createIdeWindow(data.vpsId, data.vpsName)
+  ipcMain.handle('window:openIde', (_, data: unknown) => {
+    try { createIdeWindow(parseIdeTarget(data)) } catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
     return { success: true }
   })
+
+  // Janelas independentes: saber se é a principal, fechar a própria, trazer a principal de volta.
+  ipcMain.handle('window:info', (event) => ({ isMain: !!mainWindow && BrowserWindow.fromWebContents(event.sender) === mainWindow }))
+  ipcMain.handle('window:closeSelf', (event) => {
+    const w = BrowserWindow.fromWebContents(event.sender)
+    if (w && w !== mainWindow) w.close()
+    return { success: true }
+  })
+  ipcMain.handle('window:focusMain', () => { focusMainWindow(); return { success: true } })
 
   ipcMain.handle('window:openIncident', (_, data: { vpsId: string; vpsName: string }) => {
     createIncidentWindow(data.vpsId, data.vpsName)

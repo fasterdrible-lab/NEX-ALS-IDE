@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import Editor, { type OnMount, type Monaco } from '@monaco-editor/react'
 import { safeRemotePath } from '../lib/remote-path'
+import { useWindowExit } from '../lib/useWindowExit'
 import type { editor as MonacoEditor } from 'monaco-editor'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -9,7 +10,7 @@ import '@xterm/xterm/css/xterm.css'
 import {
   ArrowLeft, Folder, FolderOpen, File, FileCode, FileText, FileJson, FileImage,
   Loader2, RefreshCw, FolderPlus, FilePlus, Trash2, Pencil, ChevronRight,
-  AlertCircle, Save, X, Circle, TerminalSquare, HardDrive, ShieldAlert,
+  AlertCircle, Save, X, Home, Circle, TerminalSquare, HardDrive, ShieldAlert,
   GitBranch, Plus, Minus, Upload, Download, GitCommit as GitCommitIcon,
   Command, Search, PanelBottom, Copy, Files, Check, FolderOpen as FolderOpenIcon,
   MessageSquare, Send, Bot, Columns2, PanelRightClose, Network, Globe, Box, Cpu,
@@ -200,6 +201,7 @@ function analyzeManifest(name: string, content: string): KbSuggestion | null {
 export default function IDEPage() {
   const { vpsId, vpsName } = useParams<{ vpsId:string; vpsName:string }>()
   const navigate = useNavigate()
+  const { leave, standalone, closes } = useWindowExit()
   // Raiz remota da árvore: `?path=` (aberto a partir de um projeto) ou /root. Fixa por montagem.
   const [searchParams] = useSearchParams()
   const remoteRoot = useMemo(() => safeRemotePath(searchParams.get('path')) ?? '/root', []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -509,8 +511,11 @@ export default function IDEPage() {
 
   useEffect(() => {
     if (isLocal) {
-      ipc.local.openFolder().then(async folder => {
-        if (!folder) { navigate(-1); return }
+      // `?folder=` = nova janela da mesma pasta local (⎋): abre direto, sem o seletor
+      const preset = searchParams.get('folder')
+      const pick = preset ? Promise.resolve(preset) : ipc.local.openFolder()
+      pick.then(async folder => {
+        if (!folder) { leave(); return }
         const root = folder.replace(/\\/g, '/')
         setLocalRoot(root); localRootRef.current = root
         setActiveDir(root)
@@ -1861,15 +1866,29 @@ export default function IDEPage() {
 
       {/* ═══ TOP BAR ═══ */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-800 bg-slate-900 shrink-0 min-w-0">
-        <button onClick={()=>navigate(-1)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-100 shrink-0">
-          <ArrowLeft size={12}/> Sair
+        <button onClick={leave} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-100 shrink-0"
+          title={closes ? 'Fechar esta janela (as outras continuam abertas)' : 'Voltar'}>
+          {closes ? <><X size={12}/> Fechar janela</> : <><ArrowLeft size={12}/> Sair</>}
         </button>
+        {standalone && (
+          <button onClick={() => { void ipc.window.focusMain() }} title="Ir para a janela principal do Zeus IDE (reabre se estiver fechada)"
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200 shrink-0">
+            <Home size={11}/>
+          </button>
+        )}
+        {isLocal && localRoot && (
+          <button onClick={() => { void ipc.window.openIdeLocal(localRoot).catch(e => showToast(false, String(e instanceof Error ? e.message : e))) }}
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200 shrink-0"
+            title="Abrir esta pasta em nova janela independente">
+            <ExternalLink size={11}/>
+          </button>
+        )}
         {!isLocal && vpsId && (
           <>
             <button
-              onClick={() => ipc.window.openIde(vpsId, displayName)}
+              onClick={() => { void ipc.window.openIde(vpsId, displayName, remoteRoot).catch(e => showToast(false, String(e instanceof Error ? e.message : e))) }}
               className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200 shrink-0"
-              title="Abrir esta VPS em nova janela independente"
+              title="Abrir esta pasta em nova janela independente"
             >
               <ExternalLink size={11}/>
             </button>

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useWindowExit } from '../lib/useWindowExit'
+import { useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, Plus, MessageSquare, Star, StarOff, Trash2, Send,
   Loader2, Bot, ChevronRight, Pencil, Check, X,
@@ -37,7 +38,7 @@ interface MemoryBlock { id: string; key: string; value: string; updatedAt: strin
 type RightTab = 'context' | 'memory'
 
 export default function AIHubPage() {
-  const navigate = useNavigate()
+  const { leave } = useWindowExit()
   // `?mode=agent&project=<id>`: aberto a partir da página de um projeto.
   const [searchParams] = useSearchParams()
   const initialProjectId = searchParams.get('project') ?? undefined
@@ -246,7 +247,7 @@ export default function AIHubPage() {
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden">
       {/* Header persistente — Voltar + Mode toggle (Chat/Agent) */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900 shrink-0">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200">
+        <button onClick={() => leave()} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-200">
           <ArrowLeft size={11}/> Voltar
         </button>
         <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-0.5">

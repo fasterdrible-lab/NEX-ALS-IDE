@@ -58,6 +58,11 @@ export function setIncidentWindowOpener(fn: (vpsId: string, vpsName: string) => 
 import { JobExecutor } from '../jobs/job-executor.js'
 import { LocalLspBridge } from '../lsp/local-lsp.js'
 
+/** Janela que fez o pedido — diálogos nativos abrem presos a ela (várias janelas de IDE; a principal pode estar fechada). */
+function senderWindow(event: Electron.IpcMainInvokeEvent): BrowserWindow {
+  return BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getAllWindows()[0]!
+}
+
 function wrapHandler<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
   return fn().catch((err: unknown) => ({
     error: err instanceof Error ? err.message : String(err),
@@ -993,8 +998,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   })
 
   // ── IDE-20: Local filesystem ─────────────────────────────────────────
-  ipcMain.handle('local:openFolder', async () => {
-    const result = await dialog.showOpenDialog(win!, {
+  ipcMain.handle('local:openFolder', async (event) => {
+    const result = await dialog.showOpenDialog(senderWindow(event), {
       properties: ['openDirectory'],
       title: 'Abrir pasta local no Zeus IDE',
     })
@@ -1055,13 +1060,14 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const { watch: fsWatch } = require('node:fs') as typeof import('node:fs')
   const localWatchers = new Map<string, import('node:fs').FSWatcher>()
 
-  ipcMain.handle('local:watch', (_, { watchId, folderPath }: { watchId: string; folderPath: string }) => {
+  ipcMain.handle('local:watch', (event, { watchId, folderPath }: { watchId: string; folderPath: string }) => {
     localWatchers.get(watchId)?.close()
+    const target = event.sender
     try {
       const watcher = fsWatch(folderPath, { recursive: true }, (eventType: string, filename: string | null) => {
-        if (!filename) return
+        if (!filename || target.isDestroyed()) return
         const fullPath = path.join(folderPath, filename)
-        win?.webContents.send('squad:fs:change', { watchId, eventType, filename, fullPath })
+        target.send('squad:fs:change', { watchId, eventType, filename, fullPath })
       })
       watcher.on('error', () => {})
       localWatchers.set(watchId, watcher)
@@ -1107,9 +1113,9 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('tunnel:list', () => ({ tunnels: tunnelSvc.list() }))
 
   // ── Import/Export de configurações ─────────────────────────────────────────
-  ipcMain.handle('config:export', async () => {
+  ipcMain.handle('config:export', async (event) => {
     try { requireAdmin() } catch (e) { return { error: (e as Error).message } }
-    const { filePath, canceled } = await dialog.showSaveDialog(win!, {
+    const { filePath, canceled } = await dialog.showSaveDialog(senderWindow(event), {
       title: 'Exportar configurações Zeus IDE',
       defaultPath: `hexagon-ide-backup-${new Date().toISOString().slice(0,10)}.json`,
       filters: [{ name: 'JSON', extensions: ['json'] }],
@@ -1134,9 +1140,9 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     }
   })
 
-  ipcMain.handle('config:import', async () => {
+  ipcMain.handle('config:import', async (event) => {
     try { requireAdmin() } catch (e) { return { error: (e as Error).message } }
-    const { filePaths, canceled } = await dialog.showOpenDialog(win!, {
+    const { filePaths, canceled } = await dialog.showOpenDialog(senderWindow(event), {
       title: 'Importar configurações Zeus IDE',
       filters: [{ name: 'JSON', extensions: ['json'] }],
       properties: ['openFile'],
@@ -1937,7 +1943,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     return { success: true }
   })
 
-  ipcMain.handle('squad:action:execute', (_, data: {
+  ipcMain.handle('squad:action:execute', (event, data: {
     type: string; content: string; cwd?: string; path?: string; vpsId: string
   }) =>
     wrapHandler(async () => {
@@ -1982,7 +1988,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
             const onData = (chunk: Buffer) => {
               const text = chunk.toString()
               chunks.push(text)
-              win?.webContents.send('squad:shell:line', text)
+              if (!event.sender.isDestroyed()) event.sender.send('squad:shell:line', text)
             }
             proc.stdout?.on('data', onData)
             proc.stderr?.on('data', onData)

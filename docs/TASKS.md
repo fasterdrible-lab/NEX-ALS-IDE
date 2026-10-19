@@ -73,6 +73,14 @@ Usar **só a VPS-1** — a VPS-2 é produção. Marcar cada item ao passar; se a
 - [ ] Mudar o mesmo arquivo nos dois lados → aparece como **conflito**, desmarcado; marcar e trazer substitui a versão do PC
 - [ ] Deixar uma aba com edição não salva num arquivo que vai ser trazido → aviso "Mudou no disco e tem edição não salva", sem perder a edição
 
+**8. Várias janelas (v3.70.1)**
+- [ ] Com o Zeus aberto, abrir de novo pelo atalho → só a janela principal vem para frente (nenhum segundo app; sessões do Hermes não viram "interrompida")
+- [ ] Projetos → projeto A → **IDE** abre em janela própria na pasta do projeto; na principal, projeto B → **IDE** → segunda janela; as duas funcionam juntas (terminal, árvore, Agent)
+- [ ] Na janela independente: botão **Fechar janela** fecha só ela; 🏠 traz a principal; fechar a principal e clicar 🏠 a reabre
+- [ ] ⎋ na IDE remota abre a **mesma pasta** (não `/root`); ⎋ na IDE local abre a mesma pasta sem o seletor
+- [ ] Na IDE independente, ir para outra tela (ex.: Workspace) e voltar → volta para a IDE, não fecha a janela
+- [ ] "Abrir pasta local" a partir de uma janela independente → o seletor abre nela
+
 ## Concluídas recentemente (v3.56.0 → v3.57.0)
 
 - [x] **Hermes Automação — FASE 6 (v3.57.0)** — cron: `scheduled_jobs` ganha `projectId`, `agentName: 'hermes'` roteia uma automação para um projeto Hermes em vez de um agente do Squad; execução não-assistida: `HermesService.runObjectiveUnattended()` bufferiza o `ExecStream` inteiro sem depender de uma `BrowserWindow` (watchdog 300s + teto duro 20min); recovery de sessão interrompida: `HermesService.recoverInterruptedSessions()` roda no boot, marca `HermesProjectAgent` órfãos (`status:'running'` sobrevivente a um restart do Electron) como erro recuperável e devolve tarefas `IN_PROGRESS` para `TODO`; banner "Retomar sessão" em `HermesAgentPanel.tsx` usa o `--resume` automático (sessionStarted preservado); seletor de projeto em `AutomationsPage.tsx` quando o agente Hermes é escolhido — `pnpm typecheck && pnpm build` limpos — 2026-08-13. Com esta fase, as 6 fases da integração Hermes planejadas em `docs/HERMES_INTEGRATION.md` estão entregues.

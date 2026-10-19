@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
-**Data:** 2026-10-18
-**Versão:** 3.70.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Data:** 2026-10-19
+**Versão:** 3.70.1 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Várias janelas e projetos ao mesmo tempo (v3.70.1)
+
+Instância única (abrir o Zeus de novo traz a janela principal, em vez de um segundo app que marcava as sessões do Hermes como interrompidas e duplicava automações). IDE de um projeto abre em janela própria; ⎋ leva a mesma pasta (remota ou local) para outra janela; "Fechar janela" fecha só a janela independente e 🏠 traz a principal. Diálogos e eventos vão para a janela que pediu.
 
 ## Hermes para projeto que começa no OneDrive (v3.70.0)
 

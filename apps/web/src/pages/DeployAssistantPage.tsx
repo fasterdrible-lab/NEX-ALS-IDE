@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useWindowExit } from '../lib/useWindowExit'
+import { useParams } from 'react-router-dom'
 import {
   X, Rocket, Send, Loader2, Play, SkipForward, CheckCircle2,
   XCircle, AlertTriangle, RefreshCw, Globe, ChevronDown, ChevronRight,
@@ -99,7 +100,7 @@ function parsePlan(raw: string, projectPath: string): DeployStep[] {
 export default function DeployAssistantPage() {
   const { vpsId = '', vpsName: encodedName = '' } = useParams()
   const vpsName = decodeURIComponent(encodedName)
-  const navigate = useNavigate()
+  const { leave } = useWindowExit()
 
   const [description, setDescription] = useState('')
   const [projectPath, setProjectPath] = useState('/root')
@@ -393,7 +394,7 @@ VPS: ${vpsName} | Diretório: ${projectPath}`
           {steps.length > 0 && (
             <span className="text-[11px] text-slate-500">{doneCount}/{steps.length} passos</span>
           )}
-          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-100">
+          <button onClick={() => leave()} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-100">
             <X size={13}/>
           </button>
         </div>

@@ -1,5 +1,21 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.70.1] — 2026-10-19
+
+### Corrigido — vários projetos e várias janelas ao mesmo tempo
+
+Reportado pelo usuário: ao abrir um projeto só havia "Sair", e abrir outra janela "interrompia".
+
+- **Abrir o Zeus de novo criava um segundo app no mesmo banco** — não havia trava de instância única. O segundo processo rodava a recuperação de boot e marcava como **"Sessão interrompida"** os agentes do Hermes que o primeiro estava executando (tarefas em andamento voltavam para Pendente, execuções viravam erro nos Logs, diagnósticos de incidente falhavam), além de subir um segundo monitor de alertas e um segundo agendador (automações rodando duas vezes, notificações em dobro). Agora `requestSingleInstanceLock`: abrir de novo só traz a janela principal para frente, ou a recria se tinha sido fechada.
+- **Nova janela perdia a pasta** — o ⎋ da IDE remota abria a nova janela em `/root`; agora leva a pasta aberta (`?path=`). A IDE local ganhou o ⎋ (mesma pasta, sem abrir o seletor — `?folder=`). Pedido validado no main (`parseIdeTarget`: id da VPS, caminho remoto absoluto sem `..`/aspas, pasta local existente).
+- **Página do projeto → IDE abre em janela própria**, deixando a janela principal livre para abrir outro projeto; "IDE nesta janela" mantém o comportamento antigo.
+- **"Sair" travado em janela separada** — era `navigate(-1)` e uma janela nova não tem tela anterior. Novo `useWindowExit` (IDE, Terminal, Explorer, Incident, Deploy, Hermes, AI Hub, Planejar, Workspace): volta se houver tela anterior na própria janela; senão, numa janela independente, **fecha só ela** ("Fechar janela"), e na principal vai para o início. Botão 🏠 na IDE independente traz a janela principal (reabre se fechada). IPC `window:info|closeSelf|focusMain`.
+- **Diálogos e eventos presos à janela principal** — "abrir pasta", exportar/importar configurações e os eventos `squad:fs:change`/`squad:shell:line` usavam a janela principal fixa: numa IDE separada o seletor abria na janela errada, e com a principal fechada dava erro. Agora vão para a janela que pediu.
+
+- **`pnpm test` falhava depois de qualquer build** — o `tsc` do build emite os `.test.js` em `dist/` e o vitest (sem config) também os carregava, como CommonJS ("Vitest cannot be imported in a CommonJS module"): 7 arquivos falhando com todos os testes reais passando. `@cwm/core` e `@cwm/config` passam a rodar `vitest run --dir src`.
+
+**Verificado:** `pnpm typecheck` (5 pacotes), `pnpm build` e `pnpm test` com `dist/` presente (17/17 config, 44/44 core). Instância única e janelas ainda não testadas no app instalado.
+
 ## [3.70.0] — 2026-10-19
 
 ### Adicionado — Hermes para projeto que começa no OneDrive (IDE local → VPS → de volta)

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useWindowExit } from '../lib/useWindowExit'
+import { useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, Network, Loader2, RefreshCw, AlertCircle, CheckCircle2,
   Layers, Package, GitMerge, ShieldAlert, ChevronDown, ChevronRight, Globe,
@@ -285,7 +286,7 @@ const TABS: { id: Tab; label: string; Icon: typeof Globe }[] = [
 ]
 
 export default function WorkspacePage() {
-  const navigate = useNavigate()
+  const { leave } = useWindowExit()
   const [params] = useSearchParams()
 
   const initVpsId   = params.get('vpsId')   ?? ''
@@ -339,7 +340,7 @@ export default function WorkspacePage() {
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-3 shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: '#08111F' }}>
-        <button onClick={() => navigate(-1)}
+        <button onClick={() => leave()}
           className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors">
           <ArrowLeft size={13} /> Voltar
         </button>

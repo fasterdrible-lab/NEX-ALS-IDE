@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useWindowExit } from '../lib/useWindowExit'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { safeRemotePath } from '../lib/remote-path'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -12,7 +13,7 @@ type Status = 'connecting' | 'connected' | 'error' | 'closed'
 export default function TerminalPage() {
   const { vpsId } = useParams<{ vpsId: string }>()
   const { vpsName } = useParams<{ vpsName: string }>()
-  const navigate = useNavigate()
+  const { leave } = useWindowExit()
   // `?cwd=` quando aberto a partir de um projeto — vira `cd '<cwd>'` logo após conectar.
   const [searchParams] = useSearchParams()
   const cwd = safeRemotePath(searchParams.get('cwd'))
@@ -141,7 +142,7 @@ export default function TerminalPage() {
       {/* Barra superior */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-800 bg-slate-900 shrink-0">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => leave()}
           className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-100 transition-colors"
         >
           <ArrowLeft size={14} /> Voltar
@@ -175,7 +176,7 @@ export default function TerminalPage() {
           {errorMsg}
           <button
             className="ml-auto text-red-400 hover:text-red-200 underline"
-            onClick={() => navigate(-1)}
+            onClick={() => leave()}
           >
             Voltar e verificar a VPS
           </button>

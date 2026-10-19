@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useWindowExit } from '../lib/useWindowExit'
+import { useParams, useSearchParams } from 'react-router-dom'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import { safeRemotePath } from '../lib/remote-path'
 import type { editor as MonacoEditor } from 'monaco-editor'
@@ -134,7 +135,7 @@ function Breadcrumb({ path, onNav }: { path: string; onNav: (p: string) => void 
 
 export default function FileExplorerPage() {
   const { vpsId, vpsName } = useParams<{ vpsId: string; vpsName: string }>()
-  const navigate = useNavigate()
+  const { leave } = useWindowExit()
   // `?path=` quando aberto a partir de um projeto; senão /root.
   const [searchParams] = useSearchParams()
   const startPath = useRef(safeRemotePath(searchParams.get('path')) ?? '/root').current
@@ -342,7 +343,7 @@ export default function FileExplorerPage() {
 
       {/* ── Top bar ── */}
       <div className="flex items-center gap-3 px-3 py-2 border-b border-slate-800 bg-slate-900 shrink-0">
-        <button onClick={() => navigate(-1)}
+        <button onClick={() => leave()}
           className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-100 shrink-0">
           <ArrowLeft size={13} /> Voltar
         </button>

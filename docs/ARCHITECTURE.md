@@ -269,6 +269,14 @@ main.ts
 
 Todas usam o mesmo preload, HashRouter, `applyWindowDefaults()`.
 
+**Várias janelas (v3.70.1):**
+- **Instância única** — `app.requestSingleInstanceLock()`; `second-instance` → `focusMainWindow()` (restaura/mostra, ou recria se a principal foi fechada). Um segundo processo no mesmo `cwm.db` rodaria o recovery de boot (marca sessões/execuções do Hermes do primeiro como interrompidas), outro `NotificationMonitor` e outro `JobExecutor`.
+- `createIdeWindow({ vpsId, vpsName, path })` → `#/ide/:vpsId/:vpsName?path=` · `createIdeWindow({ folder })` → `#/ide/local?folder=` (IDEPage pula o seletor). `window:openIde` valida com `parseIdeTarget`.
+- `window:info` (`isMain`), `window:closeSelf` (nunca fecha a principal), `window:focusMain`.
+- `useWindowExit()` (`apps/web/src/lib/useWindowExit.ts`) — saída das telas fullscreen: com histórico na própria janela → `navigate(-1)`; sem (`location.key === 'default'`) → janela independente fecha, principal vai para `/`.
+- Streams (`hermes:agent:chunk`, `ai:stream:chunk`, `squad:*`, `terminal:data`) e diálogos nativos vão para `BrowserWindow.fromWebContents(event.sender)` — nunca para a janela principal fixa.
+- Loop do Hermes no renderer (`activeLoops`) é por janela; a trava por projeto no main (`hermesActiveByProject`) impede duas execuções na mesma sessão entre janelas.
+
 ## Roteamento completo (v3.3.0)
 
 ```

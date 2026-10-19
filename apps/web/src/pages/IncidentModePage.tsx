@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useWindowExit } from '../lib/useWindowExit'
+import { useParams } from 'react-router-dom'
 import {
   X, AlertTriangle, Loader2, RefreshCw, Send,
   Terminal, Box, Cpu, Activity,
@@ -15,7 +16,7 @@ interface ChatMsg { role: 'user' | 'assistant'; text: string }
 export default function IncidentModePage() {
   const { vpsId = '', vpsName: encodedName = '' } = useParams()
   const vpsName = decodeURIComponent(encodedName)
-  const navigate = useNavigate()
+  const { leave } = useWindowExit()
 
   // ── Estado de cada painel ─────────────────────────────────────────────────
   const [stats, setStats]           = useState<VpsStats | null>(null)
@@ -231,7 +232,7 @@ export default function IncidentModePage() {
           <button onClick={loadAll} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-slate-100" title="Atualizar tudo">
             <RefreshCw size={13}/>
           </button>
-          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-red-900/40 rounded text-red-400 hover:text-red-200" title="Encerrar Incident Mode">
+          <button onClick={() => leave()} className="p-1.5 hover:bg-red-900/40 rounded text-red-400 hover:text-red-200" title="Encerrar Incident Mode">
             <X size={14}/>
           </button>
         </div>

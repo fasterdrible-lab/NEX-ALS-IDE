@@ -66,8 +66,9 @@ export default function ProjectHubPage() {
   const shortcuts = [
     { label: 'Agent', hint: 'Hermes — desenvolvimento autônomo', icon: Bot, accent: 'text-purple-300 border-purple-700/50 hover:bg-purple-950/40',
       go: () => navigate(`/ai-hub?mode=agent&project=${project.id}`) },
-    { label: 'IDE', hint: 'Editor + terminal na pasta do projeto', icon: Code2, accent: 'text-amber-300 border-amber-700/50 hover:bg-amber-950/30',
-      go: () => navigate(`/ide/${project.vpsServerId}/${vpsName}?path=${path}`) },
+    // Janela própria: a principal fica livre para abrir outro projeto ao mesmo tempo
+    { label: 'IDE', hint: 'Editor + terminal na pasta do projeto, em nova janela', icon: Code2, accent: 'text-amber-300 border-amber-700/50 hover:bg-amber-950/30',
+      go: () => { void ipc.window.openIde(project.vpsServerId, project.vpsServer?.name ?? project.vpsServerId, project.remotePath).catch(e => setLaunchMsg(String(e instanceof Error ? e.message : e))) } },
     { label: 'Explorer', hint: 'Arquivos do projeto', icon: HardDrive, accent: 'text-sky-300 border-sky-700/50 hover:bg-sky-950/30',
       go: () => navigate(`/explorer/${project.vpsServerId}/${vpsName}?path=${path}`) },
     { label: 'Terminal', hint: 'SSH já dentro da pasta', icon: Terminal, accent: 'text-emerald-300 border-emerald-700/50 hover:bg-emerald-950/30',
@@ -104,6 +105,10 @@ export default function ProjectHubPage() {
           </button>
         ))}
       </div>
+      <button onClick={() => navigate(`/ide/${project.vpsServerId}/${vpsName}?path=${path}`)} className="btn-secondary text-xs mb-8 mr-2"
+        title="Abre a IDE aqui mesmo, no lugar desta tela">
+        <Code2 size={13} /> IDE nesta janela
+      </button>
       <button onClick={() => void openVsCode()} disabled={launching} className="btn-secondary text-xs mb-8">
         {launching ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />} Abrir no VS Code (Remote SSH)
       </button>

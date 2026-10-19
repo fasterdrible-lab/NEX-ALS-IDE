@@ -519,8 +519,15 @@ export const ipc = {
       invoke<void>('tool:confirmResponse', data),
   },
   window: {
-    openIde: (vpsId: string, vpsName: string) =>
-      invoke<{ success: boolean }>('window:openIde', { vpsId, vpsName }),
+    /** `path`: pasta do projeto na VPS (raiz da árvore na nova janela). */
+    openIde: (vpsId: string, vpsName: string, path?: string) =>
+      invoke<{ success: boolean }>('window:openIde', { vpsId, vpsName, path }),
+    /** IDE local em nova janela, já na pasta (sem abrir o seletor). */
+    openIdeLocal: (folder: string) =>
+      invoke<{ success: boolean }>('window:openIde', { folder, vpsName: '' }),
+    info: () => invoke<{ isMain: boolean }>('window:info'),
+    closeSelf: () => invoke<{ success: boolean }>('window:closeSelf'),
+    focusMain: () => invoke<{ success: boolean }>('window:focusMain'),
     openIncident: (vpsId: string, vpsName: string) =>
       invoke<{ success: boolean }>('window:openIncident', { vpsId, vpsName }),
     openDeploy: (vpsId: string, vpsName: string) =>
