@@ -87,6 +87,7 @@ Usar **só a VPS-1** — a VPS-2 é produção. Marcar cada item ao passar; se a
 - [ ] Projetos locais mostra A e B com "aberta"; fechar a janela de B → B perde "aberta" ao voltar ao Dashboard
 - [ ] Com A aberta, **Arquivo → Sair** e reabrir o Zeus → A volta aberta; fechar todas as janelas no X (A por último) e reabrir → A volta
 - [ ] Dentro da IDE de A: **Abrir pasta…** no topo abre outra pasta em outra janela
+- [ ] (v3.72.0) Projetos → **Novo projeto** → nome → **Criar e abrir**: pasta criada no OneDrive com README/.gitignore/.git, abre na janela própria e aparece em Projetos locais; nome com `:` ou pasta existente → mensagem de erro, nada criado
 
 ## Concluídas recentemente (v3.56.0 → v3.57.0)
 

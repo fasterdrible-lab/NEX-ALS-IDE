@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FolderOpen, Plus, Trash2, Pencil, X, Loader2, GitBranch, Server, FolderPlus, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react'
 import { ipc } from '../lib/ipc'
+import LocalProjects from '../components/LocalProjects'
 import type { Project, ProjectInput, VpsServer, ClaudeAccount } from '@cwm/config'
 
 const emptyForm = (): ProjectInput => ({
@@ -20,6 +21,8 @@ export default function ProjectsList() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [setupState, setSetupState] = useState<null | 'loading' | { success: boolean; message: string }>(null)
+  const [localOpen, setLocalOpen] = useState(false)
+  const [localReload, setLocalReload] = useState(0)
 
   const reload = async () => {
     const [p, v, a] = await Promise.all([ipc.projects.list(), ipc.vps.list(), ipc.accounts.list()])
@@ -73,22 +76,28 @@ export default function ProjectsList() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Projetos</h1>
-          <p className="text-slate-400 mt-1">Projetos remotos cadastrados</p>
+          <p className="text-slate-400 mt-1">Projetos começam no PC, cada um na sua janela; a VPS entra quando for publicar (Agent)</p>
         </div>
-        <button onClick={openCreate} className="btn-primary">
-          <Plus size={15} /> Novo Projeto
+        <button onClick={() => setLocalOpen(true)} className="btn-primary" title="Cria a pasta do projeto no PC (OneDrive) e abre numa janela própria">
+          <Plus size={15} /> Novo projeto
+        </button>
+      </div>
+
+      <LocalProjects reloadToken={localReload} />
+
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-2"><Server size={14} /> Projetos na VPS</h2>
+        <button onClick={openCreate} className="btn-secondary text-xs py-1.5 px-3" disabled={vpsList.length === 0}
+          title={vpsList.length === 0 ? 'Cadastre uma VPS primeiro' : 'Cadastrar um projeto que já existe numa VPS'}>
+          <Plus size={13} /> Cadastrar projeto da VPS
         </button>
       </div>
 
       {loading ? (
         <div className="text-center text-slate-500 py-16">Carregando...</div>
       ) : list.length === 0 ? (
-        <div className="card text-center py-16">
-          <FolderOpen size={40} className="mx-auto text-slate-700 mb-3" />
-          <p className="text-slate-400 mb-4">Nenhum projeto cadastrado ainda</p>
-          <button onClick={openCreate} className="btn-primary" disabled={vpsList.length === 0}>
-            <Plus size={15} /> {vpsList.length === 0 ? 'Cadastre uma VPS primeiro' : 'Criar Projeto'}
-          </button>
+        <div className="card text-sm text-slate-500">
+          Nenhum projeto na VPS. Projetos locais vão para a VPS pelo botão <b className="text-slate-300">Agent</b> dentro da IDE do projeto (envia a pasta e cadastra aqui).
         </div>
       ) : (
         <div className="grid gap-4">
@@ -139,7 +148,7 @@ export default function ProjectsList() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl">
             <div className="flex items-center justify-between p-5 border-b border-slate-800">
-              <h2 className="text-lg font-semibold text-slate-100">{editingId ? 'Editar Projeto' : 'Novo Projeto'}</h2>
+              <h2 className="text-lg font-semibold text-slate-100">{editingId ? 'Editar projeto da VPS' : 'Cadastrar projeto da VPS'}</h2>
               <button onClick={() => setFormOpen(false)} className="btn-ghost p-1.5"><X size={16} /></button>
             </div>
             <div className="p-5 space-y-4">
@@ -225,6 +234,75 @@ export default function ProjectsList() {
           </div>
         </div>
       )}
+
+      {localOpen && <NewLocalProjectModal onClose={() => setLocalOpen(false)} onCreated={() => { setLocalOpen(false); setLocalReload(n => n + 1) }} />}
+    </div>
+  )
+}
+
+/** Novo projeto local: pasta nova no OneDrive (ou onde escolher), git opcional, abre na janela própria. */
+function NewLocalProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [name, setName] = useState('')
+  const [parent, setParent] = useState('')
+  const [git, setGit] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => { ipc.local.project.defaults().then(d => setParent(p => p || d.parent)).catch(() => {}) }, [])
+
+  const sep = parent.includes('/') && !parent.includes('\\') ? '/' : '\\'
+  const target = parent && name.trim() ? `${parent.replace(/[\\/]+$/, '')}${sep}${name.trim()}` : ''
+
+  const pickParent = async () => {
+    const f = await ipc.local.openFolder().catch(() => null)
+    if (f) setParent(f)
+  }
+
+  const create = async () => {
+    setBusy(true); setError(null)
+    try {
+      const r = await ipc.local.project.create(parent, name, git)
+      if (r.git === 'missing') alert('Projeto criado, mas o git não foi encontrado no PC — o repositório não foi iniciado.')
+      onCreated()
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    setBusy(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between p-5 border-b border-slate-800">
+          <h2 className="text-lg font-semibold text-slate-100">Novo projeto</h2>
+          <button onClick={onClose} className="btn-ghost p-1.5"><X size={16} /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          {error && <div className="bg-red-900/30 border border-red-800/50 text-red-300 text-sm rounded-lg px-3 py-2">{error}</div>}
+          <div>
+            <label className="label">Nome *</label>
+            <input className="input" placeholder="meu-projeto" value={name} autoFocus
+              onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && name.trim() && parent && !busy) void create() }} />
+          </div>
+          <div>
+            <label className="label">Criar dentro de</label>
+            <div className="flex gap-2">
+              <input className="input font-mono text-xs" value={parent} onChange={e => setParent(e.target.value)} />
+              <button type="button" onClick={pickParent} className="btn-secondary text-xs shrink-0"><FolderOpen size={13} /> Escolher…</button>
+            </div>
+            {target && <p className="text-[11px] text-slate-500 mt-1 font-mono break-all">Pasta: {target}</p>}
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+            <input type="checkbox" checked={git} onChange={e => setGit(e.target.checked)} />
+            Iniciar repositório git (com .gitignore para node_modules, .next, dist, .env)
+          </label>
+          <p className="text-xs text-slate-500">Nada é criado na VPS. Para publicar depois, abra o projeto e use o botão <b className="text-slate-300">Agent</b>.</p>
+        </div>
+        <div className="flex gap-3 justify-end p-5 border-t border-slate-800">
+          <button onClick={onClose} className="btn-secondary">Cancelar</button>
+          <button onClick={() => void create()} disabled={busy || !name.trim() || !parent} className="btn-primary">
+            {busy ? <><Loader2 size={14} className="animate-spin" /> Criando...</> : <><FolderPlus size={14} /> Criar e abrir</>}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

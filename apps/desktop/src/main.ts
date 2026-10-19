@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, Notification, session, dialog, Menu
 import path from 'node:path'
 import fs from 'node:fs'
 import { setupIpcHandlers, setIncidentWindowOpener } from './ipc/handlers'
-import { LocalFolderStore, folderKey } from './local-folders'
+import { LocalFolderStore, folderKey, createLocalProject, defaultProjectsParent } from './local-folders'
 
 // Ícone das janelas/barra de tarefas — instalado vai em resources/ (extraResources), em dev fica em build/
 const APP_ICON = app.isPackaged
@@ -238,8 +238,10 @@ function openLocalFolderWindow(folder: string): { focused: boolean } {
   localWindows.set(key, { folder: resolved, win })
   win.on('closed', () => {
     localWindows.delete(key)
-    // Última janela do app fechando = o app vai encerrar: mantém a pasta na lista para reabrir no próximo início
-    if (BrowserWindow.getAllWindows().length > 0) saveOpenFolders()
+    // Grava com atraso: quando o app inteiro está fechando (última janela no X, instalador, desligar o
+    // Windows — que fecham as janelas uma a uma), o encerramento chega antes e a lista fica intacta
+    // para reabrir tudo no próximo início. Fechar só esta janela grava depois de 1,5s.
+    setTimeout(saveOpenFolders, 1500)
   })
   saveOpenFolders()
   return { focused: false }
@@ -373,6 +375,16 @@ app.whenReady().then(async () => {
     if (typeof data?.path !== 'string') return { error: 'Pasta inválida' }
     try { return openLocalFolderWindow(data.path) } catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
   })
+  // Novo projeto local: cria a pasta (OneDrive por padrão) + git opcional, e abre na janela própria
+  ipcMain.handle('local:project:defaults', () => ({ parent: defaultProjectsParent() }))
+  ipcMain.handle('local:project:create', async (_, data: { parent?: unknown; name?: unknown; git?: unknown }) => {
+    if (typeof data?.parent !== 'string' || typeof data?.name !== 'string') return { error: 'Dados inválidos' }
+    try {
+      const r = await createLocalProject({ parent: data.parent, name: data.name, git: data.git !== false })
+      openLocalFolderWindow(r.folder)
+      return r
+    } catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
+  })
   ipcMain.handle('local:recent:remove', (_, data: { path?: unknown }) => {
     if (typeof data?.path === 'string') { localFolders?.remove(data.path); rebuildMenu() }
     return { success: true }
@@ -404,7 +416,7 @@ app.whenReady().then(async () => {
 })
 
 // Sair com janelas de pasta abertas (menu Sair, desligar): grava quais eram, antes de elas fecharem
-// (Fechou a última janela no X: as pastas já saíram do mapa e a lista certa ficou gravada — não sobrescreve.)
+// (Janelas já fechadas pelo encerramento saíram do mapa, mas a gravação delas ainda não aconteceu — não sobrescreve.)
 app.on('before-quit', () => { if (localWindows.size > 0) saveOpenFolders(); quitting = true })
 
 app.on('window-all-closed', async () => {

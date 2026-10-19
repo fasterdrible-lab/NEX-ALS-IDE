@@ -540,6 +540,12 @@ export const ipc = {
       invoke<string | null>('local:openFolder'),
     /** Seletor de pasta → abre (ou traz para frente) a janela própria da pasta, como no VS Code. */
     openFolderWindow: () => invoke<{ folder: string | null }>('local:openFolderWindow'),
+    project: {
+      defaults: () => invoke<{ parent: string }>('local:project:defaults'),
+      /** Cria `<parent>/<name>` (+ git init se `git`) e abre na janela própria. */
+      create: (parent: string, name: string, git: boolean) =>
+        invoke<{ folder: string; git: 'ok' | 'off' | 'missing' }>('local:project:create', { parent, name, git }),
+    },
     recent: {
       list: () => invoke<LocalRecentFolder[]>('local:recent:list'),
       open: (path: string) => invoke<{ focused: boolean }>('local:recent:open', { path }),

@@ -14,7 +14,7 @@ function ago(ms: number): string {
  * Projetos locais à moda do VS Code: cada pasta abre na sua janela; reabrir uma pasta já aberta
  * só traz a janela dela para frente. A VPS só entra quando o projeto é publicado (Agent → Hermes).
  */
-export default function LocalProjects() {
+export default function LocalProjects({ reloadToken = 0 }: { reloadToken?: number }) {
   const [items, setItems] = useState<LocalRecentFolder[]>([])
   const [msg, setMsg] = useState('')
 
@@ -24,7 +24,7 @@ export default function LocalProjects() {
     // Atualiza o "aberta" quando o usuário volta para esta janela
     window.addEventListener('focus', load)
     return () => window.removeEventListener('focus', load)
-  }, [load])
+  }, [load, reloadToken])
 
   const run = (p: Promise<unknown>) => { setMsg(''); p.then(load).catch(e => setMsg(e instanceof Error ? e.message : String(e))) }
 

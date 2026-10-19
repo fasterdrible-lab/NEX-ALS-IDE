@@ -1,5 +1,18 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.72.0] — 2026-10-19
+
+### Alterado — Projetos: "Novo projeto" cria a pasta no PC; VPS é opcional
+
+Reportado pelo usuário (print da tela Projetos): a tela só listava projetos remotos e "Novo Projeto" exigia caminho na VPS e VPS — o contrário do fluxo dele, em que o projeto nasce no OneDrive e só vai à VPS (produção) ao publicar.
+
+- **Novo projeto** (botão principal): nome + "Criar dentro de" (padrão: a pasta do OneDrive, `%OneDrive%`; "Escolher…" para outra) + "Iniciar repositório git" (marcado; cria `.gitignore` com node_modules, .next, dist, .env). Cria a pasta com `README.md`, abre na janela própria e entra nos recentes. Nada é criado na VPS. Nome validado para o Windows (`< > : " / \ | ? *`, nomes reservados como `con`/`nul`, ponto ou espaço no fim); pasta existente é recusada.
+- A tela mostra **Projetos locais** primeiro e **Projetos na VPS** depois; o formulário antigo virou **Cadastrar projeto da VPS** (secundário) — para projetos que já existem numa VPS.
+
+- **Reabrir não falha mais quando o app inteiro fecha de uma vez** (instalador, desligar o Windows, fechar a última janela): cada janela que fechava tirava a sua pasta da lista na hora, então só sobrava a última. Agora a gravação espera 1,5s e o encerramento do app chega antes.
+
+**Verificado:** no app instalado, duas pastas abertas + fechamento como o do instalador → as duas continuam na lista para reabrir; criação testada fora do app (com e sem git, `.gitignore`/`README`, pasta existente recusada, pasta-mãe inválida recusada, 8 nomes inválidos/válidos); `pnpm typecheck` (5 pacotes).
+
 ## [3.71.0] — 2026-10-19
 
 ### Adicionado — projetos locais em janelas próprias, como no VS Code
