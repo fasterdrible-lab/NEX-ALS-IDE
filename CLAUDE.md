@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`3.69.2` — app renomeado para **Zeus IDE** (3.64.0; appId e pasta de dados mantidos). Hermes: 3 níveis de autonomia + regras de desenvolvimento, fechamento da entrega (DoD como gate), Quadro/Logs por execução, painel Agent na IDE, FASE 7 (incidentes de VPS com diagnóstico e reparo confirmado). Ver `CHANGELOG.md`.
+`3.70.0` — app renomeado para **Zeus IDE** (3.64.0; appId e pasta de dados mantidos). Hermes: 3 níveis de autonomia + regras de desenvolvimento, fechamento da entrega (DoD como gate), Quadro/Logs por execução, painel Agent na IDE, FASE 7 (incidentes de VPS com diagnóstico e reparo confirmado), projeto local do OneDrive enviado à VPS com Trazer/Enviar alterações (3.70.0). Ver `CHANGELOG.md`.
 
 ## Regras de desenvolvimento
 
@@ -75,6 +75,7 @@ Duas camadas de uso:
 | Botão **Claude** (roxo) | Abre painel de chat com Claude |
 | Botão **⊟** (Columns2) | Ativa/desativa split editor |
 | Botão **Agent** (modo remoto) | Abre o painel do Hermes ao lado do editor, no projeto da pasta aberta |
+| Botão **Agent** (modo local) | Envia a pasta do PC à VPS para o Hermes; depois Trazer/Enviar alterações |
 | **TS LSP** na status bar | Conecta TypeScript LSP via túnel 6009 |
 | **⬡ DAP** na status bar | Abre Chrome DevTools via túnel 9229 |
 | Aba **Portas** (painel esq.) | Gerencia port forwarding SSH |

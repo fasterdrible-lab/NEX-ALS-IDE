@@ -15,6 +15,10 @@ export {
   type HermesRunKind, type HermesRunStatus, type HermesRunSummary, type HermesRun, type HermesRunActivity,
 } from './run-log.js'
 export {
+  HermesLocalSync, validatePublishPath, SYNC_EXCLUDE_DIRS,
+  type LocalLink, type LocalSyncStatus, type LocalSyncApplyResult, type SyncChange, type SyncChangeKind,
+} from './local-sync.js'
+export {
   MAX_DELIVERY_ROUNDS, correctionTasks, parseReview,
   type DeliveryResult, type DeliveryVerdict, type ReviewFinding, type VerifiedCheck, type CheckResult,
 } from './delivery.js'

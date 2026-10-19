@@ -142,7 +142,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 - `KnowledgeService.delete(id)` — remove
 - `KnowledgeService.buildContext()` — formata KB como markdown agrupado por categoria para injeção nos system prompts de Squad e AI HUB
 
-### `packages/core/src/hermes/` ← adicionado em 3.52.0, estendido até 3.69.2
+### `packages/core/src/hermes/` ← adicionado em 3.52.0, estendido até 3.70.0
 - `HermesService` — gerenciador de ciclo de vida do runtime agentic externo Hermes Agent (Nous Research) numa VPS
 - `getStatus/install/update/start/stop/restart/execCommand/getLogs(vpsId)` — reaproveita `TerminalService.exec` (SSH), sem novo transporte
 - FASE 1: instala/atualiza o binário `hermes`, gerencia `hermes gateway` em background via PID file
@@ -157,6 +157,7 @@ Gerenciamento de ambientes de desenvolvimento com IA e múltiplas contas Claude 
 - 3.67.0: `HermesRunLog` (`run-log.ts`) — log separado por execução gravado pelo main (`hermes_task_runs`), base do Quadro/Logs
 - 3.69.0: FASE 7 — `incident.ts` (puro: `buildIncidentPrompt`, `parseDiagnosis`, `isForbiddenRepair`) + `HermesIncidentStore` (`hermes_incidents`); `startIncidentDiagnosis` (somente leitura, `~/.hermes-nex/incidents`) e `runIncidentRepair` (só com confirmação, auditado)
 - 3.69.2: `json-loose.ts` — leitura tolerante do JSON do modelo + 2ª chance na mesma sessão (`buildJsonFixPrompt`)
+- 3.70.0: `local-sync.ts` — `HermesLocalSync`: pasta local (OneDrive) enviada à VPS (tar + SFTP, git init se faltar) e sincronizada por sha1 contra a última versão comum (`hermes_local_links.manifest`); conflito quando os dois lados mudam
 - **Armadilha do IPC:** `invoke()` do renderer trata qualquer resposta com chave `error` como falha — objetos de domínio devolvidos à tela usam `failure`, nunca `error`
 - Tabelas raw-SQL novas usam datas em **BIGINT** (com `INTEGER` o `$queryRawUnsafe` do Prisma lê i32 e falha com P2010)
 - Ver `docs/HERMES_INTEGRATION.md` para arquitetura completa e roadmap das fases
@@ -516,6 +517,7 @@ git pull
 - `hermes:delivery:get|close|reevaluate|checkReview` ← 3.66.0/3.69.2 — fechamento da entrega (revisão, checks reexecutados pelo NEX, DoD como gate, relatório)
 - `hermes:runs:list|get` ← 3.67.0 — log separado por execução (Quadro / Logs)
 - `hermes:incident:list|get|diagnose|runAction|resolve` + evento `hermes:incident:updated` ← 3.69.0 — incidentes de VPS, diagnóstico somente leitura, reparo confirmado
+- `hermes:local:link|publish|status|pull|push` ← 3.70.0 — projeto local do OneDrive → VPS para o Hermes; Trazer/Enviar alterações (o diff é recalculado no main)
 
 ### git:*
 - `git:status` — status do repositório

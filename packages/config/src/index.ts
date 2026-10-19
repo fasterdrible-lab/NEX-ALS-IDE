@@ -68,6 +68,18 @@ export const HERMES_DEV_RULES_MAX = 20_000
 export const HermesDevRulesSchema = z.string().max(HERMES_DEV_RULES_MAX, `Regras de desenvolvimento: máximo ${HERMES_DEV_RULES_MAX} caracteres`)
 // Texto da revisão de entrega devolvido pelo Hermes (vem do renderer → validar tamanho no main)
 export const HermesReviewTextSchema = z.string().max(200_000, 'Revisão grande demais')
+// Projeto local (OneDrive) enviado à VPS para o Hermes — o caminho remoto é validado de novo no core (validatePublishPath)
+export const HermesLocalPathSchema = z.string().min(3, 'Pasta local inválida').max(1024)
+export const HermesLocalPublishSchema = z.object({
+  localPath: HermesLocalPathSchema,
+  vpsId: z.string().min(1, 'VPS é obrigatória'),
+  remotePath: z.string().min(2, 'Caminho na VPS é obrigatório').max(512),
+  name: z.string().max(200).default(''),
+})
+export const HermesLocalSyncApplySchema = z.object({
+  localPath: HermesLocalPathSchema,
+  paths: z.array(z.string().min(1).max(1024)).max(5000, 'Arquivos demais de uma vez'),
+})
 
 export type VpsServer = z.infer<typeof VpsServerSchema> & { id: string; createdAt: Date; updatedAt: Date; sshHostFingerprint?: string | null }
 export type VpsServerInput = z.infer<typeof VpsServerSchema>

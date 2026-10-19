@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-18
-**Versão:** 3.69.2 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.70.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Hermes para projeto que começa no OneDrive (v3.70.0)
+
+Na IDE local, o botão **Agent** envia a pasta a uma pasta nova/vazia da VPS (sem node_modules/dist…; sem .git ganha um repositório), cadastra o projeto e abre o painel do Hermes. **Trazer alterações** / **Enviar alterações** comparam cada arquivo com a última versão sincronizada; mudança nos dois lados vira conflito, desmarcado. Validado na VPS-1 fora da UI (envio, trazer, enviar, conflito, repositório Windows com CRLF); não testado pela UI.
 
 ## Hermes — incidentes de VPS: diagnóstico + reparo confirmado (FASE 7, v3.69.0)
 
@@ -424,4 +428,4 @@ Primeira fase da integração com o runtime agentic externo **Hermes Agent** (No
 
 ## Próximos passos
 
-- Suporte a WebSocket LSP para mais linguagens (Python, Rust, Go)
+- Validar o Hermes pela UI na VPS-1 — roteiro em `docs/TASKS.md` ("Roteiro de validação do Hermes pela UI")

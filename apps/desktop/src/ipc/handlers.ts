@@ -1,5 +1,8 @@
 import { getPrismaClient } from '@cwm/db'
-import { HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesReviewTextSchema } from '@cwm/config'
+import {
+  HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesReviewTextSchema,
+  HermesLocalPathSchema, HermesLocalPublishSchema, HermesLocalSyncApplySchema,
+} from '@cwm/config'
 import type { IpcMain } from 'electron'
 import { BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
 import fs from 'node:fs/promises'
@@ -41,6 +44,7 @@ import {
   runKindFromSession,
   type HermesRunKind,
   HermesIncidentStore,
+  HermesLocalSync,
   buildIncidentPrompt,
   parseDiagnosis,
   buildJsonFixPrompt,
@@ -719,6 +723,32 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   )
   ipcMain.handle('hermes:runs:get', (_, { runId }: { runId: string }) =>
     wrapHandler(() => { requireAuth(); return hermesRunLog.get(runId) })
+  )
+
+  // ── Projeto local (OneDrive) → VPS para o Hermes; "Trazer/Enviar alterações" ──
+  // O renderer só escolhe caminhos; o que mudou é recalculado aqui a cada aplicação.
+  const localSync = new HermesLocalSync(terminal, sftpService)
+  void localSync.ensureTable().catch((e: unknown) => console.error('[DB] hermes_local_links:', e))
+  const parseOrThrow = <T>(schema: { safeParse(v: unknown): { success: boolean; data?: T; error?: { issues: { message: string }[] } } }, v: unknown): T => {
+    const r = schema.safeParse(v)
+    if (!r.success) throw new Error(r.error?.issues[0]?.message ?? 'Dados inválidos')
+    return r.data as T
+  }
+
+  ipcMain.handle('hermes:local:link', (_, { localPath }: { localPath: unknown }) =>
+    wrapHandler(() => { requireAuth(); return localSync.getLink(parseOrThrow(HermesLocalPathSchema, localPath)) })
+  )
+  ipcMain.handle('hermes:local:publish', (_, data: unknown) =>
+    wrapHandler(() => { requireAdmin(); return localSync.publish(parseOrThrow(HermesLocalPublishSchema, data)) })
+  )
+  ipcMain.handle('hermes:local:status', (_, { localPath }: { localPath: unknown }) =>
+    wrapHandler(() => { requireAuth(); return localSync.status(parseOrThrow(HermesLocalPathSchema, localPath)) })
+  )
+  ipcMain.handle('hermes:local:pull', (_, data: unknown) =>
+    wrapHandler(() => { requireAdmin(); const d = parseOrThrow(HermesLocalSyncApplySchema, data); return localSync.pull(d.localPath, d.paths) })
+  )
+  ipcMain.handle('hermes:local:push', (_, data: unknown) =>
+    wrapHandler(() => { requireAdmin(); const d = parseOrThrow(HermesLocalSyncApplySchema, data); return localSync.push(d.localPath, d.paths) })
   )
 
   // ── FASE 7 — incidentes: alerta do NotificationMonitor → incidente → diagnóstico do Hermes ──

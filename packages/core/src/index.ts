@@ -30,4 +30,5 @@ export {
   HermesRunLog, runKindFromSession, type HermesRunKind, type HermesRunSummary, type HermesRun,
   HermesIncidentStore, buildIncidentPrompt, parseDiagnosis, buildJsonFixPrompt, type HermesIncident, type IncidentType,
   parseReview,
+  HermesLocalSync, type LocalLink, type LocalSyncStatus, type LocalSyncApplyResult, type SyncChange,
 } from './hermes/index.js'

@@ -1361,4 +1361,41 @@ IDEPage (modo remoto) — botão "Agent" → showAgent
   ipc.hermes.agent.onChunk('done'|'error') → debounce 800ms → fsReaddir(raiz + expandedFolders) + loadGitStatus()
 ```
 
+**Modo local (v3.70.0):** o botão Agent também aparece com uma pasta local aberta e mostra `LocalHermesPanel` — ver "Projeto local (OneDrive) → VPS" abaixo.
+
 Sem IPC novo: o painel é o mesmo componente do AI Hub. `compact` empilha as colunas (`flex-col`, coluna de tarefas com `max-h-[55%]`); `vpsId` filtra os projetos. O estado de loop ativo (`activeLoops`) é por janela do renderer — uma IDE aberta em janela separada (multi-monitor) não enxerga o loop iniciado em outra janela; a trava por projeto do main (`hermesActiveByProject`) continua impedindo duas execuções na mesma sessão.
+
+## Hermes — projeto local (OneDrive) → VPS (v3.70.0+)
+
+O Hermes só roda na VPS; o usuário costuma começar o projeto numa pasta do OneDrive. A ponte copia a pasta para a VPS uma vez e depois sincroniza arquivo a arquivo, nos dois sentidos, sempre com escolha do usuário.
+
+```
+IDEPage (modo local) — botão "Agent" → <LocalHermesPanel localPath={localRoot}/>
+  hermes:local:link(localPath) → null  → formulário: VPS + pasta remota (nova/vazia) + nome
+                                → link  → barra "Trazer / Enviar alterações" + <HermesAgentPanel compact …/>
+
+HermesLocalSync.publish   [packages/core/src/hermes/local-sync.ts]
+  validatePublishPath (absoluto, ≥2 níveis, [A-Za-z0-9._@+-/], fora de /root /etc /var …)
+  VPS: pasta precisa estar ausente ou vazia
+  manifest = sha1 de cada arquivo local (sem SYNC_EXCLUDE_DIRS e .git)
+  tar.exe (bsdtar do Windows) -czf --exclude=<SYNC_EXCLUDE_DIRS> → sftp fastPut /tmp/nex-upload-*.tgz
+  VPS: tar -xzf --no-same-owner; .git veio? (autocrlf=true no PC → git config core.autocrlf input)
+       sem .git → git init + commit "Importado do OneDrive pelo Zeus IDE"
+  ProjectsService.create + INSERT hermes_local_links
+
+status/pull/push
+  base = manifest · local = sha1 no PC · remote = find … -prune | xargs sha1sum na VPS
+  diffSides(base, local, remote): só um lado mudou → pull ou push; os dois iguais → só atualiza a base;
+                                  os dois diferentes → conflito (nas duas listas, desmarcado na UI)
+  pull/push recalculam o diff no main — o renderer só manda os caminhos escolhidos
+  pull: isSafeRelPath + caminho resolvido dentro da pasta local; bytes crus via sftp readFileBuffer
+  push: recusado com HermesProjectAgent.status 'running'; sftp mkdirp + writeFileBuffer / delete
+```
+
+**Fora da sincronização:** `node_modules .next .nuxt dist .turbo .cache coverage .venv __pycache__` (não vão nem voltam), `.git` (vai no envio inicial, nunca volta — os commits do Hermes ficam na VPS) e `.hermes.md` na raiz (escrito pelo NEX na VPS).
+
+**Banco:** `hermes_local_links` (raw SQL, datas BIGINT) — `localKey` (caminho resolvido, minúsculo no Windows, UNIQUE), `localPath`, `projectId`, `manifest` (JSON caminho → sha1 da última versão igual nos dois lados), `lastSyncAt`. Projeto apagado em Projetos → a ligação some na próxima leitura.
+
+**IPC:** `hermes:local:link|status` (auth), `hermes:local:publish|pull|push` (admin); Zod em `@cwm/config` (`HermesLocalPublishSchema`, `HermesLocalSyncApplySchema`).
+
+**IDE:** depois de "Trazer", a árvore e as abas sem edição pendente são recarregadas; aba com edição não salva que mudou no disco só gera aviso (salvar desfaria a mudança do Hermes).

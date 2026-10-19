@@ -1,5 +1,19 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.70.0] — 2026-10-19
+
+### Adicionado — Hermes para projeto que começa no OneDrive (IDE local → VPS → de volta)
+
+Pedido do usuário: os projetos começam numa pasta do OneDrive e só depois vão para a VPS, mas o painel Agent só existia no modo remoto — o Hermes roda na VPS e não alcança a pasta do PC.
+
+- **Botão Agent na IDE local.** Sem ligação: escolher a VPS, uma pasta **nova ou vazia** lá e o nome do projeto → **Enviar e abrir o Hermes**. A pasta é empacotada com o `tar` do Windows (sem `node_modules`, `.next`, `.nuxt`, `dist`, `.turbo`, `.cache`, `coverage`, `.venv`, `__pycache__`; `build/` vai), enviada por SFTP e extraída na VPS; o projeto é cadastrado e o painel do Hermes abre já nele. Sem `.git`, a VPS ganha um repositório com o commit "Importado do OneDrive pelo Zeus IDE" (fechamento da entrega e tarefas paralelas usam git). Com `.git` vindo de um Windows com `core.autocrlf=true`, o repositório da VPS recebe `core.autocrlf input` — senão o git de lá mostraria todo arquivo como modificado.
+- **Trazer alterações / Enviar alterações.** Cada arquivo é comparado com a última versão igual nos dois lados (sha1 guardado em `hermes_local_links.manifest`): mudou só na VPS → aparece em Trazer; só no PC → em Enviar; igual nos dois → só atualiza a base; diferente nos dois → **conflito**, nas duas listas, desmarcado (marcar substitui a versão do outro lado). O botão Trazer mostra quantos arquivos mudaram na VPS quando uma execução do Hermes termina. Enviar é recusado com o Hermes rodando no projeto.
+- **Segurança:** caminho remoto validado (absoluto, ≥ 2 níveis, só `[A-Za-z0-9._@+-/]`, fora de `/root`, `/etc`, `/var`…); pasta remota precisa estar vazia; o diff é recalculado no main a cada aplicação (o renderer só escolhe caminhos); caminho vindo da VPS só é gravado se for válido no Windows e ficar dentro da pasta local. `.git` não volta (commits do Hermes ficam na VPS) e o `.hermes.md` do NEX é ignorado.
+- **IDE:** depois de Trazer, a árvore e as abas sem edição pendente recarregam; aba com edição não salva que mudou no disco só avisa.
+- **Backend:** `HermesLocalSync` (`packages/core/src/hermes/local-sync.ts`), `SftpSession.readFileBuffer/writeFileBuffer/uploadFile/mkdirp` (as leituras/escritas antigas eram só UTF-8), IPC `hermes:local:link|publish|status|pull|push` com Zod (`HermesLocalPublishSchema`, `HermesLocalSyncApplySchema`). UI em `LocalHermesPanel.tsx`; Manual de Uso com a seção "Projeto que começa no OneDrive".
+
+**Verificado:** `pnpm typecheck` (5 pacotes); 44/44 testes no core (12 novos: diff dos 3 lados, conflitos, validação de caminho, nomes inválidos no Windows, leitura do `sha1sum`) e 17/17 no config; **integração real na VPS-1** numa cópia do banco do app, em pasta descartável apagada no fim — envio sem `node_modules` com `build/` e binário byte a byte iguais, git init, segunda publicação recusada, modificado/novo/apagado trazidos, conflito detectado e preservado até ser escolhido, `.hermes.md` ignorado, `../fora.txt` recusado, envio PC → VPS, `/root` recusado; repositório clonado no Windows com CRLF enviado → `git status` limpo na VPS. **Não testado pela UI** (botões e formulário na IDE local).
+
 ## [3.69.2] — 2026-10-19
 
 ### Corrigido — diagnóstico do Hermes "não respondeu no formato esperado", ações sumindo e "Error" solto

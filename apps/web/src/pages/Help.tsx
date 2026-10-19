@@ -1080,6 +1080,15 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
 
         <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Projeto que começa no OneDrive (IDE local)</p>
+          <p className="text-xs">O Hermes só roda na VPS, mas você pode começar o projeto numa pasta do PC:</p>
+          <Step n={1}><span>Abra a pasta na IDE (<strong className="text-slate-100">Abrir pasta local</strong>) e clique <strong className="text-slate-100">Agent</strong> no topo.</span></Step>
+          <Step n={2}><span>Escolha a VPS e uma pasta <strong className="text-slate-100">nova ou vazia</strong> lá → <strong className="text-slate-100">Enviar e abrir o Hermes</strong>. A pasta é copiada (sem node_modules, .next, dist…), o projeto é cadastrado e o painel do Hermes abre. Sem .git, a VPS ganha um repositório com o primeiro commit.</span></Step>
+          <Step n={3}><span>Quando o Hermes terminar, <strong className="text-slate-100">Trazer alterações</strong> lista o que mudou na VPS e copia para o OneDrive. Editou no PC? <strong className="text-slate-100">Enviar alterações</strong> manda para a VPS.</span></Step>
+          <Warn>Arquivo que mudou nos dois lados aparece como <strong>conflito</strong> e começa desmarcado — marcar substitui a versão do outro lado. O .git do PC não é sincronizado: os commits do Hermes ficam na VPS.</Warn>
+        </div>
+
+        <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Fechamento da entrega</p>
           <p className="text-xs">Quando todas as tarefas terminam, aparece a seção <strong className="text-slate-100">Entrega</strong> (no Semi-autônomo e no Autônomo ela começa sozinha):</p>
           <Step n={1}><span>O Hermes revisa o código e a segurança do que mudou no objetivo e roda build/testes — <strong className="text-slate-100">sem alterar nada</strong>.</span></Step>
@@ -1157,7 +1166,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.69.2</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.70.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}

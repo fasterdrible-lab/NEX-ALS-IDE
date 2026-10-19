@@ -108,6 +108,46 @@ export class SftpSession {
     })
   }
 
+  /** Bytes crus (sem conversão UTF-8) — usado pela sincronização OneDrive ↔ VPS, que também copia binários. */
+  readFileBuffer(filePath: string): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = []
+      const stream = this.sftp.createReadStream(filePath)
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk))
+      stream.on('end', () => resolve(Buffer.concat(chunks)))
+      stream.on('error', (err: Error) => reject(new Error(`Erro ao ler ${filePath}: ${err.message}`)))
+    })
+  }
+
+  writeFileBuffer(filePath: string, data: Buffer): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const stream = this.sftp.createWriteStream(filePath)
+      stream.on('close', resolve)
+      stream.on('error', (err: Error) => reject(new Error(`Erro ao salvar ${filePath}: ${err.message}`)))
+      stream.end(data)
+    })
+  }
+
+  /** Envia um arquivo local inteiro (sftp fastPut — paralelo, para arquivos grandes). */
+  uploadFile(localPath: string, remotePath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.sftp.fastPut(localPath, remotePath, (err) => {
+        if (err) reject(new Error(`Erro ao enviar para ${remotePath}: ${err.message}`))
+        else resolve()
+      })
+    })
+  }
+
+  /** mkdir -p: cria cada nível que faltar (erro de "já existe" é ignorado; a escrita seguinte acusa o problema real). */
+  async mkdirp(dirPath: string): Promise<void> {
+    const parts = dirPath.split('/').filter(Boolean)
+    let cur = ''
+    for (const p of parts) {
+      cur += '/' + p
+      await new Promise<void>(resolve => this.sftp.mkdir(cur, () => resolve()))
+    }
+  }
+
   touch(filePath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.sftp.open(filePath, 'w', (err, handle) => {

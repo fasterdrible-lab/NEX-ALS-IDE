@@ -93,6 +93,15 @@ export interface HermesIncident {
   status: IncidentStatus; createdAt: number; updatedAt: number
   runId: string | null; failure: string; diagnosis: IncidentDiagnosis | null
 }
+/** Pasta local (OneDrive) enviada à VPS para o Hermes. */
+export interface HermesLocalLink {
+  localPath: string; projectId: string; projectName: string
+  vpsId: string; vpsName: string; remotePath: string; lastSyncAt: number
+}
+/** `kind` = o que acontece no lado que recebe; `conflict` = mudou diferente nos dois lados. */
+export interface HermesSyncChange { path: string; kind: 'added' | 'modified' | 'deleted'; conflict: boolean }
+export interface HermesLocalSyncStatus { link: HermesLocalLink; pull: HermesSyncChange[]; push: HermesSyncChange[] }
+export interface HermesLocalSyncResult { applied: number; skipped: { path: string; reason: string }[] }
 export interface HermesRunSummary {
   id: string; projectId: string; taskId: string | null
   kind: HermesRunKind; status: 'running' | 'done' | 'error'
@@ -344,6 +353,14 @@ export const ipc = {
         if (!window.electron) return () => {}
         return window.electron.on('hermes:incident:updated', cb as (...args: unknown[]) => void)
       },
+    },
+    local: {
+      link: (localPath: string) => invoke<HermesLocalLink | null>('hermes:local:link', { localPath }),
+      publish: (data: { localPath: string; vpsId: string; remotePath: string; name: string }) =>
+        invoke<HermesLocalLink>('hermes:local:publish', data),
+      status: (localPath: string) => invoke<HermesLocalSyncStatus>('hermes:local:status', { localPath }),
+      pull: (localPath: string, paths: string[]) => invoke<HermesLocalSyncResult>('hermes:local:pull', { localPath, paths }),
+      push: (localPath: string, paths: string[]) => invoke<HermesLocalSyncResult>('hermes:local:push', { localPath, paths }),
     },
     runs: {
       list: (projectId: string, taskId?: string) =>

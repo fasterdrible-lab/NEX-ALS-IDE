@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
 import HermesAgentPanel from '../components/HermesAgentPanel'
+import LocalHermesPanel from '../components/LocalHermesPanel'
 import { LSP_CONFIGS, monacoLangToLspKey } from '../lib/lsp'
 
 // ── language / icon helpers ────────────────────────────────────────────
@@ -624,6 +625,28 @@ export default function IDEPage() {
     })
     void loadGitStatus()
   }
+  // Modo local: "Trazer alterações" acabou de gravar arquivos do Hermes na pasta. Recarrega a árvore e as abas
+  // sem edição pendente; aba com edição não salva que mudou no disco só avisa (salvar desfaria a mudança do Hermes).
+  const localPulledRef = useRef<() => void>(() => {})
+  localPulledRef.current = () => {
+    const root = localRootRef.current
+    if (!root) return
+    void fsReaddir(root).then(r => { if (r.success) setRootEntries(r.entries) })
+    expandedFoldersRef.current.forEach(p => {
+      void fsReaddir(p).then(r => { if (r.success) setFolderChildren(m => new Map([...m, [p, r.entries]])) })
+    })
+    void Promise.all(openFiles.filter(f => !f.loading && !f.imageDataUrl).map(async f => {
+      const r = await fsReadFile(f.path)
+      return r.success && r.content !== f.savedContent ? { f, content: r.content } : null
+    })).then(changed => {
+      const hits = changed.filter((x): x is { f: OpenFile; content: string } => x !== null)
+      const conflicts = hits.filter(h => isDirty(h.f)).map(h => h.f.name)
+      const reload = new Map(hits.filter(h => !isDirty(h.f)).map(h => [h.f.path, h.content]))
+      if (reload.size) setOpenFiles(fs => fs.map(fl => reload.has(fl.path) && !isDirty(fl) ? { ...fl, content: reload.get(fl.path)!, savedContent: reload.get(fl.path)! } : fl))
+      if (conflicts.length) showToast(false, `Mudou no disco e tem edição não salva: ${conflicts.join(', ')}`)
+    })
+  }
+
   useEffect(() => {
     if (!showAgent || isLocal) return
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -1941,9 +1964,9 @@ export default function IDEPage() {
             className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${showChat?'bg-purple-600/40 text-purple-200 border border-purple-500/40':'text-purple-400 hover:text-purple-200 hover:bg-purple-900/40 border border-transparent'}`}>
             <Bot size={13}/> IA
           </button>
-          {/* ETAPA 16: painel Agent (Hermes) — só modo remoto */}
-          {!isLocal && (
-            <button onClick={()=>setShowAgent(v=>!v)} title="Agent (Hermes) — objetivos, tarefas, quadro e logs deste projeto, ao lado do editor"
+          {/* ETAPA 16: painel Agent (Hermes). Modo local: envia a pasta à VPS e sincroniza (LocalHermesPanel) */}
+          {(!isLocal || localRoot) && (
+            <button onClick={()=>setShowAgent(v=>!v)} title={isLocal ? 'Agent (Hermes) — envia esta pasta à VPS para o Hermes trabalhar e traz as alterações de volta' : 'Agent (Hermes) — objetivos, tarefas, quadro e logs deste projeto, ao lado do editor'}
               aria-pressed={showAgent}
               className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${showAgent?'bg-brand-600/30 text-brand-200 border border-brand-500/40':'text-brand-400 hover:text-brand-200 hover:bg-brand-900/40 border border-transparent'}`}>
               <ListChecks size={13}/> Agent
@@ -2839,6 +2862,21 @@ export default function IDEPage() {
                   <HermesAgentPanel key={agentProjectId ?? 'none'} compact vpsId={vpsId} initialProjectId={agentProjectId ?? undefined}/>
                 </>
               )}
+            </div>
+          </>
+        )}
+
+        {/* ─── Painel Agent no modo local: pasta do OneDrive ↔ projeto na VPS ─── */}
+        {showAgent && isLocal && localRoot && (
+          <>
+            <div className="w-1 bg-slate-800 hover:bg-brand-600/50 cursor-col-resize shrink-0 transition-colors active:bg-brand-500" onMouseDown={startResizeAgent}/>
+            <div className="flex flex-col bg-slate-900 border-l border-slate-800 shrink-0 overflow-hidden" style={{width:agentW}}>
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 shrink-0">
+                <ListChecks size={13} className="text-brand-400"/>
+                <span className="text-xs font-semibold text-slate-300 flex-1">Agent · Hermes</span>
+                <button onClick={()=>setShowAgent(false)} title="Fechar painel Agent" className="text-slate-500 hover:text-slate-300"><X size={13}/></button>
+              </div>
+              <LocalHermesPanel key={localRoot} localPath={localRoot} onPulled={()=>localPulledRef.current()}/>
             </div>
           </>
         )}
