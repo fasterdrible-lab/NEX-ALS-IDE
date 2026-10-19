@@ -1,17 +1,19 @@
-# NEX-ALS IDE — Guia para Iniciantes
+# Zeus IDE — Guia para Iniciantes
 
 **Para quem está começando na programação e quer entender o que este app faz.**
 
 ---
 
-## O que é o NEX-ALS IDE?
+## O que é o Zeus IDE?
 
 Imagine que você tem um ou mais servidores na internet — computadores que ficam ligados 24 horas por dia rodando seus sites, APIs ou aplicações. O problema é: como você edita os arquivos dentro desses servidores? Como você vê o que está acontecendo lá dentro? Como você pede ajuda à inteligência artificial sem sair do contexto do seu projeto?
 
-O **NEX-ALS IDE** resolve tudo isso numa única janela no seu computador.
+O **Zeus IDE** resolve tudo isso numa única janela no seu computador.
 
 É um **programa de desktop para Windows** que permite:
 
+- começar projetos numa pasta do seu computador (OneDrive), cada um na sua própria janela — como no VS Code
+- publicar o projeto na VPS só quando quiser, e trazer de volta o que a IA fizer lá
 - conectar em servidores remotos (VPS) pelo seu computador
 - editar código nesses servidores como se fosse um editor normal
 - abrir um terminal dentro do servidor sem precisar de outros programas
@@ -37,22 +39,22 @@ Exemplos de onde você pode alugar uma VPS: DigitalOcean, Vultr, Hetzner, AWS, G
 
 ### O que é SSH?
 
-SSH é o protocolo que permite você "entrar" dentro de um servidor remoto pelo terminal. É como se você abrisse um controle remoto do servidor e digitasse comandos nele. O NEX-ALS IDE usa SSH internamente para tudo — você nem precisa saber os detalhes, o app cuida disso.
+SSH é o protocolo que permite você "entrar" dentro de um servidor remoto pelo terminal. É como se você abrisse um controle remoto do servidor e digitasse comandos nele. O Zeus IDE usa SSH internamente para tudo — você nem precisa saber os detalhes, o app cuida disso.
 
 ### O que é SFTP?
 
-SFTP é o protocolo para transferir arquivos entre seu computador e o servidor. Quando você salva um arquivo no editor do NEX-ALS IDE, ele usa SFTP para enviar o arquivo para a VPS automaticamente.
+SFTP é o protocolo para transferir arquivos entre seu computador e o servidor. Quando você salva um arquivo no editor do Zeus IDE, ele usa SFTP para enviar o arquivo para a VPS automaticamente.
 
 ### O que é uma API Key?
 
-Quando você usa um serviço de inteligência artificial (como Claude da Anthropic ou GPT da OpenAI), você precisa de uma "chave" para se identificar e pagar pelo uso. Essa chave é chamada de API Key. No NEX-ALS IDE, você cadastra essa chave nas Configurações uma única vez e ela é salva com criptografia no seu computador.
+Quando você usa um serviço de inteligência artificial (como Claude da Anthropic ou GPT da OpenAI), você precisa de uma "chave" para se identificar e pagar pelo uso. Essa chave é chamada de API Key. No Zeus IDE, você cadastra essa chave nas Configurações uma única vez e ela é salva com criptografia no seu computador.
 
 ---
 
 ## O que o app tem — explicado por telas
 
 ### 1. Dashboard
-A página inicial. Mostra um resumo rápido: quantas VPS você tem, projetos recentes e ações rápidas.
+A página inicial. No topo ficam os **Projetos locais**: as pastas do seu PC que você abriu, com um clique para abrir cada uma na sua janela, e o botão **Abrir pasta…**. Embaixo, um resumo das VPS e projetos na VPS.
 
 ### 2. VPS
 Aqui você cadastra seus servidores. Para cada servidor você informa:
@@ -64,18 +66,28 @@ Aqui você cadastra seus servidores. Para cada servidor você informa:
 O app também salva uma "impressão digital" do servidor para detectar se alguém tentou trocar o servidor por outro (proteção MITM).
 
 ### 3. Projetos
-Aqui você registra as pastas dos seus projetos dentro de cada VPS. Por exemplo: `/var/www/meusite` na VPS de produção.
+Onde seus projetos nascem. **Novo projeto** cria uma pasta no seu OneDrive (já com git) e abre numa janela própria — nada é criado no servidor. Embaixo ficam os **Projetos na VPS**: os que você já publicou, ou que já existiam no servidor (botão **Cadastrar projeto da VPS**, ex.: `/var/www/meusite`).
+
+> **Por que começar no PC?** A VPS costuma ser produção — o site que está no ar. Rascunho e experimento ficam no seu computador; a VPS só recebe o projeto quando você decide publicar.
 
 ### 4. Lançador
-A página mais usada no dia a dia. Mostra todas as suas VPS e projetos com botões de ação:
+Atalhos para tudo: projetos locais no topo e, embaixo, as VPS e os projetos na VPS:
 
 ```
 VPS: Servidor Prod (204.168.180.25)
- ├─ [IDE]          ← abre o editor integrado nessa VPS
- ├─ [⎋ Nova janela] ← abre em monitor separado
- ├─ [🚨 Incident]  ← modo de emergência
- └─ [🚀 Deploy]    ← assistente de deploy
+ ├─ [IDE]          ← abre o editor integrado nessa VPS (nesta janela)
+ ├─ [Nova janela]  ← o mesmo, numa janela separada
+ ├─ [Incidente]    ← modo de emergência
+ └─ [Deploy]       ← assistente de deploy
+
+Projeto na VPS: meusite
+ ├─ [IDE ⎋]   ← editor já na pasta do projeto, em janela própria
+ ├─ [Agent]   ← Hermes, a IA que desenvolve sozinha
+ └─ [VS Code] ← abre no VS Code (Remote SSH)
 ```
+
+### Uma janela por projeto
+Igual ao VS Code: cada projeto fica na sua janela, com o nome dele na barra de tarefas (`meu-app — Zeus IDE`). Abrir de novo um projeto que já está aberto só traz a janela dele para frente. Quando você fecha e reabre o Zeus, os projetos que estavam abertos voltam abertos. Atalho para abrir uma pasta: **Ctrl+O**.
 
 ### 5. Monitor
 Mostra em tempo real o uso de CPU, RAM e Disco de todas as suas VPS. Atualiza a cada 30 segundos. Se o disco estiver acima de 85%, fica vermelho como alerta.
@@ -85,7 +97,7 @@ Onde você configura as API Keys dos provedores de IA (Anthropic, OpenAI, Gemini
 
 ---
 
-## O coração do app: o NEX-ALS IDE
+## O coração do app: o Zeus IDE
 
 Quando você clica em **IDE** para uma VPS, abre uma janela de editor completa — parecida com o VS Code, mas conectada diretamente ao servidor.
 
@@ -219,12 +231,15 @@ O **Deploy Assistant** funciona assim:
 ## Por onde começar (passo a passo para iniciantes)
 
 ### Passo 1 — Instale o app
-Execute o instalador `NEX-ALS IDE Setup.exe` (ou o portátil). Siga o wizard normal.
+Execute o instalador `Zeus IDE Setup.exe` (ou o portátil). Siga o wizard normal.
 
-### Passo 2 — Configure um provedor de IA
-Vá em **Configurações → Provedores de IA**. Para começar sem custo, use o **Groq** (grátis) ou o **Ollama** (local). Cole a API Key e marque como Padrão.
+### Passo 2 — Crie seu primeiro projeto
+Vá em **Projetos → Novo projeto**, dê um nome e clique **Criar e abrir**. A pasta é criada no seu OneDrive e abre numa janela própria, com o editor. Já tem uma pasta? Use **Abrir pasta…** (ou **Ctrl+O**).
 
-### Passo 3 — Cadastre sua VPS
+### Passo 3 — Configure um provedor de IA
+Vá em **Configurações → Provedores de IA**. Para começar sem custo, use o **Groq** (grátis) ou o **Ollama** (local). Cole a API Key e marque como Padrão. Se você tem o Claude Code instalado e logado, pode usar a sua conta Claude sem API Key.
+
+### Passo 4 — Cadastre sua VPS (quando for publicar)
 Vá em **VPS → Nova VPS**. Preencha:
 - **Nome:** um apelido (ex: "Servidor Prod")
 - **Host:** o IP da sua VPS (ex: `204.168.180.25`)
@@ -234,13 +249,13 @@ Vá em **VPS → Nova VPS**. Preencha:
 
 Clique em **Testar Conexão** para confirmar que funciona.
 
-### Passo 4 — Abra o IDE
-Vá em **Lançador** → clique no botão **IDE** da sua VPS. O editor abre conectado ao servidor.
-
 ### Passo 5 — Converse com a IA
-No IDE, clique no botão roxo **Claude** no canto superior direito. O painel de chat abre. Pergunte qualquer coisa sobre o projeto — a IA já recebe o contexto dos arquivos abertos.
+Na janela do projeto, clique no botão roxo **IA** no canto superior direito. O painel de chat abre. Pergunte qualquer coisa sobre o projeto — a IA já recebe o contexto dos arquivos abertos.
 
-### Passo 6 — Explore o AI HUB
+### Passo 6 — Publique na VPS e use o Hermes
+Na janela do projeto, clique **Agent** → escolha a VPS e uma pasta nova lá → **Enviar e abrir o Hermes**. O projeto é copiado para o servidor (sem `node_modules` e pastas geradas) e o Hermes pode trabalhar nele. Quando ele terminar, **Trazer alterações** copia de volta para o seu PC o que mudou — você escolhe arquivo por arquivo. Se um arquivo mudou nos dois lados, ele aparece como **conflito** e só é substituído se você marcar.
+
+### Passo 7 — Explore o AI HUB
 Clique em **AI HUB** na sidebar. Aqui você tem histórico de conversas, streaming em tempo real e pode selecionar dados do servidor para incluir no contexto.
 
 ---
@@ -257,7 +272,10 @@ As senhas SSH e as API Keys de IA são armazenadas criptografadas (AES-256) no s
 Para conectar nas VPS e para as chamadas às APIs de IA, sim. Se usar Ollama (modelos locais), a IA funciona offline.
 
 **O app funciona sem VPS?**
-Sim. Você pode usar o **Modo Local** (Lançador → "Abrir pasta local no IDE") para editar arquivos do seu computador, e o **AI HUB** para conversar com IA — sem precisar de VPS.
+Sim — e é o jeito recomendado de começar. **Projetos → Novo projeto** (ou **Abrir pasta…** / **Ctrl+O**) abre uma pasta do seu computador na sua própria janela, e o **AI HUB** conversa com IA — sem precisar de VPS. A VPS só é necessária para publicar e para o Hermes.
+
+**Posso ter vários projetos abertos?**
+Sim, cada um na sua janela, como no VS Code. Se você abrir o Zeus de novo pelo atalho com ele já aberto, ele não cria um segundo programa — só traz a janela principal para frente.
 
 **E se eu quebrar algo na VPS?**
 O Modo Agente salva snapshots antes de cada modificação. Você pode restaurar individualmente. Além disso, o Git integrado permite reverter commits. Para deploys, use o Deploy Assistant que tem rollback automático.
@@ -305,7 +323,7 @@ O card mostrará "Não encontrado" com instruções de instalação. Após insta
 
 ## O Squad — sua equipe de agentes de IA
 
-O **Squad** é a funcionalidade mais poderosa do NEX-ALS IDE. Em vez de conversar com um único agente de IA, você tem uma **equipe completa de 22 especialistas**, cada um com um papel diferente — como um time de desenvolvimento real.
+O **Squad** é a funcionalidade mais poderosa do Zeus IDE. Em vez de conversar com um único agente de IA, você tem uma **equipe completa de 22 especialistas**, cada um com um papel diferente — como um time de desenvolvimento real.
 
 Acesse pelo botão **Squad** na barra lateral esquerda.
 
@@ -466,5 +484,5 @@ Agente gera um bloco de ação
 
 ---
 
-*NEX-ALS IDE v3.50.0 — NEX-ALS*
+*Zeus IDE v3.72.0 — NEX-ALS*
 *github.com/fasterdrible-lab/NEX-ALS-IDE*

@@ -112,12 +112,12 @@ const sections: Section[] = [
     color: 'bg-emerald-600/20 text-emerald-400',
     content: (
       <div className="space-y-3">
-        <Step n={1}><strong className="text-slate-100">Cadastre sua VPS</strong> — vá em <em>VPS</em> → Nova VPS. Preencha IP, porta, usuário e senha SSH. Clique em <strong>Testar</strong> para confirmar a conexão.</Step>
-        <Step n={2}><strong className="text-slate-100">Configure um provedor de IA</strong> — vá em <em>Configurações → Provedores de IA</em>. Groq é grátis, DeepSeek é barato, Anthropic é o melhor. Salve a API Key e marque como padrão.</Step>
-        <Step n={3}><strong className="text-slate-100">Abra o IDE</strong> — vá em <em>Lançador</em> → clique em <strong>IDE</strong> na VPS desejada. O Zeus IDE abre em tela cheia com explorer, editor e terminal SSH.</Step>
-        <Step n={4}><strong className="text-slate-100">Converse com a IA</strong> — no IDE, clique no botão roxo <strong>Claude</strong> (canto superior direito). Para o agente autônomo (lê e escreve arquivos), ative o botão 🤖.</Step>
-        <Step n={5}><strong className="text-slate-100">Explore o AI HUB</strong> — clique em <strong className="text-slate-100">AI HUB</strong> (botão roxo na sidebar) para um chat avançado com histórico de conversas, streaming e múltiplos provedores.</Step>
-        <Tip>Projetos começam no PC: <strong>Abrir pasta…</strong> (Dashboard, Lançador ou Ctrl+O) abre cada pasta na sua própria janela, como no VS Code — sem tocar na VPS. As pastas abertas voltam abertas quando você reabre o Zeus.</Tip>
+        <p className="text-xs text-slate-400">O projeto nasce no seu PC e só vai para a VPS quando você decidir — a VPS de produção nunca é o rascunho.</p>
+        <Step n={1}><strong className="text-slate-100">Crie ou abra um projeto local</strong> — <em>Projetos</em> → <strong>Novo projeto</strong> cria a pasta no OneDrive (com git) e abre numa janela própria. Para uma pasta que já existe: <strong>Abrir pasta…</strong> no Dashboard, no Lançador ou <Code>Ctrl+O</Code>.</Step>
+        <Step n={2}><strong className="text-slate-100">Configure um provedor de IA</strong> — <em>Configurações → Provedores de IA</em> (ou use sua conta do Claude Code, sem API Key). No editor, o botão roxo <strong>IA</strong> abre o chat; o 🤖 liga o agente que lê e escreve arquivos.</Step>
+        <Step n={3}><strong className="text-slate-100">Cadastre sua VPS</strong> (quando for publicar) — <em>VPS</em> → Nova VPS: IP, porta, usuário e chave/senha SSH → <strong>Testar</strong>.</Step>
+        <Step n={4}><strong className="text-slate-100">Publique e use o Hermes</strong> — na janela do projeto, botão <strong>Agent</strong> → escolha a VPS e uma pasta nova lá → <strong>Enviar e abrir o Hermes</strong>. Depois, <strong>Trazer alterações</strong> devolve ao PC o que o Hermes mudar.</Step>
+        <Step n={5}><strong className="text-slate-100">Vários projetos ao mesmo tempo</strong> — cada pasta fica na sua janela (como no VS Code), com o nome do projeto na barra de tarefas, e as que estavam abertas voltam quando você reabre o Zeus.</Step>
       </div>
     ),
   },
@@ -153,8 +153,10 @@ const sections: Section[] = [
               <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>
               Modo Local
             </p>
-            <p className="text-slate-400 text-xs">Edita arquivos locais (ex: OneDrive, C:\Projetos). Badge verde "LOCAL" na top bar. Não conecta em VPS.</p>
+            <p className="text-slate-400 text-xs">Edita arquivos locais (ex: OneDrive, C:\Projetos), cada pasta na sua janela. Badge verde "LOCAL" na top bar. Não conecta em VPS — é onde o projeto deve nascer.</p>
             <div className="space-y-0.5 text-xs">
+              <p className="text-slate-300">✓ Uma janela por projeto, recentes, reabre ao iniciar</p>
+              <p className="text-slate-300">✓ Agent: publica na VPS e traz de volta o que o Hermes fizer</p>
               <p className="text-slate-300">✓ Monaco Editor completo</p>
               <p className="text-slate-300">✓ Preview de imagem</p>
               <p className="text-slate-300">✓ Chat IA com contexto do projeto</p>
@@ -171,9 +173,9 @@ const sections: Section[] = [
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Como abrir cada modo</p>
           <KV items={[
-            ['Modo Remoto', 'Lançador → botão IDE (ícone Code2) em qualquer VPS'],
-            ['Nova janela', 'Ícone ⎋ no Lançador ou na barra da IDE (remota ou local) — abre a mesma pasta numa janela independente; na página do projeto, IDE já abre em janela própria'],
-            ['Modo Local', 'Projetos locais → Abrir pasta… (ou Ctrl+O, ou um recente): uma janela por pasta; abrir de novo uma pasta aberta só traz a janela dela'],
+            ['Modo Local (novo)', 'Projetos → Novo projeto — cria a pasta no OneDrive e abre na janela própria'],
+            ['Modo Local (existente)', 'Abrir pasta… (Dashboard, Lançador, Projetos, Ctrl+O) ou clique num recente em "Projetos locais"'],
+            ['Modo Remoto', 'Lançador → IDE (nesta janela) ou Nova janela, em cada VPS; ou IDE ⎋ no cartão do projeto da VPS'],
           ]}/>
         </div>
       </div>
@@ -507,20 +509,38 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
   {
     id: 'multimonitor',
     icon: ExternalLink,
-    title: 'Multi-monitor — Múltiplas janelas',
+    title: 'Janelas — um projeto por janela (como no VS Code)',
     color: 'bg-cyan-600/20 text-cyan-400',
     content: (
       <div className="space-y-3">
-        <p>Abra múltiplas VPS em janelas Electron completamente independentes — cada uma com seus próprios terminais, sessões SSH/SFTP, Git e chat IA.</p>
-        <KV items={[
-          ['⎋ Lançador', 'Botão ExternalLink ao lado do botão IDE em cada VPS'],
-          ['⎋ IDE top bar', 'Ícone ExternalLink ao lado de Sair — mesma pasta (remota ou local) em outra janela'],
-          ['Página do projeto', 'IDE abre em janela própria; "IDE nesta janela" para abrir no lugar'],
-          ['Abrir o Zeus de novo', 'Não cria um segundo app: traz a janela principal para frente (reabre se estiver fechada)'],
-          ['Independência total', 'Estado React, SFTP, terminais e chat são isolados por janela'],
-          ['Título da janela', 'Mostra "Zeus IDE — {nome da VPS}" para identificação fácil'],
-        ]}/>
-        <Tip>Ideal para monitorar uma VPS de produção em um monitor enquanto desenvolve em outra VPS em outro monitor.</Tip>
+        <p>Cada projeto abre na sua própria janela, independente das outras — com editor, terminais, Git, chat IA e painel Agent próprios. A janela principal (Dashboard, Projetos, Lançador…) fica livre.</p>
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Projetos locais</p>
+          <KV items={[
+            ['Abrir pasta…', 'Dashboard, Lançador, Projetos, menu Arquivo ou Ctrl+O — a pasta abre numa janela nova'],
+            ['Pasta já aberta', 'Abrir de novo só traz a janela dela para frente (não duplica)'],
+            ['Projetos locais', 'Lista de recentes com "aberta" e "não encontrada"; × tira da lista sem apagar a pasta. Também em Arquivo → Abrir recente'],
+            ['Ao reabrir o Zeus', 'As pastas que estavam abertas quando o app fechou voltam abertas'],
+            ['Dentro do projeto', 'Botão "Abrir pasta…" no topo abre outro projeto em outra janela'],
+          ]}/>
+        </div>
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">VPS</p>
+          <KV items={[
+            ['Nova janela', 'Lançador → "Nova janela" em cada VPS, ou ⎋ no topo da IDE remota (leva a mesma pasta)'],
+            ['Projeto na VPS', 'Lançador → IDE ⎋ no cartão do projeto, ou página do projeto → IDE (janela própria; "IDE nesta janela" abre no lugar)'],
+          ]}/>
+        </div>
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Navegar entre janelas</p>
+          <KV items={[
+            ['Título', 'O nome do projeto vem primeiro: "acessibilidade — Zeus IDE", "VPS-1 (VPS) — Zeus IDE" — fácil de achar na barra de tarefas'],
+            ['Fechar janela', 'No topo de uma janela de projeto: fecha só ela (as outras continuam). Também em Arquivo → Fechar janela'],
+            ['🏠', 'Traz a janela principal para frente — e a reabre, se você a fechou'],
+            ['Abrir o Zeus de novo', 'Pelo atalho, com o Zeus aberto: não cria um segundo app, só traz a janela principal (um segundo app interromperia o Hermes)'],
+          ]}/>
+        </div>
+        <Tip>Ctrl+W não fecha a janela de propósito — no VS Code esse atalho fecha uma aba, e aqui fecharia o projeto inteiro.</Tip>
       </div>
     ),
   },
@@ -813,6 +833,27 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     content: (
       <div className="space-y-4">
         {[
+          {
+            problem: 'Abri o Zeus pelo atalho e não apareceu janela nova',
+            solutions: [
+              'É de propósito: com o Zeus já aberto, ele só traz a janela principal para frente (procure-a na barra de tarefas).',
+              'Para outro projeto, use Abrir pasta… / Ctrl+O ou um recente em Projetos locais — cada um abre na sua janela.',
+            ],
+          },
+          {
+            problem: 'Um projeto não voltou aberto ao reabrir o Zeus',
+            solutions: [
+              'Só voltam as pastas que estavam abertas quando o app fechou. Fechar a janela do projeto antes tira ele da lista.',
+              'Se a pasta foi movida ou renomeada, ela aparece como "não encontrada" em Projetos locais — abra o novo local com Abrir pasta….',
+            ],
+          },
+          {
+            problem: '"Novo projeto" diz que a pasta já existe ou que o nome não é aceito',
+            solutions: [
+              'Já existe uma pasta com esse nome no local escolhido — use outro nome, ou abra a existente com Abrir pasta….',
+              'O Windows não aceita < > : " / \\ | ? *, nomes como con/nul, nem nome terminando em ponto ou espaço.',
+            ],
+          },
           {
             problem: 'Erro "column sshHostFingerprint does not exist" ao criar VPS',
             solutions: [
