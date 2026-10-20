@@ -84,6 +84,12 @@ export const LocalGitRequestSchema = z.object({
   staged: z.boolean().optional(),
   message: z.string().max(5000).optional(),
 })
+export const LocalGitPublishSchema = z.object({
+  cwd: z.string().min(3).max(1024),
+  name: z.string().max(100).optional(),
+  isPrivate: z.boolean().optional(),
+  url: z.string().max(300).optional(),
+})
 export const HermesLocalSyncApplySchema = z.object({
   localPath: HermesLocalPathSchema,
   paths: z.array(z.string().min(1).max(1024)).max(5000, 'Arquivos demais de uma vez'),
@@ -189,6 +195,10 @@ export interface GitStatus {
   isRepo: boolean
   /** IDE local: a pasta não tem git próprio e está dentro do repositório da pasta pessoal do usuário — ignorado. */
   outerRepo?: string
+  /** IDE local: URL do `origin` ('' = sem remoto → oferece "Publicar no GitHub"). */
+  remote?: string
+  /** IDE local: já existe ao menos um commit (publicar exige). */
+  hasCommits?: boolean
 }
 
 export interface GitCommit {

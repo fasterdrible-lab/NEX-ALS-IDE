@@ -14,7 +14,7 @@ const ALLOWED_CHANNELS = new Set([
   'sftp:mkdir', 'sftp:delete', 'sftp:rename', 'sftp:close', 'sftp:touch', 'sftp:readFileBase64',
   'git:status', 'git:diff', 'git:add', 'git:restore', 'git:commit',
   'git:push', 'git:pull', 'git:log',
-  'git:local:status', 'git:local:diff', 'git:local:add', 'git:local:restore', 'git:local:commit', 'git:local:push', 'git:local:pull',
+  'git:local:status', 'git:local:diff', 'git:local:add', 'git:local:restore', 'git:local:commit', 'git:local:push', 'git:local:pull', 'git:local:publish',
   'local:openFolder', 'local:readdir', 'local:readFile', 'local:readFileBase64',
   'local:writeFile', 'local:mkdir', 'local:delete', 'local:rename', 'local:touch', 'local:exec',
   'clipboard:readImage',

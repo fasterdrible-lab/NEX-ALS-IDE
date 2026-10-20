@@ -274,6 +274,9 @@ Para conectar nas VPS e para as chamadas às APIs de IA, sim. Se usar Ollama (mo
 **O app funciona sem VPS?**
 Sim — e é o jeito recomendado de começar. **Projetos → Novo projeto** (ou **Abrir pasta…** / **Ctrl+O**) abre uma pasta do seu computador na sua própria janela, e o **AI HUB** conversa com IA — sem precisar de VPS. A VPS só é necessária para publicar e para o Hermes.
 
+**Meus commits vão para o GitHub?**
+Não sozinhos: o commit fica no seu PC. Na aba **Git** do projeto, depois do primeiro commit, use **Publicar no GitHub** — o Zeus cria o repositório na sua conta (privado por padrão) e envia tudo. Daí em diante, o botão **Push** manda os próximos commits.
+
 **Posso ter vários projetos abertos?**
 Sim, cada um na sua janela, como no VS Code. Se você abrir o Zeus de novo pelo atalho com ele já aberto, ele não cria um segundo programa — só traz a janela principal para frente.
 
@@ -484,5 +487,5 @@ Agente gera um bloco de ação
 
 ---
 
-*Zeus IDE v3.73.0 — NEX-ALS*
+*Zeus IDE v3.74.0 — NEX-ALS*
 *github.com/fasterdrible-lab/NEX-ALS-IDE*

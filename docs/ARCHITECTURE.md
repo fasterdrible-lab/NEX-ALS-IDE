@@ -572,6 +572,15 @@ IDEPage.gitApi (adaptador): isLocal ? ipc.git.local.*(localRoot) : ipc.git.*(vps
               → status --porcelain=v1 -uall → parsePorcelain(out, prefix)   (renomeado, aspas, subpasta)
       add/restore/commit/push/pull/diff: assertOwnRepo(cwd) antes (recusa a pasta que só está no repo pessoal)
       restore --staged sem HEAD → rm --cached;  erros → explainGitError (identidade, upstream, sem remoto, login)
+      status também devolve remote (origin) e hasCommits → UI mostra GitHubPublish quando !remote
+
+Publicar no GitHub (v3.74.0) — git:local:publish (Zod LocalGitPublishSchema, requireAdmin)
+  publishToGitHub(cwd, { name, isPrivate } | { url })
+    recusa: sem commit, já tem origin, URL fora de github.com, nome inválido (validateGitHubRepoName)
+    criar: token = `git credential fill` (Git Credential Manager; só no main, não persiste)
+           → POST https://api.github.com/user/repos { name, private } → clone_url   (422 = já existe, 401 = login expirado)
+    → git remote add origin <url> → git push -u origin HEAD   (falhou → remote remove origin)
+Árvore: pasta .git escondida (IDEPage.hideGitDir, local e VPS)
 ```
 
 ### Busca em arquivos — Modo Local (Ctrl+Shift+F)

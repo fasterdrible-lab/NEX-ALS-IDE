@@ -20,6 +20,7 @@ import {
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
 import HermesAgentPanel from '../components/HermesAgentPanel'
 import LocalHermesPanel from '../components/LocalHermesPanel'
+import GitHubPublish from '../components/GitHubPublish'
 import { LSP_CONFIGS, monacoLangToLspKey } from '../lib/lsp'
 
 // ── language / icon helpers ────────────────────────────────────────────
@@ -433,15 +434,18 @@ export default function IDEPage() {
 
   // ── IDE-20: filesystem abstraction (local vs remote SFTP) ─────────────
 
+  // A pasta .git fica fora da árvore (como no VS Code): mexer nela à mão estraga o repositório
+  const hideGitDir = (entries: FileEntry[]) => entries.filter(e => !(e.isDirectory && e.name === '.git'))
   const fsReaddir = useCallback(async (dir: string): Promise<{ success: boolean; entries: FileEntry[] }> => {
     if (isLocal) {
       try {
         const entries = await ipc.local.readdir(dir)
-        return { success: true, entries: (entries ?? []).map(e => ({ ...e, size:0, modifiedAt:0, permissions:'' })) }
+        return { success: true, entries: hideGitDir((entries ?? []).map(e => ({ ...e, size:0, modifiedAt:0, permissions:'' }))) }
       } catch { return { success: false, entries: [] } }
     }
     if (!sftpSession.current) return { success: false, entries: [] }
-    return ipc.sftp.readdir(sftpSession.current, dir)
+    const r = await ipc.sftp.readdir(sftpSession.current, dir)
+    return r.success ? { ...r, entries: hideGitDir(r.entries) } : r
   }, [isLocal])
 
   const fsReadFile = useCallback(async (filePath: string): Promise<{ success: boolean; content: string; error?: string }> => {
@@ -520,7 +524,7 @@ export default function IDEPage() {
         setLocalRoot(root); localRootRef.current = root
         setActiveDir(root)
         const entries = await ipc.local.readdir(root)
-        setRootEntries((entries ?? []).map(e => ({ ...e, size:0, modifiedAt:0, permissions:'' })))
+        setRootEntries(hideGitDir((entries ?? []).map(e => ({ ...e, size:0, modifiedAt:0, permissions:'' }))))
         setTreeConnecting(false)
       }).catch(() => { setTreeError('Erro ao abrir pasta'); setTreeConnecting(false) })
       return
@@ -531,7 +535,7 @@ export default function IDEPage() {
       if (!r.success || !r.sessionId) { setTreeError(r.error ?? 'Falha SFTP'); setTreeConnecting(false); return }
       sid = r.sessionId; sftpSession.current = sid
       const r2 = await ipc.sftp.readdir(sid, remoteRoot)
-      if (r2.success) { setRootEntries(r2.entries); setTreeConnecting(false) }
+      if (r2.success) { setRootEntries(hideGitDir(r2.entries)); setTreeConnecting(false) }
       else { setTreeError(r2.error ?? 'Erro SFTP'); setTreeConnecting(false) }
     })
     return () => { if (sid) ipc.sftp.close(sid) }
@@ -2449,6 +2453,11 @@ export default function IDEPage() {
                     : <>Esta pasta não tem repositório git.</>}
                   {' '}Para versionar este projeto, rode <span className="font-mono text-slate-400">git init</span> na pasta (projetos criados em Projetos → Novo projeto já vêm com git).
                 </p>
+              )}
+
+              {isLocal && gitStatus?.isRepo && !gitStatus.remote && (
+                <GitHubPublish cwd={localRootRef.current} folderName={displayName} hasCommits={!!gitStatus.hasCommits}
+                  onDone={(ok, text) => { showToast(ok, text); void loadGitStatus() }} />
               )}
 
               {gitStatus?.isRepo && (

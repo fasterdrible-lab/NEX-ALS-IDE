@@ -1,6 +1,8 @@
 export { VpsService } from './vps/vps.service.js'
 export { GitService } from './git/git.service.js'
-export { LocalGitService, parsePorcelain, explainGitError } from './git/local-git.service.js'
+export {
+  LocalGitService, parsePorcelain, explainGitError, validateGitHubRepoName, suggestRepoName, isGitHubRemoteUrl,
+} from './git/local-git.service.js'
 export { TerminalService, TerminalSession, ExecStream } from './terminal/terminal.service.js'
 export { SftpService, SftpSession, type FileEntry } from './sftp/sftp.service.js'
 export { ProjectsService } from './projects/projects.service.js'

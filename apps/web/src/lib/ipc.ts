@@ -296,6 +296,9 @@ export const ipc = {
       commit: (cwd: string, message: string) => invoke<void>('git:local:commit', { cwd, message }),
       push: (cwd: string) => invoke<string>('git:local:push', { cwd }),
       pull: (cwd: string) => invoke<string>('git:local:pull', { cwd }),
+      /** Sem `url`: cria o repositório no GitHub (privado por padrão). Com `url`: liga um existente. Faz o 1º push. */
+      publish: (cwd: string, opts: { name?: string; isPrivate?: boolean; url?: string }) =>
+        invoke<{ url: string; created: boolean; output: string }>('git:local:publish', { cwd, ...opts }),
     },
   },
   hermes: {

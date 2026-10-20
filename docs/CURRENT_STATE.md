@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-19
-**Versão:** 3.73.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.74.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Publicar no GitHub (v3.74.0)
+
+Na aba Git da IDE local, projeto sem remoto ganha **Publicar no GitHub**: cria o repositório na conta logada no Windows (privado por padrão) ou liga um existente, e faz o primeiro push. A pasta `.git` saiu da árvore de arquivos.
 
 ## Git na IDE local (v3.73.0)
 

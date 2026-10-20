@@ -1,7 +1,7 @@
 import { getPrismaClient } from '@cwm/db'
 import {
   HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesReviewTextSchema,
-  HermesLocalPathSchema, HermesLocalPublishSchema, HermesLocalSyncApplySchema, LocalGitRequestSchema,
+  HermesLocalPathSchema, HermesLocalPublishSchema, HermesLocalSyncApplySchema, LocalGitRequestSchema, LocalGitPublishSchema,
 } from '@cwm/config'
 import type { IpcMain } from 'electron'
 import { BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
@@ -492,6 +492,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   }))
   ipcMain.handle('git:local:push', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); return localGit.push(lg(data).cwd) }))
   ipcMain.handle('git:local:pull', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); return localGit.pull(lg(data).cwd) }))
+  // Publicar no GitHub: cria o repositório (login do GitHub já guardado no PC) ou liga um existente, e faz o 1º push
+  ipcMain.handle('git:local:publish', (_, data: unknown) => wrapHandler(async () => {
+    requireAdmin()
+    const r = LocalGitPublishSchema.safeParse(data)
+    if (!r.success) throw new Error(r.error.issues[0]?.message ?? 'Dados inválidos')
+    return localGit.publishToGitHub(r.data.cwd, { name: r.data.name, isPrivate: r.data.isPrivate, url: r.data.url })
+  }))
 
   ipcMain.handle('git:status', (_, { vpsId, cwd }: { vpsId: string; cwd: string }) =>
     wrapHandler(() => git.status(vpsId, cwd))

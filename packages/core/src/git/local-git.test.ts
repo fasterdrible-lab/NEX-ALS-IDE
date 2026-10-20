@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parsePorcelain, explainGitError } from './local-git.service'
+import { parsePorcelain, explainGitError, validateGitHubRepoName, suggestRepoName, isGitHubRemoteUrl } from './local-git.service'
 
 describe('parsePorcelain', () => {
   it('separa preparados, não preparados e novos', () => {
@@ -31,5 +31,20 @@ describe('explainGitError', () => {
   })
   it('o resto passa como veio', () => {
     expect(explainGitError('error: algo diferente')).toBe('error: algo diferente')
+  })
+})
+
+describe('publicar no GitHub — regras', () => {
+  it('nome de repositório', () => {
+    expect(validateGitHubRepoName('meu-app_2.0')).toBeNull()
+    for (const n of ['', 'com espaço', 'ação', 'a/b', '.', 'x.git', 'a'.repeat(101)]) expect(validateGitHubRepoName(n), n).not.toBeNull()
+  })
+  it('sugestão a partir da pasta', () => {
+    expect(suggestRepoName('Meu Projeto Ação')).toBe('Meu-Projeto-Acao')
+    expect(suggestRepoName('  ###  ')).toBe('projeto')
+  })
+  it('URL do GitHub', () => {
+    for (const u of ['https://github.com/fasterdrible-lab/agentix.git', 'https://github.com/fasterdrible-lab/agentix', 'git@github.com:fasterdrible-lab/agentix.git']) expect(isGitHubRemoteUrl(u), u).toBe(true)
+    for (const u of ['http://github.com/a/b', 'https://gitlab.com/a/b', 'https://github.com/a', 'https://github.com/a/b;rm', 'C:/repo']) expect(isGitHubRemoteUrl(u), u).toBe(false)
   })
 })

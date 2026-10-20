@@ -1,5 +1,17 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.74.0] — 2026-10-19
+
+### Adicionado — Publicar no GitHub (IDE local) e pasta .git fora da árvore
+
+O usuário fez o primeiro commit na IDE local e perguntou se tinha ido para o GitHub — não: o projeto não tinha remoto, e ligar um exigia o terminal.
+
+- **Publicar no GitHub** na aba Git (projeto local sem `origin`, depois do 1º commit): **Criar no GitHub e enviar** cria o repositório na conta do usuário (privado por padrão; nome sugerido a partir da pasta, sem acentos) e faz `push -u origin HEAD`; **Já tenho o repositório** liga uma URL `https://github.com/<dono>/<repo>` (ou `git@github.com:…`) e envia. Depois disso o **Push** funciona normalmente.
+- O login usado é o que o **Git Credential Manager** já guarda no Windows (`git credential fill`), lido no main só para a chamada à API (`POST /user/repos`) — nunca vai para o renderer, log ou banco. Nome já existente na conta, login expirado, sem login, URL inválida, projeto sem commit e projeto já ligado viram mensagens claras; se o push falhar, a ligação é desfeita para tentar de novo.
+- A pasta **`.git` não aparece mais na árvore** de arquivos (local e VPS), como no VS Code — mexer nela à mão estraga o repositório.
+
+**Verificado:** 3 testes unitários novos (nome do repositório, sugestão de nome, URL) — core 52/52; integração com o git real e a API do GitHub sem criar nada (8 casos: status sem remoto/sem commits, recusa sem commit, URL de outro serviço, nome inválido, login + API respondendo "já existe" para `NEX-ALS-IDE`, nada ligado após a recusa, recusa quando já há origin); `pnpm typecheck` (5 pacotes). A criação de verdade fica provada no primeiro uso.
+
 ## [3.73.0] — 2026-10-19
 
 ### Adicionado — Git na IDE local
