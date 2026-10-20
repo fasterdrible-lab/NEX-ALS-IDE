@@ -19,6 +19,10 @@ export {
   type LocalLink, type LocalSyncStatus, type LocalSyncApplyResult, type SyncChange, type SyncChangeKind,
 } from './local-sync.js'
 export {
+  HermesAgentRunner,
+  type RunnerMode, type RunnerApproval, type RunnerActivity, type RunnerState, type RunnerSnapshot, type RunnerEvent,
+} from './agent-runner.js'
+export {
   MAX_DELIVERY_ROUNDS, correctionTasks, parseReview,
   type DeliveryResult, type DeliveryVerdict, type ReviewFinding, type VerifiedCheck, type CheckResult,
 } from './delivery.js'

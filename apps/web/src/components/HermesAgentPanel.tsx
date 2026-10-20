@@ -8,13 +8,11 @@ import {
 import type { Project } from '@cwm/config'
 import {
   ipc, type HermesProjectAgentInfo, type HermesStatus, type HermesAgentStatus,
-  type HermesAutonomyLevel, type DodItem, type AgentTask, type TaskStatus,
-  type HermesActivity, type HermesApprovalRequest, type TaskRisk,
+  type HermesAutonomyLevel, type DodItem, type AgentTask, type TaskStatus, type TaskRisk,
   type HermesDelivery, type DeliveryVerdict, type DeliveryCheck,
+  type HermesRunnerState, type HermesRunnerActivity, type HermesRunnerApproval,
 } from '../lib/ipc'
-import {
-  AUTONOMY_LEVELS, AUTONOMY_POLICIES, getAutonomyPolicy, classifyTaskRisk, needsRiskGate,
-} from '../lib/autonomy-policy'
+import { AUTONOMY_LEVELS, AUTONOMY_POLICIES, getAutonomyPolicy } from '../lib/autonomy-policy'
 import { HermesBoard, HermesRunLogs, useHermesRuns } from './HermesTaskBoard'
 
 const HERMES_STATUS_LABEL: Record<HermesStatus, string> = {
@@ -42,92 +40,10 @@ const TASK_STATUS_COLOR: Record<TaskStatus, string> = {
   BLOCKED: 'text-red-400 bg-red-950/40', DONE: 'text-emerald-400 bg-emerald-950/40',
 }
 
-type TaskTag =
-  | { kind: 'done' }
-  | { kind: 'blocked'; reason: string }
-  | { kind: 'decision'; question: string; options: string[] }
-  | { kind: 'none' }
-
-function parseTaskTag(text: string): TaskTag {
-  if (/\[TAREFA_CONCLUIDA\]/i.test(text)) return { kind: 'done' }
-  const blocked = text.match(/\[TAREFA_BLOQUEADA:?\s*([^\]]*)\]/i)
-  if (blocked) return { kind: 'blocked', reason: (blocked[1] || '').trim() || 'motivo não informado' }
-  const decision = text.match(/\[DECISAO_NECESSARIA([^\]]*)\]/i)
-  if (decision) {
-    const params: Record<string, string> = {}
-    const pr = /(\w+)="([^"]*)"/g
-    let pm: RegExpExecArray | null
-    while ((pm = pr.exec(decision[1])) !== null) params[pm[1]] = pm[2]
-    const options = (params['opcoes'] ?? '').split('|').map(s => s.trim()).filter(Boolean)
-    return { kind: 'decision', question: params['pergunta'] ?? 'Decisão necessária', options }
-  }
-  return { kind: 'none' }
-}
-
-function parseTaskPlan(text: string): { title: string; description: string; parallelizable: boolean; risk: TaskRisk }[] {
-  const fence = text.match(/```json\s*([\s\S]*?)```/i)
-  const raw = fence ? fence[1] : (text.match(/\[[\s\S]*\]/)?.[0] ?? null)
-  if (raw) {
-    try {
-      const parsed: unknown = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        const tasks = parsed
-          .filter((p): p is { title: string; description?: string; parallelizable?: unknown; risk?: unknown } =>
-            !!p && typeof p === 'object' && typeof (p as { title?: unknown }).title === 'string')
-          .map(p => {
-            const t = { title: p.title, description: typeof p.description === 'string' ? p.description : '' }
-            return { ...t, parallelizable: p.parallelizable === true, risk: classifyTaskRisk(t, p.risk) }
-          })
-        if (tasks.length > 0) return tasks
-      }
-    } catch { /* cai no fallback abaixo */ }
-  }
-  const whole = { title: 'Objetivo completo', description: text.slice(0, 2000) }
-  return [{ ...whole, parallelizable: false, risk: classifyTaskRisk(whole) }]
-}
-
-function buildPlanPrompt(objective: string): string {
-  return `Antes de implementar, gere a lista de tarefas para o seguinte objetivo:\n\n${objective}\n\n`
-    + 'Responda APENAS com um bloco ```json contendo um array no formato '
-    + '[{"title":"...","description":"...","parallelizable":true|false,"risk":"low|medium|high"}], sem nenhum texto antes ou depois do bloco. '
-    + 'Marque "parallelizable":true apenas para tarefas que podem rodar ao mesmo tempo que outras sem conflito '
-    + '(ex.: arquivos/módulos diferentes, sem depender do resultado de outra tarefa). Na dúvida, use false. '
-    + 'Marque "risk":"high" para tarefas que mexem em deploy/produção, migração ou remoção de dados, secrets/credenciais, '
-    + 'pagamentos ou infraestrutura do servidor; "medium" para autenticação, banco de dados, dependências ou CI; '
-    + '"low" para o resto. Na dúvida, escolha o risco maior.'
-}
-
 const RISK_BADGE: Record<TaskRisk, { label: string; cls: string } | null> = {
   low: null,
   medium: { label: 'risco médio', cls: 'text-amber-400 bg-amber-950/40' },
   high: { label: 'risco alto', cls: 'text-red-400 bg-red-950/40' },
-}
-
-/**
- * Revisão de fechamento da entrega (ETAPAS 24/27): código + segurança, build e testes, sem alterar
- * nada. Os comandos informados precisam ser simples para o NEX conseguir reexecutá-los e conferir
- * o resultado pelo exit code (lista segura em packages/core/src/hermes/delivery.ts).
- */
-function buildReviewPrompt(objective: string, baseCommit: string): string {
-  const range = baseCommit ? `git diff ${baseCommit}..HEAD (e git log ${baseCommit}..HEAD)` : 'o histórico e o código atual do repositório'
-  return [
-    'Faça a REVISÃO DE FECHAMENTO da entrega deste objetivo. NÃO altere, crie nem apague arquivos e NÃO faça commit — só leia e rode verificações.',
-    '',
-    `Objetivo: ${objective || '(ver histórico do repositório)'}`,
-    '',
-    `1. Leia as alterações do objetivo: ${range}.`,
-    '2. Rode o build e os testes padrão do projeto, se existirem. Use o comando simples do projeto, sem && | ; nem redirecionamento',
-    '   (ex.: npm test, pnpm build, pnpm run typecheck, pytest, go test ./..., cargo test, make test). Se não houver, use result "not_run".',
-    '3. Revise o código: bugs, tratamento de erro, validação de entrada.',
-    '4. Revise a segurança: secrets/credenciais no código, injeção (SQL, comando, path), autenticação/autorização, dados sensíveis em log, dependências perigosas.',
-    '',
-    'Responda APENAS com um bloco ```json neste formato, sem texto antes ou depois:',
-    '{"build":{"command":"...","result":"passed|failed|not_run","summary":"..."},',
-    ' "tests":{"command":"...","result":"passed|failed|not_run","summary":"..."},',
-    ' "findings":[{"severity":"critical|high|medium|low","category":"security|bug|quality","file":"caminho","title":"...","detail":"..."}],',
-    ' "summary":"resumo da revisão em 2 a 5 frases"}',
-    'Use "critical" só para o que quebra a aplicação ou expõe dados; seja objetivo, sem achados genéricos.',
-  ].join('\n')
 }
 
 /** Igual a MAX_DELIVERY_ROUNDS do core: teto do ciclo revisão → correção automática. */
@@ -150,93 +66,14 @@ const DEV_RULES_TEMPLATE = [
   '- Não adicione dependências novas sem necessidade clara; prefira o que o projeto já usa.',
 ].join('\n')
 
-function buildTaskPrompt(task: { title: string; description: string }): string {
-  return [
-    `Tarefa: ${task.title}`,
-    task.description,
-    '',
-    'Instruções de finalização (obrigatório):',
-    '- Rode os testes do projeto (se existirem) e só faça o commit com eles passando; se falharem, corrija antes.',
-    `- ${GITIGNORE_RULE}`,
-    // ETAPA 25 do brief — commits frequentes, um por tarefa, para cada entrega ficar no histórico.
-    '- Antes de marcar como concluída, faça um commit git com tudo desta tarefa: git add -A && git commit -m "<tipo>(<escopo>): <descrição>"',
-    '  O NEX confere o repositório depois: tarefa com alteração sem commit não é dada como concluída.',
-    '  (tipo: feat, fix, refactor, test, docs, chore). Se o diretório ainda não for um repositório, rode git init antes.',
-    '  Nunca faça push, reset --hard nem force — só commits locais.',
-    '- Sucesso → termine sua resposta com a tag: [TAREFA_CONCLUIDA]',
-    '- Bloqueio técnico real → termine com: [TAREFA_BLOQUEADA: <motivo>]',
-    '- Decisão de negócio que você não pode inferir sozinho → termine com: [DECISAO_NECESSARIA pergunta="..." opcoes="A|B|C"]',
-    'Decida sozinho qualquer decisão técnica razoável — use DECISAO_NECESSARIA apenas para decisão de negócio real.',
-  ].filter(Boolean).join('\n')
-}
-
-function buildParallelTaskPrompt(task: { title: string; description: string }): string {
-  return buildTaskPrompt(task)
-    + '\n\nVocê está trabalhando num git worktree isolado desta tarefa — o commit é o que o NEX mergeia de volta, '
-    + 'então nenhuma alteração pode ficar fora dele.'
-}
-
-const PARALLEL_CAP = 3
-
-/**
- * Loops autônomos ativos por projeto — em nível de módulo, não no componente. O loop é uma
- * função async que continua viva depois que o painel desmonta (Voltar); com o estado só no
- * componente, o painel reaberto mostrava "Continuar loop" travado e não havia como pará-lo.
- */
-const activeLoops = new Map<string, { stop: boolean }>()
-const loopListeners = new Set<() => void>()
-const notifyLoops = () => loopListeners.forEach(fn => fn())
-
-/**
- * Sessão do Hermes de uma tarefa do loop (`-c nex-task-<id> --create-if-missing`). Cada tarefa
- * começa com histórico curto em vez de herdar a conversa do projeto inteiro; o contexto entre
- * tarefas vem do repositório (código + commits) e do `.hermes.md`. O id vem do banco (UUID) —
- * só [A-Za-z0-9_-], que é o que o main aceita.
- */
-const taskSession = (taskId: string) => `nex-task-${taskId.replace(/[^A-Za-z0-9_-]/g, '')}`.slice(0, 80)
-
-/** `git add -A` sem .gitignore levaria node_modules/.env para o histórico — a conferência de commit não pode empurrar isso. */
-const GITIGNORE_RULE = 'Antes do commit, garanta um .gitignore com node_modules/, dist/, .next/, .env e .env.local: nunca commite dependências instaladas, saída de build nem .env.'
-
-/** Hermes disse que terminou, mas o repositório tem alteração sem commit: pede (uma vez) testar e commitar. */
-function buildCommitFollowUp(files: string[]): string {
-  return [
-    'Você marcou a tarefa como concluída, mas o NEX conferiu o repositório e ainda há alterações sem commit:',
-    ...files.slice(0, 15).map(f => `- ${f}`),
-    files.length > 15 ? `- (+${files.length - 15} arquivo(s))` : '',
-    '',
-    'Faça agora, nesta ordem:',
-    '1. Rode os testes do projeto (se existirem). Se falharem, corrija até passarem.',
-    `   ${GITIGNORE_RULE} Se algum arquivo da lista acima for gerado (dependências, build, .env), ele deve ser ignorado, não commitado.`,
-    '2. Faça o commit de tudo desta tarefa: git add -A && git commit -m "<tipo>(<escopo>): <descrição>". Se a pasta não for um repositório git, rode git init antes.',
-    '3. Termine com [TAREFA_CONCLUIDA]. Se não for possível commitar com os testes passando, termine com [TAREFA_BLOQUEADA: motivo].',
-    'Nunca faça push, reset --hard nem force.',
-  ].filter(Boolean).join('\n')
-}
-
-const REMINDER_PROMPT = 'Você não incluiu nenhuma tag obrigatória. Termine AGORA com [TAREFA_CONCLUIDA], '
-  + '[TAREFA_BLOQUEADA: motivo] ou [DECISAO_NECESSARIA pergunta="..." opcoes="A|B|C"]. Não repita o trabalho, apenas finalize com a tag correta.'
-
-interface PendingDecision { taskId: string; question: string; options: string[] }
-
-/** Aprovação pendente + de onde veio: tarefa sequencial (dá para retomar a sessão) ou worktree paralelo (one-shot). */
-interface PendingApproval extends HermesApprovalRequest { taskId: string | null; parallel: boolean }
-
-interface ActivityEntry extends HermesActivity { at: number }
-
 const ACTIVITY_CAP = 200
-
-function buildApprovalFollowUp(a: PendingApproval, r: { executed: boolean; success: boolean; output: string }): string {
-  if (!r.executed) {
-    return `O usuário NEGOU o comando bloqueado: \`${a.command}\`. Não tente contorná-lo por outro caminho `
-      + '(outro comando, script ou ferramenta com o mesmo efeito). Siga sem ele; se for indispensável, finalize com '
-      + '[TAREFA_BLOQUEADA: motivo] ou [DECISAO_NECESSARIA pergunta="..." opcoes="A|B"].'
-  }
-  return `O usuário AUTORIZOU e o NEX executou por você o comando que estava bloqueado: \`${a.command}\`\n`
-    + `Resultado (${r.success ? 'sucesso' : 'falhou'}):\n${r.output.slice(-3000)}\n\nContinue a partir daqui.`
-}
+const LOOP_MODES = new Set(['loop', 'single', 'decision', 'approval'])
 
 /**
+ * Painel do Hermes de um projeto. O loop de tarefas roda no processo principal (HermesAgentRunner):
+ * este painel só mostra o estado e manda comandos — fechar o painel ou a janela não interrompe nada,
+ * e qualquer janela aberta no mesmo projeto mostra o mesmo loop.
+ *
  * `compact` (ETAPA 16 — painel lateral da IDE): as duas colunas ficam empilhadas para caber ao lado
  * do editor. `vpsId`: só lista projetos daquela VPS (a IDE está aberta numa VPS específica).
  */
@@ -250,36 +87,28 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
   const [agentInfo, setAgentInfo] = useState<HermesProjectAgentInfo | null>(null)
   const [loadingStatus, setLoadingStatus] = useState(false)
   const [chatInput, setChatInput] = useState('')
-  const [output, setOutput] = useState('')
-  const [streamId, setStreamId] = useState<string | null>(null)
-  const [sending, setSending] = useState(false)
   const outputRef = useRef<HTMLPreElement>(null)
 
-  // ── Autonomous Loop (FASE 3) ──────────────────────────────────────────────
+  // ── Estado do loop (vem do main) ──────────────────────────────────────────
+  const [rstate, setRstate] = useState<HermesRunnerState | null>(null)
+  const [output, setOutput] = useState('')
+  const outputEndRef = useRef(0)
+  const [activity, setActivity] = useState<HermesRunnerActivity[]>([])
+  // Execução do Hermes rodando na VPS sem stream deste app (órfã de antes de reabrir o Zeus).
+  const [orphanRunning, setOrphanRunning] = useState(false)
+  const [stoppingOrphan, setStoppingOrphan] = useState(false)
+  const projectIdRef = useRef(projectId)
+  useEffect(() => { projectIdRef.current = projectId }, [projectId])
+
+  // ── Objetivo / autonomia / tarefas / DoD ──────────────────────────────────
   const [goalInput, setGoalInput] = useState('')
   const [autonomyLevel, setAutonomyLevel] = useState<HermesAutonomyLevel>('manual')
   const policy = getAutonomyPolicy(autonomyLevel)
-  // Semi-autônomo: tarefa de risco alto em que o loop parou, aguardando o usuário liberar.
-  const [riskGateTaskId, setRiskGateTaskId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<AgentTask[]>([])
-  const [planning, setPlanning] = useState(false)
-  const [looping, setLooping] = useState(false)
-  const [pendingDecision, setPendingDecision] = useState<PendingDecision | null>(null)
   const [decisionAnswer, setDecisionAnswer] = useState('')
   const [dodItems, setDodItems] = useState<DodItem[]>([])
   const [dodOpen, setDodOpen] = useState(false)
   const [runningDod, setRunningDod] = useState(false)
-  const loopStopRef = useRef(false)
-  // Re-render quando um loop (de qualquer instância do painel) começa/termina/recebe Parar.
-  const [, setLoopTick] = useState(0)
-  useEffect(() => {
-    const fn = () => setLoopTick(t => t + 1)
-    loopListeners.add(fn)
-    return () => { loopListeners.delete(fn) }
-  }, [])
-
-  // ── Execução paralela via git worktree (FASE 4) ───────────────────────────
-  const [activeParallel, setActiveParallel] = useState<Map<string, { title: string; branch: string }>>(new Map())
 
   // ── Adapter de contexto NEX→Hermes (FASE 5) ───────────────────────────────
   const [syncingContext, setSyncingContext] = useState(false)
@@ -296,11 +125,8 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
 
   // ── Fechamento da entrega (ETAPAS 9/24/27/40) ─────────────────────────────
   const [delivery, setDelivery] = useState<HermesDelivery | null>(null)
-  const [reviewing, setReviewing] = useState(false)
-  const [deliveryMsg, setDeliveryMsg] = useState('')
+  const [localDeliveryMsg, setLocalDeliveryMsg] = useState('')
   const [reportOpen, setReportOpen] = useState(false)
-  // runLoop é declarado antes do fechamento — chama a revisão automática por ref.
-  const autoReviewRef = useRef<(() => void) | null>(null)
 
   // ── Quadro / agentes / logs por execução (ETAPAS 12/13/37) ────────────────
   const [rightTab, setRightTab] = useState<'live' | 'board' | 'logs'>('live')
@@ -309,59 +135,14 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
   const runs = useHermesRuns(rightTab === 'live' ? '' : projectId)
   useEffect(() => { setLogTaskFilter('') }, [projectId])
 
-  // ── Governança + activity feed (stream-json) ──────────────────────────────
-  const [activity, setActivity] = useState<ActivityEntry[]>([])
-  const [approvals, setApprovals] = useState<PendingApproval[]>([])
-  const [resolvingApproval, setResolvingApproval] = useState<string | null>(null)
-  // Execução do Hermes rodando na VPS sem stream deste app (órfã de antes de reabrir o NEX).
-  const [orphanRunning, setOrphanRunning] = useState(false)
-  const [stoppingOrphan, setStoppingOrphan] = useState(false)
-  const approvalsRef = useRef<PendingApproval[]>([])
-  const currentTaskRef = useRef<string | null>(null)
-  const parallelStreamsRef = useRef<Set<string>>(new Set())
-  useEffect(() => { approvalsRef.current = approvals }, [approvals])
-
-  // Ao abrir o painel (ou trocar de projeto), reconecta ao que o main sabe que está em andamento:
-  // a execução da sessão do projeto (vira "mensagem em andamento", com saída ao vivo e Cancelar,
-  // e trava os botões) e os cartões Autorizar/Negar pendentes. Sem isso, Voltar → reabrir
-  // liberava "Próxima" no meio de uma execução e o Hermes recusava a segunda na mesma sessão.
-  useEffect(() => {
-    setActivity([]); setApprovals([]); setOrphanRunning(false); setRiskGateTaskId(null)
-    if (!projectId) return
-    let cancelled = false
-    ipc.hermes.agent.active(projectId).then(({ streamId: activeId, approvals: pending, orphanRunning: orphan }) => {
-      if (cancelled) return
-      setOrphanRunning(orphan)
-      if (activeId) {
-        setStreamId(activeId)
-        setSending(true)
-        setOutput('(reconectado a uma execução do Hermes em andamento — a saída anterior não é reexibida)\n\n')
-      }
-      if (pending.length > 0) setApprovals(pending.map(a => ({ ...a, taskId: null })))
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [projectId])
-
-  // Listener global (não depende de `sending`): captura atividade e bloqueios de qualquer
-  // stream deste painel — mensagem livre, loop sequencial ou tarefa paralela.
-  useEffect(() => {
-    const unsub = ipc.hermes.agent.onChunk((chunk) => {
-      if (chunk.type === 'activity' && chunk.activity) {
-        const entry: ActivityEntry = { ...chunk.activity, at: Date.now() }
-        setActivity(prev => [...prev.slice(-(ACTIVITY_CAP - 1)), entry])
-      }
-      if (chunk.type === 'approval_request' && chunk.approval) {
-        const parallel = parallelStreamsRef.current.has(chunk.streamId)
-        const pending: PendingApproval = { ...chunk.approval, parallel, taskId: parallel ? null : currentTaskRef.current }
-        setApprovals(prev => prev.some(a => a.id === pending.id) ? prev : [...prev, pending])
-      }
-    })
-    return () => { try { unsub() } catch { /* ignorar */ } }
-  }, [])
-
   const scrollOutput = () => setTimeout(() => {
     if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight
   }, 60)
+
+  const fail = useCallback((e: unknown) => {
+    setOutput(prev => `${prev}\n\n[erro] ${e instanceof Error ? e.message : String(e)}`)
+    scrollOutput()
+  }, [])
 
   useEffect(() => {
     ipc.projects.list().then(ps => setProjects(vpsFilter ? ps.filter(p => p.vpsServerId === vpsFilter) : ps)).catch(() => {})
@@ -382,32 +163,6 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
     setLoadingStatus(false)
   }, [])
 
-  // Enquanto houver órfã, confere a cada 20s — libera o painel sozinho quando ela terminar.
-  // (Depois de loadStatus: arrays de dependência são avaliados no render — antes da declaração daria ReferenceError.)
-  useEffect(() => {
-    if (!orphanRunning || !projectId) return
-    const t = setInterval(() => {
-      ipc.hermes.agent.active(projectId)
-        .then(r => { if (!r.orphanRunning) { setOrphanRunning(false); void loadStatus(projectId) } })
-        .catch(() => {})
-    }, 20_000)
-    return () => clearInterval(t)
-  }, [orphanRunning, projectId, loadStatus])
-
-  const stopOrphan = useCallback(async () => {
-    if (!projectId) return
-    setStoppingOrphan(true)
-    try {
-      const { stopped } = await ipc.hermes.agent.stopRemote(projectId)
-      setOutput(prev => `${prev}\n[governança] ${stopped} execução(ões) do Hermes encerrada(s) na VPS.\n`)
-      setOrphanRunning(false)
-      void loadStatus(projectId)
-    } catch (e) {
-      setOutput(prev => `${prev}\n[erro ao encerrar] ${String(e)}\n`)
-    }
-    setStoppingOrphan(false)
-  }, [projectId, loadStatus])
-
   useEffect(() => { void loadStatus(projectId) }, [projectId, loadStatus])
 
   const loadTasks = useCallback(async () => {
@@ -424,528 +179,176 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
 
   useEffect(() => { void loadDod() }, [loadDod])
 
+  const loadDelivery = useCallback(async (id: string) => {
+    if (!id) { setDelivery(null); return }
+    try { setDelivery(await ipc.hermes.delivery.get(id)) } catch { /* silencioso */ }
+  }, [])
+
   useEffect(() => {
-    setDelivery(null); setDeliveryMsg(''); setReportOpen(false)
+    setDelivery(null); setLocalDeliveryMsg(''); setReportOpen(false)
+    void loadDelivery(projectId)
+  }, [projectId, loadDelivery])
+
+  // Ao abrir o painel (ou trocar de projeto), pega do main o que está acontecendo: estado do loop,
+  // saída ao vivo guardada, atividade e aprovações pendentes.
+  useEffect(() => {
+    setRstate(null); setOutput(''); outputEndRef.current = 0; setActivity([]); setOrphanRunning(false)
     if (!projectId) return
     let cancelled = false
-    ipc.hermes.delivery.get(projectId).then(d => { if (!cancelled) setDelivery(d) }).catch(() => {})
+    ipc.hermes.runner.snapshot(projectId).then(s => {
+      if (cancelled) return
+      setRstate(s.state)
+      setOutput(s.output)
+      outputEndRef.current = s.outputEnd
+      setActivity(s.activity)
+      setOrphanRunning(s.orphanRunning)
+      scrollOutput()
+    }).catch(() => {})
     return () => { cancelled = true }
   }, [projectId])
 
-  // Listener do fluxo de "mensagem livre" (FASE 2) — ignora chunks enquanto o loop autônomo
-  // está usando o mesmo canal via sendAndWait (guardado por `sending`).
+  // Eventos do loop — estado, saída ao vivo e atividade do projeto aberto.
+  const prevStateRef = useRef<HermesRunnerState | null>(null)
+  useEffect(() => { prevStateRef.current = rstate }, [rstate])
   useEffect(() => {
-    const unsub = ipc.hermes.agent.onChunk((chunk) => {
-      if (!sending) return
-      if (streamId && chunk.streamId !== streamId) return
-      if (chunk.type === 'text_delta' && chunk.delta) {
-        setOutput(prev => prev + chunk.delta)
-        scrollOutput()
-      }
-      if (chunk.type === 'error' && chunk.error) {
-        setOutput(prev => `${prev}\n\n[erro] ${chunk.error}`)
-        scrollOutput()
-      }
-      if (chunk.type === 'done' || chunk.type === 'error') {
-        setSending(false)
-        setStreamId(null)
-        void loadStatus(projectId)
+    const unsub = ipc.hermes.runner.onEvent(e => {
+      if (e.projectId !== projectIdRef.current) return
+      if (e.kind === 'state') {
+        const prev = prevStateRef.current
+        prevStateRef.current = e.state
+        setRstate(e.state)
+        if (!prev || prev.tasksVersion !== e.state.tasksVersion) void loadTasks()
+        if (!prev || prev.deliveryVersion !== e.state.deliveryVersion) {
+          void loadDelivery(e.projectId)
+          ipc.hermes.dod.get(e.projectId).then(setDodItems).catch(() => {})
+        }
+        if (prev && prev.mode !== 'idle' && e.state.mode === 'idle') void loadStatus(e.projectId)
+        if (e.state.mode !== 'idle') setOrphanRunning(false)
+      } else if (e.kind === 'output') {
+        if (e.reset) setOutput('')
+        const fresh = e.end - outputEndRef.current
+        if (fresh > 0 && e.text) {
+          const part = e.text.slice(Math.max(0, e.text.length - fresh))
+          setOutput(prev => prev + part)
+          scrollOutput()
+        }
+        outputEndRef.current = Math.max(outputEndRef.current, e.end)
+      } else if (e.kind === 'activity') {
+        setActivity(prev => [...prev.slice(-(ACTIVITY_CAP - 1)), e.entry])
       }
     })
     return () => { try { unsub() } catch { /* ignorar */ } }
-  }, [streamId, sending, projectId, loadStatus])
+  }, [loadTasks, loadDelivery, loadStatus])
+
+  // Enquanto houver órfã, confere a cada 20s — libera o painel sozinho quando ela terminar.
+  useEffect(() => {
+    if (!orphanRunning || !projectId) return
+    const t = setInterval(() => {
+      ipc.hermes.runner.snapshot(projectId)
+        .then(r => { if (!r.orphanRunning) { setOrphanRunning(false); void loadStatus(projectId) } })
+        .catch(() => {})
+    }, 20_000)
+    return () => clearInterval(t)
+  }, [orphanRunning, projectId, loadStatus])
+
+  const stopOrphan = useCallback(async () => {
+    if (!projectId) return
+    setStoppingOrphan(true)
+    try {
+      const { stopped } = await ipc.hermes.runner.stopRemote(projectId)
+      setOutput(prev => `${prev}\n[governança] ${stopped} execução(ões) do Hermes encerrada(s) na VPS.\n`)
+      setOrphanRunning(false)
+      void loadStatus(projectId)
+    } catch (e) {
+      setOutput(prev => `${prev}\n[erro ao encerrar] ${String(e)}\n`)
+    }
+    setStoppingOrphan(false)
+  }, [projectId, loadStatus])
+
+  // ── Comandos (o main executa; o progresso volta pelos eventos) ────────────
+  const mode = rstate?.mode ?? 'idle'
+  const sending = mode === 'message'
+  const planning = mode === 'planning'
+  const reviewing = mode === 'review'
+  const looping = LOOP_MODES.has(mode)
+  const approvals: HermesRunnerApproval[] = rstate?.approvals ?? []
+  const pendingDecision = rstate?.pendingDecision ?? null
+  const riskGateTaskId = policy.gateHighRisk ? (rstate?.riskGateTaskId ?? null) : null
+  const activeParallel = rstate?.parallel ?? []
+  const deliveryMsg = rstate?.deliveryMsg || localDeliveryMsg
 
   const handleSend = useCallback(async () => {
-    if (!projectId || !chatInput.trim() || sending || planning || looping) return
-    currentTaskRef.current = null
-    setSending(true)
-    setOutput('')
-    try {
-      const { streamId: id } = await ipc.hermes.agent.send(projectId, chatInput.trim())
-      setStreamId(id)
-      setChatInput('')
-    } catch (e) {
-      setOutput(`Erro: ${String(e)}`)
-      setSending(false)
-    }
-  }, [projectId, chatInput, sending, planning, looping])
+    if (!projectId || !chatInput.trim()) return
+    try { await ipc.hermes.runner.message(projectId, chatInput.trim()); setChatInput('') } catch (e) { fail(e) }
+  }, [projectId, chatInput, fail])
 
-  /** FASE 6 — recovery: reenvia via o mesmo fluxo de mensagem livre; resume funciona porque
-   *  `sessionStarted` não é tocado por `recoverInterruptedSessions()`, então o backend já manda
-   *  `--resume latest --in <workspace>` sozinho. */
+  /** FASE 6 — recovery: o main reenvia com --resume (sessionStarted preservado). */
   const resumeInterrupted = useCallback(async () => {
-    if (!projectId || sending || planning || looping) return
-    setSending(true)
-    setOutput('')
-    try {
-      const { streamId: id } = await ipc.hermes.agent.send(
-        projectId,
-        'Continue de onde você parou. Revise o estado atual do workspace (git status/diff) antes de prosseguir.'
-      )
-      setStreamId(id)
-    } catch (e) {
-      setOutput(`Erro: ${String(e)}`)
-      setSending(false)
-    }
-  }, [projectId, sending, planning, looping])
+    if (!projectId) return
+    try { await ipc.hermes.runner.resume(projectId) } catch (e) { fail(e) }
+  }, [projectId, fail])
 
   const handleCancel = useCallback(async () => {
-    if (!streamId) return
-    await ipc.hermes.agent.cancel(streamId).catch(() => {})
-    setSending(false)
-    setStreamId(null)
-  }, [streamId])
+    if (!projectId) return
+    await ipc.hermes.runner.cancel(projectId).catch(fail)
+  }, [projectId, fail])
 
-  /** Espera a conclusão de um stream já iniciado (streamId conhecido), devolvendo o texto completo. */
-  const waitForChunkStream = useCallback((knownId: string): Promise<{ text: string; ok: boolean }> => {
-    return new Promise((resolve) => {
-      let acc = ''
-      let settled = false
-      const unsub = ipc.hermes.agent.onChunk((chunk) => {
-        if (chunk.streamId !== knownId) return
-        if (chunk.type === 'text_delta' && chunk.delta) {
-          acc += chunk.delta
-          setOutput(prev => prev + chunk.delta)
-          scrollOutput()
-        }
-        if (chunk.type === 'done' && !settled) {
-          settled = true; unsub(); resolve({ text: acc, ok: true })
-        }
-        if (chunk.type === 'error' && !settled) {
-          settled = true
-          setOutput(prev => `${prev}\n\n[erro] ${chunk.error ?? 'erro desconhecido'}`)
-          unsub(); resolve({ text: acc, ok: false })
-        }
-      })
-    })
-  }, [])
-
-  /** Envia um prompt no fluxo principal (sessão do projeto) e aguarda a conclusão. Usado pelo loop/plano sequencial. */
-  const sendAndWait = useCallback(async (prompt: string, sessionName?: string): Promise<{ text: string; ok: boolean }> => {
-    try {
-      const { streamId: id } = await ipc.hermes.agent.send(projectId, prompt, sessionName)
-      return await waitForChunkStream(id)
-    } catch (e) {
-      setOutput(prev => `${prev}\n\n[erro] ${String(e)}`)
-      return { text: '', ok: false }
-    }
-  }, [projectId, waitForChunkStream])
-
-  /**
-   * Alterações sem commit numa pasta do projeto na VPS (pasta principal ou worktree paralelo).
-   * Ignora o `.hermes.md` (escrito pelo próprio NEX). `null` = não deu para conferir — não trava a tarefa.
-   */
-  const uncommittedIn = useCallback(async (dir: string | undefined): Promise<string[] | null> => {
-    if (!agentInfo || !dir) return null
-    try {
-      const s = await ipc.git.status(agentInfo.vpsId, dir)
-      if (!s.isRepo) return ['(a pasta ainda não é um repositório git com commit)']
-      const files = [...s.staged, ...s.unstaged, ...s.untracked].map(f => f.path)
-        .filter(p => p !== '.hermes.md' && !p.endsWith('/.hermes.md'))
-      return [...new Set(files)]
-    } catch { return null }
-  }, [agentInfo])
-
-  /**
-   * Fechamento de uma tarefa que o Hermes deu como concluída: o NEX confere o repositório. Sobrou
-   * alteração sem commit → pede uma vez, na mesma sessão, para testar e commitar; decide pelo estado
-   * do repositório depois disso (não pela tag). Ainda sujo → Bloqueada com os arquivos.
-   */
-  const completeTask = useCallback(async (task: AgentTask): Promise<'done' | 'blocked' | 'decision'> => {
-    const markDone = async () => { await ipc.tasks.update(task.id, { status: 'DONE' }).catch(() => {}); return 'done' as const }
-    const left = await uncommittedIn(agentInfo?.workspace)
-    if (left === null || left.length === 0) return markDone()
-
-    setOutput(prev => `${prev}\n\n[NEX] A tarefa terminou com ${left.length} alteração(ões) sem commit — pedindo ao Hermes para rodar os testes e commitar.`)
-    const { text, ok } = await sendAndWait(buildCommitFollowUp(left), taskSession(task.id))
-    if (ok) {
-      if (approvalsRef.current.some(a => a.taskId === task.id)) return 'decision'
-      const tag = parseTaskTag(text)
-      if (tag.kind === 'blocked') {
-        await ipc.tasks.update(task.id, { status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${tag.reason}`.trim() }).catch(() => {})
-        return 'blocked'
-      }
-      if (tag.kind === 'decision') {
-        setPendingDecision({ taskId: task.id, question: tag.question, options: tag.options })
-        return 'decision'
-      }
-    }
-    const after = await uncommittedIn(agentInfo?.workspace)
-    if (after !== null && after.length === 0) return markDone()
-    const still = after ?? left
-    await ipc.tasks.update(task.id, {
-      status: 'BLOCKED',
-      description: `${task.description}\n\n[bloqueado] concluída sem commit — alterações pendentes: ${still.slice(0, 10).join(', ')}${still.length > 10 ? ` (+${still.length - 10})` : ''}`.trim(),
-    }).catch(() => {})
-    return 'blocked'
-  }, [agentInfo, uncommittedIn, sendAndWait])
-
-  const executeTask = useCallback(async (task: AgentTask): Promise<'done' | 'blocked' | 'decision' | 'error'> => {
-    let prompt = buildTaskPrompt(task)
-    currentTaskRef.current = task.id
-    for (let attempt = 0; attempt < 2; attempt++) {
-      // Sessão própria da tarefa: o lembrete de tag (2ª tentativa) continua a mesma conversa.
-      const { text, ok } = await sendAndWait(prompt, taskSession(task.id))
-      if (!ok) {
-        // Execução não aconteceu ou caiu (ex.: barrada por já haver outra na sessão): a tarefa
-        // volta para Pendente em vez de ficar "Em andamento" sem nada rodando.
-        await ipc.tasks.update(task.id, { status: 'TODO' }).catch(() => {})
-        return 'error'
-      }
-      // Comando bloqueado aguardando o usuário: a tarefa espera a decisão (resolveApproval
-      // reenvia a tarefa com o desfecho e lê a tag dali) em vez de gastar o lembrete.
-      if (approvalsRef.current.some(a => a.taskId === task.id)) return 'decision'
-      const tag = parseTaskTag(text)
-      if (tag.kind === 'done') return completeTask(task)
-      if (tag.kind === 'blocked') {
-        await ipc.tasks.update(task.id, {
-          status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${tag.reason}`.trim(),
-        }).catch(() => {})
-        return 'blocked'
-      }
-      if (tag.kind === 'decision') {
-        setPendingDecision({ taskId: task.id, question: tag.question, options: tag.options })
-        return 'decision'
-      }
-      prompt = REMINDER_PROMPT
-    }
-    await ipc.tasks.update(task.id, {
-      status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] sem tag de conclusão após lembrete`.trim(),
-    }).catch(() => {})
-    return 'blocked'
-  }, [sendAndWait, completeTask])
-
-  /**
-   * Roda uma tarefa isolada num git worktree próprio (gerenciado pelo NEX via GitService, não via
-   * `hermes -w`, que é pouco documentado). Execução one-shot — sem sessão pra retomar, então
-   * DECISAO_NECESSARIA/tag ausente aqui viram bloqueio para revisão manual em vez de um turno de volta.
-   */
-  const runParallelTask = useCallback(async (task: AgentTask): Promise<'done' | 'blocked' | 'error'> => {
-    let start: { streamId: string; worktreePath: string; branch: string }
-    try {
-      start = await ipc.hermes.parallel.start(projectId, task.id, buildParallelTaskPrompt(task))
-    } catch (e) {
-      setOutput(prev => `${prev}\n\n[erro ao iniciar tarefa paralela "${task.title}"] ${String(e)}`)
-      await ipc.tasks.update(task.id, { status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] falha ao iniciar execução paralela` }).catch(() => {})
-      return 'error'
-    }
-    parallelStreamsRef.current.add(start.streamId)
-    setActiveParallel(prev => new Map(prev).set(task.id, { title: task.title, branch: start.branch }))
-    const { text, ok } = await waitForChunkStream(start.streamId)
-    parallelStreamsRef.current.delete(start.streamId)
-    setActiveParallel(prev => { const next = new Map(prev); next.delete(task.id); return next })
-
-    if (!ok) {
-      await ipc.tasks.update(task.id, { status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] falha na execução paralela (branch ${start.branch} preservado)` }).catch(() => {})
-      return 'error'
-    }
-
-    const tag = parseTaskTag(text)
-    // O merge leva só o que foi commitado no worktree e depois o apaga: alteração sem commit sumiria.
-    // Nesse caso não mergeia — worktree e branch ficam preservados para revisão.
-    if (tag.kind === 'done') {
-      const left = await uncommittedIn(start.worktreePath)
-      if (left && left.length > 0) {
-        await ipc.hermes.parallel.finish(projectId, start.worktreePath, start.branch, false).catch(() => {})
-        await ipc.tasks.update(task.id, {
-          status: 'BLOCKED',
-          description: `${task.description}\n\n[bloqueado] concluída sem commit no worktree ${start.worktreePath} (branch ${start.branch} preservado) — alterações pendentes: ${left.slice(0, 10).join(', ')}`.trim(),
-        }).catch(() => {})
-        return 'blocked'
-      }
-    }
-    const merge = await ipc.hermes.parallel.finish(projectId, start.worktreePath, start.branch, tag.kind === 'done')
-      .catch(() => ({ merged: false, output: 'erro ao finalizar' }))
-
-    if (tag.kind === 'done') {
-      const note = merge.merged ? '' : `\n\n[atenção] merge automático falhou — branch "${start.branch}" preservado para revisão manual.\n${merge.output.slice(0, 500)}`
-      await ipc.tasks.update(task.id, { status: 'DONE', description: `${task.description}${note}` }).catch(() => {})
-      return 'done'
-    }
-    const reason = tag.kind === 'blocked' ? tag.reason
-      : tag.kind === 'decision' ? `decisão necessária ("${tag.question}") — não suportado em execução paralela, revise manualmente`
-      : 'terminou sem tag de conclusão'
-    await ipc.tasks.update(task.id, {
-      status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${reason} (branch ${start.branch})`.trim(),
-    }).catch(() => {})
-    return 'blocked'
-  }, [projectId, waitForChunkStream, uncommittedIn])
-
-  const runParallelBatch = useCallback(async (candidates: AgentTask[]): Promise<void> => {
-    const batch = candidates.slice(0, PARALLEL_CAP)
-    await Promise.all(batch.map(t => runParallelTask(t)))
-  }, [runParallelTask])
-
-  /** `approvedTaskId`: tarefa de risco alto que o usuário acabou de liberar (Semi-autônomo) — passa pelo gate uma vez. */
+  /** `approvedTaskId`: tarefa de risco alto que o usuário acabou de liberar (Semi-autônomo). */
   const runLoop = useCallback(async (approvedTaskId?: string) => {
-    if (looping || activeLoops.has(projectId)) return
-    const handle = { stop: false }
-    activeLoops.set(projectId, handle)
-    notifyLoops()
-    setLooping(true)
-    setRiskGateTaskId(null)
-    loopStopRef.current = false
-    // Fila esvaziada com tudo concluído depois de ter executado algo nesta rodada → fechar a entrega.
-    let executedAny = false
-    let finishedAll = false
-    try {
-      let guard = 0
-      const cap = 20
-      while (!loopStopRef.current && !handle.stop) {
-        // Governança: nunca segue com comando perigoso aguardando Autorizar/Negar.
-        if (approvalsRef.current.length > 0) break
-        const current = await ipc.tasks.list({ projectId, ownerAgent: 'hermes' }).catch(() => [] as AgentTask[])
-        setTasks(current)
-        const todo = current.filter(t => t.status === 'TODO')
-        if (todo.length === 0) {
-          finishedAll = executedAny && current.length > 0 && current.every(t => t.status === 'DONE')
-          break
-        }
-        guard++
-        if (guard > Math.max(cap, todo.length * 3)) break
-
-        // Paralelo só para tarefas paralelizáveis CONSECUTIVAS no início da fila, na ordem do plano.
-        // Antes pegava todas as paralelizáveis da lista inteira — rodava a 05/06/07/21 antes da
-        // 03/04, sem a fundação que elas pressupõem.
-        // Uma tarefa que a política manda parar antes (risco alto no Semi-autônomo) também fecha o lote.
-        const leading: AgentTask[] = []
-        if (policy.allowParallel) {
-          for (const t of todo) { if (!t.parallelizable || needsRiskGate(policy, t)) break; leading.push(t) }
-        }
-        // Worktree nasce do último commit: com trabalho não commitado na pasta principal, as cópias
-        // paralelas não teriam esse trabalho. Nesse caso roda em sequência (que vê o diretório real).
-        const clean = leading.length > 1 && agentInfo
-          ? await ipc.git.status(agentInfo.vpsId, agentInfo.workspace)
-              .then(s => s.isRepo && s.staged.length === 0 && s.unstaged.length === 0 && s.untracked.length === 0)
-              .catch(() => false)
-          : false
-        if (leading.length > 1 && clean) {
-          const batch = leading.slice(0, PARALLEL_CAP)
-          await Promise.all(batch.map(t => ipc.tasks.update(t.id, { status: 'IN_PROGRESS' }).catch(() => {})))
-          await loadTasks()
-          await runParallelBatch(batch)
-          await loadTasks()
-          executedAny = true
-          continue
-        }
-
-        const next = todo[0]
-        if (needsRiskGate(policy, next) && next.id !== approvedTaskId) {
-          setRiskGateTaskId(next.id)
-          break
-        }
-        await ipc.tasks.update(next.id, { status: 'IN_PROGRESS' }).catch(() => {})
-        await loadTasks()
-        const result = await executeTask(next)
-        await loadTasks()
-        executedAny = true
-        if (result !== 'done') break
-      }
-    } finally {
-      if (activeLoops.get(projectId) === handle) activeLoops.delete(projectId)
-      notifyLoops()
-      setLooping(false)
-      void loadStatus(projectId)
-    }
-    if (finishedAll && !handle.stop && policy.autoAdvance) autoReviewRef.current?.()
-  }, [looping, projectId, agentInfo, policy, executeTask, runParallelBatch, loadTasks, loadStatus])
+    if (!projectId) return
+    await ipc.hermes.runner.loop(projectId, approvedTaskId).catch(fail)
+  }, [projectId, fail])
 
   const runNextTaskOnce = useCallback(async () => {
-    if (looping) return
-    const current = await ipc.tasks.list({ projectId, ownerAgent: 'hermes' }).catch(() => [] as AgentTask[])
-    const next = current.find(t => t.status === 'TODO')
-    if (!next) return
-    setLooping(true)
-    try {
-      await ipc.tasks.update(next.id, { status: 'IN_PROGRESS' }).catch(() => {})
-      await loadTasks()
-      await executeTask(next)
-      await loadTasks()
-    } finally {
-      setLooping(false)
-      void loadStatus(projectId)
-    }
-  }, [looping, projectId, executeTask, loadTasks, loadStatus])
+    if (!projectId) return
+    await ipc.hermes.runner.next(projectId).catch(fail)
+  }, [projectId, fail])
+
+  const stopLoop = useCallback(async () => {
+    if (!projectId) return
+    await ipc.hermes.runner.stop(projectId).catch(fail)
+  }, [projectId, fail])
 
   const startAutonomousObjective = useCallback(async () => {
-    if (!projectId || !goalInput.trim() || planning || looping) return
-    const obj = goalInput.trim()
-    currentTaskRef.current = null
-    setPlanning(true)
-    setOutput('')
-    await ipc.hermes.agent.setObjective(projectId, obj).catch(() => {})
-    // Best-effort: mantém .hermes.md (KB Global + memória do projeto) atualizado — o Hermes já
-    // injeta esse arquivo automaticamente no system prompt, sem precisar de flag nenhuma.
-    await ipc.hermes.agent.syncContext(projectId).catch(() => {})
-    const { text, ok } = await sendAndWait(buildPlanPrompt(obj))
-    setPlanning(false)
-    if (!ok) return
-    const planned = parseTaskPlan(text)
-    for (const t of planned) {
-      await ipc.tasks.create({
-        title: t.title, description: t.description, projectId, ownerAgent: 'hermes',
-        status: 'TODO', parallelizable: t.parallelizable, risk: t.risk,
-      }).catch(() => {})
-    }
-    setGoalInput('')
-    setDelivery(null)
-    await loadTasks()
-    await loadStatus(projectId)
-    if (policy.autoAdvance) void runLoop()
-  }, [projectId, goalInput, planning, looping, sendAndWait, loadTasks, loadStatus, policy, runLoop])
+    if (!projectId || !goalInput.trim()) return
+    try {
+      await ipc.hermes.runner.startObjective(projectId, goalInput.trim())
+      setGoalInput('')
+      setDelivery(null)
+    } catch (e) { fail(e) }
+  }, [projectId, goalInput, fail])
 
   const resolveDecision = useCallback(async (answer: string) => {
-    if (!pendingDecision || !answer.trim()) return
-    const task = tasks.find(t => t.id === pendingDecision.taskId)
-    const decision = pendingDecision
-    setPendingDecision(null)
-    setDecisionAnswer('')
-    if (!task) return
-    setLooping(true)
-    let stillPending = false
-    try {
-      const prompt = `${buildTaskPrompt(task)}\n\nDecisão do usuário para "${decision.question}": ${answer.trim()}`
-      const { text, ok } = await sendAndWait(prompt, taskSession(task.id))
-      if (ok) {
-        const tag = parseTaskTag(text)
-        if (tag.kind === 'done') { if ((await completeTask(task)) === 'decision') stillPending = true }
-        else if (tag.kind === 'blocked') {
-          await ipc.tasks.update(task.id, {
-            status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${tag.reason}`.trim(),
-          }).catch(() => {})
-        } else if (tag.kind === 'decision') {
-          setPendingDecision({ taskId: task.id, question: tag.question, options: tag.options })
-          stillPending = true
-        }
-      }
-      await loadTasks()
-    } finally {
-      setLooping(false)
-      if (policy.autoAdvance && !stillPending) void runLoop()
-    }
-  }, [pendingDecision, tasks, sendAndWait, loadTasks, policy, runLoop, completeTask])
+    if (!projectId || !answer.trim()) return
+    try { await ipc.hermes.runner.decision(projectId, answer.trim()); setDecisionAnswer('') } catch (e) { fail(e) }
+  }, [projectId, fail])
 
-  /**
-   * Autorizar/Negar um comando que o Hermes teve bloqueado. Autorizar = o NEX executa (main
-   * process, auditado em tool_execution_log). Depois avisa o Hermes do desfecho na mesma sessão;
-   * se o bloqueio veio de uma tarefa sequencial, reenvia a tarefa e lê a tag — igual ao Decision
-   * Request. Tarefa paralela é one-shot (worktree sem sessão): o comando roda no worktree e a
-   * tarefa fica para revisão manual.
-   */
-  const resolveApproval = useCallback(async (a: PendingApproval, approve: boolean) => {
-    if (sending || planning || looping || resolvingApproval) return
-    setResolvingApproval(a.id)
-    let result = { executed: false, success: false, output: '' }
-    try {
-      if (a.executable) result = await ipc.hermes.agent.resolveApproval(a.id, approve)
-      setOutput(prev => `${prev}\n\n[governança] ${approve ? 'Autorizado' : 'Negado'}: ${a.command}`
-        + (result.executed ? `\n${result.output.slice(-1500)}` : ''))
-      scrollOutput()
-    } catch (e) {
-      setOutput(prev => `${prev}\n\n[erro ao resolver aprovação] ${String(e)}`)
-      setResolvingApproval(null)
-      return
-    }
-    setApprovals(prev => prev.filter(x => x.id !== a.id))
-    setResolvingApproval(null)
-    if (a.parallel) return
-
-    const task = a.taskId ? tasks.find(t => t.id === a.taskId) : undefined
-    setLooping(true)
-    let stillPending = false
-    try {
-      const followUp = buildApprovalFollowUp(a, result)
-      const { text, ok } = task
-        ? await sendAndWait(`${buildTaskPrompt(task)}\n\n${followUp}`, taskSession(task.id))
-        : await sendAndWait(followUp)
-      if (ok && task) {
-        currentTaskRef.current = task.id
-        const tag = parseTaskTag(text)
-        if (approvalsRef.current.some(x => x.taskId === task.id)) stillPending = true
-        else if (tag.kind === 'done') { if ((await completeTask(task)) === 'decision') stillPending = true }
-        else if (tag.kind === 'blocked') {
-          await ipc.tasks.update(task.id, {
-            status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${tag.reason}`.trim(),
-          }).catch(() => {})
-        } else if (tag.kind === 'decision') {
-          setPendingDecision({ taskId: task.id, question: tag.question, options: tag.options })
-          stillPending = true
-        }
-        await loadTasks()
-      }
-    } finally {
-      setLooping(false)
-      if (policy.autoAdvance && !stillPending && approvalsRef.current.length === 0) void runLoop()
-    }
-  }, [sending, planning, looping, resolvingApproval, tasks, sendAndWait, loadTasks, policy, runLoop, completeTask])
+  /** Autorizar/Negar — o main executa (ou descarta), avisa o Hermes e segue o loop. */
+  const resolveApproval = useCallback(async (a: HermesRunnerApproval, approve: boolean) => {
+    await ipc.hermes.runner.approval(a.id, approve).catch(fail)
+  }, [fail])
 
   const changeAutonomy = useCallback(async (level: HermesAutonomyLevel) => {
     setAutonomyLevel(level)
-    // Saiu do Semi-autônomo: o gate pendente não vale mais (Autônomo segue com "Continuar loop").
-    if (!getAutonomyPolicy(level).gateHighRisk) setRiskGateTaskId(null)
     if (projectId) await ipc.hermes.agent.setAutonomy(projectId, level).catch(() => {})
   }, [projectId])
 
-  const createCorrections = useCallback(async (d: HermesDelivery) => {
-    for (const c of d.corrections) {
-      await ipc.tasks.create({
-        title: c.title, description: c.description, projectId, ownerAgent: 'hermes',
-        status: 'TODO', parallelizable: false, risk: classifyTaskRisk(c),
-      }).catch(() => {})
-    }
-    await loadTasks()
-  }, [projectId, loadTasks])
+  const createCorrections = useCallback(async () => {
+    if (!projectId) return
+    await ipc.hermes.runner.corrections(projectId).catch(fail)
+  }, [projectId, fail])
 
-  /**
-   * Fecha a entrega: o Hermes revisa (sessão própria, não suja a do projeto) → o main reexecuta
-   * build/testes seguros, atualiza a DoD, aplica o gate e gera o relatório. `auto` (fim do loop no
-   * Semi-autônomo/Autônomo): se bloquear por algo corrigível, cria as tarefas de correção e volta
-   * ao loop — no máximo MAX_DELIVERY_ROUNDS rodadas, para não virar um ciclo infinito.
-   */
-  const runDeliveryReview = useCallback(async (auto = false) => {
-    if (!projectId || reviewing || activeLoops.has(projectId)) return
-    setReviewing(true)
-    setDeliveryMsg('O Hermes está revisando código e segurança e rodando build/testes…')
-    currentTaskRef.current = null
-    try {
-      const session = `nex-review-${projectId.replace(/[^A-Za-z0-9_-]/g, '')}-${Date.now()}`.slice(0, 80)
-      let { text, ok } = await sendAndWait(buildReviewPrompt(agentInfo?.objective ?? '', agentInfo?.baseCommit ?? ''), session)
-      if (!ok) { setDeliveryMsg('A revisão não terminou — veja a saída ao lado e tente de novo.'); return }
-      // JSON ilegível (o modelo gratuito às vezes erra a sintaxe): pede só o JSON corrigido, na
-      // mesma sessão, uma vez — antes de fechar, porque cada fechamento conta uma rodada.
-      const check = await ipc.hermes.delivery.checkReview(text).catch(() => ({ parsed: true, fixPrompt: '' }))
-      if (!check.parsed) {
-        setDeliveryMsg('A resposta da revisão veio com o JSON inválido — pedindo ao Hermes que reenvie corrigido…')
-        const retry = await sendAndWait(check.fixPrompt, session)
-        if (retry.ok) ({ text, ok } = retry)
-      }
-      setDeliveryMsg('Conferindo build/testes no servidor e aplicando a Definition of Done…')
-      const d = await ipc.hermes.delivery.close(projectId, text)
-      setDelivery(d)
-      setDodItems(await ipc.hermes.dod.get(projectId).catch(() => dodItems))
-      setDeliveryMsg('')
-      if (auto && d.verdict === 'blocked' && d.corrections.length > 0 && d.round < MAX_DELIVERY_ROUNDS && approvalsRef.current.length === 0) {
-        setDeliveryMsg(`Entrega bloqueada — ${d.corrections.length} tarefa(s) de correção criada(s) (rodada ${d.round}/${MAX_DELIVERY_ROUNDS}).`)
-        await createCorrections(d)
-        setReviewing(false)
-        // Por ref: a revisão leva minutos, e o runLoop capturado aqui teria o estado de antes dela.
-        setTimeout(() => { void runLoopRef.current() }, 0)
-      }
-    } catch (e) {
-      setDeliveryMsg(`Erro no fechamento: ${String(e)}`)
-    } finally {
-      setReviewing(false)
-    }
-  }, [projectId, reviewing, agentInfo, sendAndWait, dodItems, createCorrections])
-
-  const runLoopRef = useRef(runLoop)
-  useEffect(() => { runLoopRef.current = runLoop }, [runLoop])
-  useEffect(() => { autoReviewRef.current = () => { setTimeout(() => { void runDeliveryReview(true) }, 0) } }, [runDeliveryReview])
+  /** Fecha a entrega: o main pede a revisão ao Hermes, reexecuta build/testes seguros e aplica a DoD. */
+  const runDeliveryReview = useCallback(async () => {
+    if (!projectId) return
+    setLocalDeliveryMsg('')
+    await ipc.hermes.runner.review(projectId).catch((e: unknown) => setLocalDeliveryMsg(`Erro no fechamento: ${String(e)}`))
+  }, [projectId])
 
   const reevaluateDelivery = useCallback(async () => {
     if (!projectId) return
-    try { setDelivery(await ipc.hermes.delivery.reevaluate(projectId)); setDeliveryMsg('') }
-    catch (e) { setDeliveryMsg(`Erro: ${String(e)}`) }
+    try { setDelivery(await ipc.hermes.delivery.reevaluate(projectId)); setLocalDeliveryMsg('') }
+    catch (e) { setLocalDeliveryMsg(`Erro: ${String(e)}`) }
   }, [projectId])
 
   const saveDevRules = useCallback(async () => {
@@ -990,9 +393,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
 
   const selectedProject = projects.find(p => p.id === projectId)
   const hermesReady = agentInfo?.hermesStatus === 'running'
-  // Loop deste projeto rodando em qualquer instância do painel (inclusive uma já desmontada).
-  const loopHandle = projectId ? activeLoops.get(projectId) : undefined
-  const busy = sending || planning || looping || reviewing || orphanRunning || !!loopHandle
+  const busy = mode !== 'idle' || orphanRunning
   const canSendChat = hermesReady && !busy && chatInput.trim().length > 0
   const canStartGoal = hermesReady && !busy && goalInput.trim().length > 0
   const doneCount = tasks.filter(t => t.status === 'DONE').length
@@ -1182,13 +583,13 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
             )}
 
             {/* Agentes ativos — execuções paralelas em andamento */}
-            {activeParallel.size > 0 && (
+            {activeParallel.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-[10px] text-slate-500 uppercase tracking-widest">
-                  Agentes ativos ({activeParallel.size})
+                  Agentes ativos ({activeParallel.length})
                 </p>
-                {[...activeParallel.entries()].map(([taskId, info]) => (
-                  <div key={taskId} className="flex items-center gap-2 bg-purple-950/30 border border-purple-800/40 rounded px-2 py-1.5">
+                {activeParallel.map(info => (
+                  <div key={info.taskId} className="flex items-center gap-2 bg-purple-950/30 border border-purple-800/40 rounded px-2 py-1.5">
                     <Loader2 size={11} className="animate-spin text-purple-400 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-[11px] text-slate-200 truncate">{info.title}</p>
@@ -1216,14 +617,14 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
                     </button>
                   )}
                   {policy.autoAdvance && (
-                    looping || loopHandle ? (
+                    looping ? (
                       <button
-                        onClick={() => { loopStopRef.current = true; if (loopHandle) loopHandle.stop = true; notifyLoops() }}
-                        disabled={loopHandle?.stop}
+                        onClick={() => void stopLoop()}
+                        disabled={rstate?.stopRequested}
                         className="text-[10px] text-red-400 hover:text-red-300 disabled:opacity-60 flex items-center gap-1"
                         title="Termina a tarefa atual e não começa a próxima"
                       >
-                        <Square size={11} /> {loopHandle?.stop ? 'Parando após a tarefa atual…' : 'Parar'}
+                        <Square size={11} /> {rstate?.stopRequested ? 'Parando após a tarefa atual…' : 'Parar'}
                       </button>
                     ) : hasTodo && !riskGateTaskId ? (
                       <button
@@ -1303,14 +704,14 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => void resolveApproval(a, true)}
-                      disabled={busy || resolvingApproval !== null}
+                      disabled={busy}
                       className="flex-1 text-[11px] py-1 rounded bg-red-700 hover:bg-red-600 disabled:opacity-30 flex items-center justify-center gap-1"
                     >
-                      {resolvingApproval === a.id ? <Loader2 size={11} className="animate-spin" /> : null} Autorizar
+                      Autorizar
                     </button>
                     <button
                       onClick={() => void resolveApproval(a, false)}
-                      disabled={busy || resolvingApproval !== null}
+                      disabled={busy}
                       className="flex-1 text-[11px] py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30"
                     >
                       Negar
@@ -1319,7 +720,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
                 ) : (
                   <button
                     onClick={() => void resolveApproval(a, false)}
-                    disabled={busy || resolvingApproval !== null}
+                    disabled={busy}
                     className="w-full text-[11px] py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30"
                     title="Código Python arbitrário não é reexecutado pelo NEX"
                   >
@@ -1458,7 +859,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
 
                 <div className="flex flex-wrap gap-1.5">
                   <button
-                    onClick={() => void runDeliveryReview(false)}
+                    onClick={() => void runDeliveryReview()}
                     disabled={!hermesReady || busy}
                     className="text-[10px] px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-30 flex items-center gap-1"
                   >
@@ -1477,7 +878,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
                   )}
                   {delivery?.verdict === 'blocked' && delivery.corrections.length > 0 && (
                     <button
-                      onClick={() => void createCorrections(delivery).then(() => { if (policy.autoAdvance) void runLoop() })}
+                      onClick={() => void createCorrections()}
                       disabled={busy}
                       className="text-[10px] px-2 py-1 rounded bg-red-800 hover:bg-red-700 disabled:opacity-30"
                     >
@@ -1499,7 +900,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
                         <FileText size={11} /> Relatório final
                       </button>
                       <button
-                        onClick={() => { void navigator.clipboard.writeText(delivery.report).then(() => setDeliveryMsg('Relatório copiado.')) }}
+                        onClick={() => { void navigator.clipboard.writeText(delivery.report).then(() => setLocalDeliveryMsg('Relatório copiado.')) }}
                         className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 ml-auto"
                       >
                         <Copy size={10} /> Copiar

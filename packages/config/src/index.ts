@@ -95,6 +95,16 @@ export const HermesLocalSyncApplySchema = z.object({
   paths: z.array(z.string().min(1).max(1024)).max(5000, 'Arquivos demais de uma vez'),
 })
 
+// Hermes — loop no main process: comandos do painel validados antes de chegar ao HermesAgentRunner
+export const HermesProjectIdSchema = z.string().min(1).max(64)
+export const HermesRunnerTextSchema = z.string().trim().min(1, 'Texto vazio').max(50_000, 'Texto grande demais')
+
+// Nomes explícitos: o Rollup do apps/web lê o dist em CommonJS e não enxerga os nomes de um `export *`.
+export {
+  AUTONOMY_POLICIES, AUTONOMY_LEVELS, getAutonomyPolicy, toTaskRisk, classifyTaskRisk, needsRiskGate,
+  type AutonomyLevel, type AutonomyTaskRisk, type AutonomyPolicy,
+} from './autonomy-policy.js'
+
 export type VpsServer = z.infer<typeof VpsServerSchema> & { id: string; createdAt: Date; updatedAt: Date; sshHostFingerprint?: string | null }
 export type VpsServerInput = z.infer<typeof VpsServerSchema>
 

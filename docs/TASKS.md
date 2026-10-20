@@ -11,6 +11,11 @@
   - [x] Painel Agent na IDE (ETAPA 16) — v3.68.0; falta ver pela UI na VPS-1 (abrir a IDE na pasta de um projeto e rodar uma tarefa pelo painel)
   - [x] FASE 7 — NotificationMonitor + Incident Mode (ETAPAS 31/32) — v3.69.0; diagnóstico validado na VPS-1 fora da UI; falta ver pela UI (clique na notificação, executar uma ação sugerida)
 - [x] **Hermes para projeto local (OneDrive → VPS)** — v3.70.0; validado na VPS-1 fora da UI; falta ver pela UI (bloco 7 do roteiro abaixo)
+- [ ] **Dados sumindo do banco (2026-10-20)** — projetos (11:46–12:00) e depois todas as tarefas do Hermes (14:30–15:40) apagados linha a linha do `cwm.db`; causa não encontrada (código, build, instalador, E2E e outra sessão do Claude descartados). v3.77.1: cópia automática + `backups.log` com contagens para achar o horário se repetir. Pendente: usuário dizer se excluiu pela tela; tentar recuperar as 42 tarefas do ACESSIBILIDADE a partir de `backups/cwm-forense-2026-10-20-paginas-livres.db`
+- [ ] **Zeus Mobile** — plano em `docs/ZEUS_MOBILE_PLAN.md` (2026-10-20): Android; funcionar com o PC ligado **e** desligado → Zeus Server na VPS-1 (loop do Hermes), PC e celular como clientes, só pelo Tailscale. Ordem: 0) loop do Hermes como módulo fora do painel → 1) serviço na VPS-1 → 2) PC cliente → 3) PWA com push + Autorizar/Negar → 4) ponte do PC (incidentes das outras VPS, OneDrive). Passo 0 feito na v3.77.0 (loop no main, `HermesAgentRunner`) — falta validar pela UI (itens abaixo). Próximo: passo 1 (serviço na VPS-1), Tailscale aprovado pelo usuário só quando chegar lá
+  - [ ] (v3.77.0) Com o loop rodando uma tarefa: fechar o painel Agent (ou a janela da IDE) e reabrir → a tarefa continuou; Ao vivo mostra a saída de antes e segue atualizando; Parar/aprovações/decisão aparecem de onde estavam
+  - [ ] (v3.77.0) Mesmo projeto aberto em duas janelas (principal + IDE) → as duas mostram o mesmo loop; Parar numa vale para as duas
+  - [ ] (v3.77.0) Autorizar/Negar, Decision Request, Semi-autônomo parando em risco alto e "Revisar e fechar entrega" funcionam como antes (roteiro dos blocos 1–3)
 
 ### Roteiro de validação do Hermes pela UI (VPS-1)
 
@@ -33,7 +38,7 @@ Usar **só a VPS-1** — a VPS-2 é produção. Marcar cada item ao passar; se a
 **2. Níveis de autonomia e regras (v3.62.0)**
 - [ ] Seção **Regras de desenvolvimento** → **Usar modelo** → Salvar. Na VPS: `head -40 <pasta>/.hermes.md` mostra as regras **no início** do arquivo
 - [ ] Apagar as regras → Salvar → `.hermes.md` regravado sem elas
-- [ ] Nível **Semi-autônomo** + objetivo com uma tarefa claramente de risco alto (ex.: "criar migração que remove a coluna X"). Esperado: loop para antes dela com o cartão "Tarefa de risco alto" → **Liberar e continuar** retoma
+- [ ] Nível **Semi-autônomo** + objetivo com uma tarefa claramente de risco alto (ex.: "criar migração do banco que remove a coluna X" — sem "banco/dados" a regra de palavras-chave não marca migração como alto, 2026-10-20). Esperado: loop para antes dela com o cartão "Tarefa de risco alto" → **Liberar e continuar** retoma
 - [ ] Nível **Assistido**: cada tarefa só começa ao clicar **Próxima**
 
 **3. Fechamento da entrega (v3.66.0)**

@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-19
-**Versão:** 3.76.3 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.77.1 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Loop do Hermes no processo principal (v3.77.0)
+
+O loop de tarefas do Hermes (plano, tarefas, Autorizar/Negar, decisões, paralelas, entrega) roda no `HermesAgentRunner`, no main, e não mais dentro do painel: fechar o painel ou uma janela não interrompe a tarefa. O painel só mostra o estado e manda comandos. Primeiro passo do Zeus Mobile (`docs/ZEUS_MOBILE_PLAN.md`). Testado com Hermes falso; falta pela UI com o Hermes real.
 
 ## Terminal na IDE local (v3.76.0)
 

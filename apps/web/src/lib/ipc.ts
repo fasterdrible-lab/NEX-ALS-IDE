@@ -180,12 +180,41 @@ export interface HermesAgentChunk {
   approval?: HermesApprovalRequest
 }
 
-export interface HermesApprovalResult {
-  executed: boolean
-  success: boolean
-  output: string
-  command: string
+// Espelho dos tipos do HermesAgentRunner (packages/core/src/hermes/agent-runner.ts)
+export type HermesRunnerMode = 'idle' | 'message' | 'planning' | 'loop' | 'single' | 'decision' | 'approval' | 'review'
+
+export interface HermesRunnerApproval extends HermesApprovalRequest {
+  parallel: boolean
+  taskId: string | null
 }
+
+export interface HermesRunnerActivity extends HermesActivity { at: number }
+
+export interface HermesRunnerState {
+  projectId: string
+  mode: HermesRunnerMode
+  stopRequested: boolean
+  currentTaskId: string | null
+  riskGateTaskId: string | null
+  pendingDecision: { taskId: string; question: string; options: string[] } | null
+  approvals: HermesRunnerApproval[]
+  parallel: { taskId: string; title: string; branch: string }[]
+  deliveryMsg: string
+  tasksVersion: number
+  deliveryVersion: number
+}
+
+export interface HermesRunnerSnapshot {
+  state: HermesRunnerState
+  output: string
+  outputEnd: number
+  activity: HermesRunnerActivity[]
+}
+
+export type HermesRunnerEvent =
+  | { kind: 'state'; projectId: string; state: HermesRunnerState }
+  | { kind: 'output'; projectId: string; text: string; end: number; reset?: boolean }
+  | { kind: 'activity'; projectId: string; entry: HermesRunnerActivity }
 
 declare global {
   interface Window {
@@ -321,23 +350,11 @@ export const ipc = {
     agent: {
       status: (projectId: string) =>
         invoke<HermesProjectAgentInfo>('hermes:agent:status', { projectId }),
-      /** `sessionName`: sessão nomeada do Hermes (uma por tarefa do loop); sem ela, a sessão única do projeto. */
-      send: (projectId: string, objective: string, sessionName?: string) =>
-        invoke<{ streamId: string }>('hermes:agent:send', { projectId, objective, sessionName }),
-      cancel: (streamId: string) =>
-        invoke<{ success: boolean }>('hermes:agent:cancel', streamId),
+      /** Fim de cada execução do Hermes (done/error) — a IDE recarrega árvore/Git, o projeto local conta alterações. */
       onChunk: (cb: (chunk: HermesAgentChunk) => void) => {
         if (!window.electron) return () => {}
         return window.electron.on('hermes:agent:chunk', cb as (...args: unknown[]) => void)
       },
-      resolveApproval: (approvalId: string, approve: boolean) =>
-        invoke<HermesApprovalResult>('hermes:approval:resolve', { approvalId, approve }),
-      /** Execução em andamento + aprovações pendentes do projeto — para o painel se reconectar ao reabrir. */
-      active: (projectId: string) =>
-        invoke<{ streamId: string | null; approvals: (HermesApprovalRequest & { parallel: boolean })[]; orphanRunning: boolean }>('hermes:agent:active', { projectId }),
-      /** Encerra na VPS uma execução órfã (de antes de o app ser reaberto) que segura a sessão. */
-      stopRemote: (projectId: string) =>
-        invoke<{ stopped: number }>('hermes:agent:stopRemote', { projectId }),
       setObjective: (projectId: string, objective: string) =>
         invoke<void>('hermes:agent:setObjective', { projectId, objective }),
       setAutonomy: (projectId: string, level: HermesAutonomyLevel) =>
@@ -395,11 +412,30 @@ export const ipc = {
       checkReview: (reviewText: string) =>
         invoke<{ parsed: boolean; fixPrompt: string }>('hermes:delivery:checkReview', { reviewText }),
     },
-    parallel: {
-      start: (projectId: string, taskId: string, objective: string) =>
-        invoke<{ streamId: string; worktreePath: string; branch: string }>('hermes:parallel:start', { projectId, taskId, objective }),
-      finish: (projectId: string, worktreePath: string, branch: string, merge: boolean) =>
-        invoke<{ merged: boolean; output: string }>('hermes:parallel:finish', { projectId, worktreePath, branch, merge }),
+    /**
+     * Loop de tarefas do Hermes no main process: o painel manda comandos (voltam logo) e acompanha
+     * pelo `onEvent`. Fechar o painel ou a janela não interrompe nada.
+     */
+    runner: {
+      snapshot: (projectId: string) => invoke<HermesRunnerSnapshot & { orphanRunning: boolean }>('hermes:runner:snapshot', { projectId }),
+      onEvent: (cb: (e: HermesRunnerEvent) => void) => {
+        if (!window.electron) return () => {}
+        return window.electron.on('hermes:runner:event', cb as (...args: unknown[]) => void)
+      },
+      message: (projectId: string, text: string) => invoke<void>('hermes:runner:message', { projectId, text }),
+      resume: (projectId: string) => invoke<void>('hermes:runner:resume', { projectId }),
+      cancel: (projectId: string) => invoke<void>('hermes:runner:cancel', { projectId }),
+      stop: (projectId: string) => invoke<void>('hermes:runner:stop', { projectId }),
+      /** Encerra na VPS uma execução órfã (de antes de o app ser reaberto) que segura a sessão. */
+      stopRemote: (projectId: string) => invoke<{ stopped: number }>('hermes:runner:stopRemote', { projectId }),
+      startObjective: (projectId: string, objective: string) => invoke<void>('hermes:runner:startObjective', { projectId, objective }),
+      /** `approvedTaskId`: tarefa de risco alto liberada pelo usuário (Semi-autônomo). */
+      loop: (projectId: string, approvedTaskId?: string) => invoke<void>('hermes:runner:loop', { projectId, approvedTaskId }),
+      next: (projectId: string) => invoke<void>('hermes:runner:next', { projectId }),
+      decision: (projectId: string, answer: string) => invoke<void>('hermes:runner:decision', { projectId, answer }),
+      approval: (approvalId: string, approve: boolean) => invoke<{ projectId: string }>('hermes:runner:approval', { approvalId, approve }),
+      review: (projectId: string) => invoke<void>('hermes:runner:review', { projectId }),
+      corrections: (projectId: string) => invoke<void>('hermes:runner:corrections', { projectId }),
     },
     skills: {
       list: (vpsId: string) =>

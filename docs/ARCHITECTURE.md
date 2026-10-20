@@ -1456,3 +1456,52 @@ HermesAgentPanel
               tag BLOQUEADA/DECISAO respeitada; senão reconfere: limpo → DONE, sujo → BLOCKED "concluída sem commit — …"
   runParallelTask: done + worktree sujo → parallel.finish(merge=false) (worktree e branch preservados) + BLOCKED
 ```
+(Desde a v3.77.0 este fluxo está no `HermesAgentRunner`, não no painel — ver abaixo.)
+
+## Cópia de segurança do banco (v3.77.1)
+
+`apps/desktop/src/db-backup.ts` — `startDatabaseBackups(userData)` roda no `main.ts` logo depois de
+`initializeDatabase()` (antes das migrações do handlers.ts): `VACUUM INTO` em
+`<userData>/backups/cwm-<ISO>-<abertura|hora>.db`, de novo a cada hora, guarda as 20 últimas
+(só as de nome com data; cópias à mão como `cwm-forense-…` ficam). `backups.log` registra a contagem de
+`vps_servers, projects, agent_tasks, hermes_project_agents, hermes_task_runs, hermes_local_links` em cada cópia.
+
+## Hermes — loop no processo principal (v3.77.0) — Passo 0 do Zeus Mobile
+
+O loop de tarefas saiu do `HermesAgentPanel.tsx` (renderer) para `HermesAgentRunner`
+(`packages/core/src/hermes/agent-runner.ts`). Fechar o painel ou uma janela não interrompe mais
+a tarefa; só fechar o Zeus inteiro. O runner não importa nada do Electron: recebe
+`{ hermes, runLog, tasks, git, emit }` e avisa por `emit`, para poder rodar depois como serviço na
+VPS-1 (docs/ZEUS_MOBILE_PLAN.md).
+
+```
+painel (renderer)                    main (handlers.ts)                     core
+  ipc.hermes.runner.<cmd>   ──────►  hermes:runner:<cmd> (Zod)    ──────►  HermesAgentRunner.<cmd>()
+    snapshot / message / resume / cancel / stop / stopRemote / startObjective / loop / next
+    decision / approval / review / corrections
+  ipc.hermes.runner.onEvent ◄──────  broadcast('hermes:runner:event') ◄──  emit({kind:'state'|'output'|'activity'})
+  ipc.hermes.agent.onChunk  ◄──────  broadcast('hermes:agent:chunk')  ◄──  emit({kind:'chunk', type:'done'|'error'})
+```
+
+- **Uma operação por projeto** (`mode`: idle/message/planning/loop/single/decision/approval/review).
+  Começar uma operação marca o modo de forma síncrona e roda em segundo plano; o IPC volta na hora.
+  Segunda operação no mesmo projeto → erro "já há uma execução em andamento".
+- **Encadeamento**: o que antes era `void runLoop()` no fim de uma ação do painel virou `afterIdle()`
+  (espera o projeto voltar a idle e então decide pela política): plano → loop (Semi/Autônomo),
+  loop terminou tudo → revisão automática, decisão/aprovação resolvida → loop, revisão bloqueada → correções → loop.
+- **Estado**: `RunnerState` (modo, Parar pedido, tarefa atual, gate de risco, decisão pendente,
+  aprovações, paralelas, mensagem da entrega, `tasksVersion`/`deliveryVersion` para o painel recarregar).
+  Saída ao vivo guardada no main (cauda de 300k caracteres) + `outputEnd` (total emitido): o painel
+  reaberto pega o `snapshot` e só acrescenta o que vier depois, sem duplicar.
+- **Aprovações** ficam no runner (`approvals`, com `taskId` e `parallel`); o comando nunca vem da UI.
+  `hermes:runner:approval` exige o projeto idle (o loop já para sozinho quando há aprovação pendente).
+- **Prompts e tags** em `agent-prompts.ts` (puro, testado); **AutonomyPolicy** em
+  `packages/config/src/autonomy-policy.ts` (o runner decide com ela). O painel tem só uma cópia dos
+  rótulos em `apps/web/src/lib/autonomy-policy.ts`: o Vite não converte o CommonJS do config (pacote
+  do workspace) e o index dele puxa `node:crypto` — manter os dois iguais.
+- Saíram: `wireHermesStream`, `hermes:agent:send/cancel/active/stopRemote`, `hermes:approval:resolve`,
+  `hermes:parallel:start/finish` e os mapas `hermesStreams/hermesApprovals/hermesActiveByProject` do handlers.ts.
+- `hermes:agent:chunk` continua (só done/error), agora para todas as janelas: a IDE recarrega árvore/Git
+  e o projeto local conta alterações ao fim de cada execução.
+- Testes: `agent-runner.test.ts` (Hermes falso: plano→loop→entrega; bloqueio→Negar→concluída; Parar;
+  uma operação por projeto) e `agent-prompts.test.ts`.

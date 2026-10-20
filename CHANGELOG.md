@@ -1,5 +1,31 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.77.1] — 2026-10-20
+
+### Adicionado — cópia de segurança automática do banco
+
+Em 2026-10-20 os projetos (de manhã) e depois todas as tarefas do Hermes (à tarde: 42 do ACESSIBILIDADE + 26 do teste-hermes) sumiram do `cwm.db`. As linhas foram apagadas uma a uma (o texto continua nas páginas livres do arquivo); nada no código, na build, no instalador ou nos testes E2E apaga em massa, e a causa não foi encontrada.
+
+- Ao abrir o Zeus e a cada hora: cópia consistente (`VACUUM INTO`) em `%APPDATA%\@cwm\desktop\backups\`, guardando as 20 últimas.
+- `backups.log` anota, em cada cópia, quantas linhas havia em VPS, projetos, tarefas e tabelas do Hermes — se algo sumir de novo, mostra entre quais horários.
+- Guardada à mão uma cópia bruta do banco de hoje (`cwm-forense-2026-10-20-paginas-livres.db`), com as páginas livres onde ainda está o texto das tarefas apagadas; a limpeza automática não toca nela.
+
+**Verificado:** `VACUUM INTO` e a contagem pelo Prisma numa cópia do banco real; `pnpm --filter @cwm/desktop typecheck`.
+
+## [3.77.0] — 2026-10-20
+
+### Alterado — loop do Hermes no processo principal (Passo 0 do Zeus Mobile)
+
+O loop de tarefas do Hermes rodava dentro do painel Agent: fechar o painel ou a janela no meio de uma tarefa a interrompia (aconteceu com a T1 do ACESSIBILIDADE). Primeiro passo do plano em `docs/ZEUS_MOBILE_PLAN.md`.
+
+- O loop inteiro (plano, tarefas, conferência de commit, Decision Request, Autorizar/Negar, tarefas paralelas, fechamento da entrega e correções automáticas) foi para o `HermesAgentRunner`, no core, executado pelo processo principal. **Fechar o painel ou uma janela não interrompe mais nada**; só fechar o Zeus inteiro.
+- O painel só mostra o estado e manda comandos. Ao reabrir, mostra a saída ao vivo, a atividade, as aprovações e a decisão pendente de onde estavam. Duas janelas no mesmo projeto mostram o mesmo loop.
+- Uma operação por projeto, conferida no main (antes cada painel tinha sua trava).
+- O runner não depende do Electron — é o mesmo código que vai rodar como serviço na VPS-1 para o Zeus funcionar com o PC desligado.
+- Política de autonomia (avançar, parar em risco alto, paralelo, classificar risco) movida para `@cwm/config`, usada pelo loop; a tela guarda só os rótulos (o renderer não importa valores do config). Prompts e leitura das tags em `agent-prompts.ts`.
+
+**Verificado:** `pnpm typecheck` (5 pacotes); core 61/61 (novos: 4 cenários do runner com um Hermes falso — plano → loop → entrega fechada sozinha; comando bloqueado → Negar → tarefa concluída; Parar; uma operação por projeto — e 5 de prompts/tags); config 17/17. **Não testado com o Hermes real nem clicando no app.**
+
 ## [3.76.3] — 2026-10-20
 
 ### Corrigido — selo do agente e "Retomar sessão" no painel do Hermes
