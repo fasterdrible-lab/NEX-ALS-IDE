@@ -17,14 +17,15 @@
 Usar **só a VPS-1** — a VPS-2 é produção. Marcar cada item ao passar; se algo falhar, anotar o sintoma ao lado e abrir uma tarefa de correção.
 
 **0. Preparação**
-- [ ] Hermes na VPS-1: Lançador → botão **Hermes** da VPS-1 → status `running` (senão **Iniciar**). Esperado: status card com versão e "running"
+- [x] Hermes na VPS-1: Lançador → botão **Hermes** da VPS-1 → status `running` (senão **Iniciar**). Esperado: status card com versão e "running" — 2026-10-20: v0.22.2, "Rodando" (print do usuário)
+- [x] (v3.76.1) Encaixar o Zeus na metade da tela (Win+← / Win+→) ao lado do VS Code: ocupa a metade sem passar da borda; o mesmo com a janela da IDE e o Incident Mode — 2026-10-20: confirmado pelo usuário
 - [ ] Projeto de teste cadastrado na VPS-1 com pasta git (ex.: `/root/teste-hermes`), working tree limpo
 - [ ] Claude Code logado na VPS-1 (`claude` responde) — o Hermes delega a implementação a ele
 
 **1. Ponta a ponta — cenário "assistência técnica"**
 - [ ] Projetos → projeto de teste → **Agent** (abre o AI Hub na aba Agent com o projeto já selecionado)
 - [ ] Nível **Autônomo**; objetivo: o cenário "assistência técnica" do brief → enviar. Esperado: plano em tarefas na lista, cada uma com selo de risco quando médio/alto
-- [ ] Loop roda as tarefas sozinho; aba **Ao vivo** mostra a saída e a faixa Atividade lista ferramentas usadas
+- [x] Loop roda as tarefas sozinho; aba **Ao vivo** mostra a saída e a faixa Atividade lista ferramentas usadas — 2026-10-20, projeto ACESSIBILIDADE (T1): write_file/read_file/patch com horário; "Refusing to overwrite" do Hermes seguido de read+patch (proteção dele, esperado)
 - [ ] Quando o Hermes pedir um comando perigoso: cartão **Autorizar/Negar** aparece e o loop espera. Testar uma vez **Negar** (Hermes recebe a recusa e segue/contorna) e uma vez **Autorizar** (comando roda e o resultado volta ao Hermes)
 - [ ] Se surgir um cartão de decisão (`[DECISAO_NECESSARIA]`): responder e ver o loop retomar
 - [ ] Ao fim, todas as tarefas em Concluída (ou Bloqueada com motivo legível — nunca "Error" vazio)
@@ -68,6 +69,7 @@ Usar **só a VPS-1** — a VPS-2 é produção. Marcar cada item ao passar; se a
 - [ ] Lançador → **Abrir pasta local** → uma pasta de teste do OneDrive → botão **Agent**. Esperado: formulário com VPS-1, pasta sugerida `/root/<nome-da-pasta>` e nome do projeto
 - [ ] **Enviar e abrir o Hermes**. Esperado: mensagem verde, projeto aparece em Projetos e o painel do Hermes abre já nele; na VPS, a pasta existe sem `node_modules` e `git log` mostra o commit inicial (ou o histórico, se a pasta já era git)
 - [ ] Tentar enviar para uma pasta da VPS que já tem arquivos → recusado com mensagem clara
+- [ ] (v3.76.2) Pasta ACESSIBILIDADE (cadastro perdido em 2026-10-20) → Agent → Enviar → aviso com **Ligar a esta pasta existente** → ligada; projeto volta em Projetos com as tarefas antigas do Hermes; Trazer/Enviar mostram só o que difere
 - [ ] Rodar uma tarefa pelo painel; ao terminar, o botão **Trazer alterações** mostra a contagem → abrir a lista (A/M/D) → Trazer. Esperado: arquivos no OneDrive, árvore da IDE atualizada, aba aberta sem edição recarregada
 - [ ] Editar um arquivo no PC → **Enviar alterações** → chega na VPS
 - [ ] Mudar o mesmo arquivo nos dois lados → aparece como **conflito**, desmarcado; marcar e trazer substitui a versão do PC

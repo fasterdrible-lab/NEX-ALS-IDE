@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Download, Loader2, Upload, UploadCloud, X } from 'lucide-react'
+import { AlertTriangle, Download, Link2, Loader2, Upload, UploadCloud, X } from 'lucide-react'
 import type { VpsServer } from '@cwm/config'
 import { ipc, type HermesLocalLink, type HermesSyncChange } from '../lib/ipc'
 import HermesAgentPanel from './HermesAgentPanel'
@@ -42,6 +42,8 @@ export default function LocalHermesPanel({ localPath, onPulled }: { localPath: s
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string; details?: string[] } | null>(null)
   const [sync, setSync] = useState<{ dir: 'pull' | 'push'; changes: HermesSyncChange[]; selected: Set<string> } | null>(null)
   const [remoteChanged, setRemoteChanged] = useState(0)
+  /** Pasta da VPS que o envio recusou por já existir — oferece ligar a ela. */
+  const [existsAt, setExistsAt] = useState<string | null>(null)
 
   useEffect(() => {
     ipc.hermes.local.link(localPath).then(setLink).catch(e => { setLink(null); setMsg({ kind: 'err', text: String(e instanceof Error ? e.message : e) }) })
@@ -76,11 +78,26 @@ export default function LocalHermesPanel({ localPath, onPulled }: { localPath: s
   const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
   const publish = async () => {
-    setBusy('publish'); setMsg(null)
+    setBusy('publish'); setMsg(null); setExistsAt(null)
     try {
       const l = await ipc.hermes.local.publish({ localPath, vpsId, remotePath, name })
       setLink(l)
       setMsg({ kind: 'ok', text: `Pasta enviada para ${l.vpsName}:${l.remotePath} e projeto "${l.projectName}" cadastrado.` })
+    } catch (e) {
+      const text = errText(e)
+      // Pasta já existe na VPS: em vez de só recusar, oferece ligar a ela (projeto enviado antes).
+      if (text.includes('já existe na VPS')) setExistsAt(remotePath.trim())
+      else setMsg({ kind: 'err', text })
+    }
+    setBusy(null)
+  }
+
+  const relink = async () => {
+    setBusy('relink'); setMsg(null)
+    try {
+      const l = await ipc.hermes.local.relink({ localPath, vpsId, remotePath, name })
+      setLink(l); setExistsAt(null)
+      setMsg({ kind: 'ok', text: `Pasta ligada a ${l.vpsName}:${l.remotePath} (projeto "${l.projectName}"). Use Trazer/Enviar alterações para igualar os dois lados.` })
     } catch (e) { setMsg({ kind: 'err', text: errText(e) }) }
     setBusy(null)
   }
@@ -185,6 +202,21 @@ export default function LocalHermesPanel({ localPath, onPulled }: { localPath: s
                 {busy === 'publish' ? <Loader2 size={13} className="animate-spin"/> : <UploadCloud size={13}/>}
                 {busy === 'publish' ? 'Enviando…' : `Enviar para ${selVps?.name ?? 'a VPS'} e abrir o Hermes`}
               </button>
+              {existsAt && existsAt === remotePath.trim() && (
+                <div className="rounded border border-amber-900/50 bg-amber-950/30 p-2 space-y-2">
+                  <p className="text-[11px] text-amber-200 leading-relaxed">
+                    <span className="font-mono">{existsAt}</span> já existe na {selVps?.name ?? 'VPS'} e não está vazia.
+                    Se é esta pasta enviada antes, ligue a ela sem copiar nada: os arquivos iguais ficam sincronizados,
+                    os diferentes aparecem em Trazer/Enviar alterações, e o histórico do Hermes nessa pasta volta.
+                    Senão, escolha outra pasta acima.
+                  </p>
+                  <button onClick={relink} disabled={!!busy}
+                    className="btn-secondary w-full flex items-center justify-center gap-2 text-xs py-1.5 disabled:opacity-50">
+                    {busy === 'relink' ? <Loader2 size={13} className="animate-spin"/> : <Link2 size={13}/>}
+                    {busy === 'relink' ? 'Comparando arquivos…' : 'Ligar a esta pasta existente'}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

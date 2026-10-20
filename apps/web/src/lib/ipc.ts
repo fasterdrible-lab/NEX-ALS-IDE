@@ -373,6 +373,8 @@ export const ipc = {
       link: (localPath: string) => invoke<HermesLocalLink | null>('hermes:local:link', { localPath }),
       publish: (data: { localPath: string; vpsId: string; remotePath: string; name: string }) =>
         invoke<HermesLocalLink>('hermes:local:publish', data),
+      relink: (data: { localPath: string; vpsId: string; remotePath: string; name: string }) =>
+        invoke<HermesLocalLink>('hermes:local:relink', data),
       status: (localPath: string) => invoke<HermesLocalSyncStatus>('hermes:local:status', { localPath }),
       pull: (localPath: string, paths: string[]) => invoke<HermesLocalSyncResult>('hermes:local:pull', { localPath, paths }),
       push: (localPath: string, paths: string[]) => invoke<HermesLocalSyncResult>('hermes:local:push', { localPath, paths }),

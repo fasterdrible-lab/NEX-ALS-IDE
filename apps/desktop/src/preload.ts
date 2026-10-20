@@ -71,7 +71,7 @@ const ALLOWED_CHANNELS = new Set([
   'hermes:incident:resolve', 'hermes:incident:updated',
   'hermes:parallel:start', 'hermes:parallel:finish',
   'hermes:skills:list', 'hermes:sessions:summary', 'hermes:agent:syncContext',
-  'hermes:local:link', 'hermes:local:publish', 'hermes:local:status', 'hermes:local:pull', 'hermes:local:push',
+  'hermes:local:link', 'hermes:local:publish', 'hermes:local:relink','hermes:local:status', 'hermes:local:pull', 'hermes:local:push',
 ])
 
 contextBridge.exposeInMainWorld('electron', {

@@ -802,6 +802,9 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('hermes:local:publish', (_, data: unknown) =>
     wrapHandler(() => { requireAdmin(); return localSync.publish(parseOrThrow(HermesLocalPublishSchema, data)) })
   )
+  ipcMain.handle('hermes:local:relink', (_, data: unknown) =>
+    wrapHandler(() => { requireAdmin(); return localSync.relink(parseOrThrow(HermesLocalPublishSchema, data)) })
+  )
   ipcMain.handle('hermes:local:status', (_, { localPath }: { localPath: unknown }) =>
     wrapHandler(() => { requireAuth(); return localSync.status(parseOrThrow(HermesLocalPathSchema, localPath)) })
   )

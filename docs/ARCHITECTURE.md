@@ -1437,7 +1437,9 @@ status/pull/push
 
 **Fora da sincronização:** `node_modules .next .nuxt dist .turbo .cache coverage .venv __pycache__` (não vão nem voltam), `.git` (vai no envio inicial, nunca volta — os commits do Hermes ficam na VPS) e `.hermes.md` na raiz (escrito pelo NEX na VPS).
 
-**Banco:** `hermes_local_links` (raw SQL, datas BIGINT) — `localKey` (caminho resolvido, minúsculo no Windows, UNIQUE), `localPath`, `projectId`, `manifest` (JSON caminho → sha1 da última versão igual nos dois lados), `lastSyncAt`. Projeto apagado em Projetos → a ligação some na próxima leitura.
+**Banco:** `hermes_local_links` (raw SQL, datas BIGINT) — `localKey` (caminho resolvido, minúsculo no Windows, UNIQUE), `localPath`, `projectId`, `manifest` (JSON caminho → sha1 da última versão igual nos dois lados), `lastSyncAt`. Projeto apagado em Projetos → `getLink` devolve null, mas a linha fica (v3.76.2; antes era apagada e o manifest se perdia); Enviar/Ligar substituem a linha da mesma `localKey`.
+
+**Ligar a uma pasta que já existe (v3.76.2)** — `HermesLocalSync.relink()` / IPC `hermes:local:relink` (mesmo schema do publish), oferecido quando o envio recusa por pasta não vazia. Não copia nada: manifest = arquivos com o mesmo sha1 no PC e na VPS (o resto aparece em Trazer/Enviar; existente nos dois e diferente = conflito). Projeto: reaproveita o da mesma VPS+`remotePath`; senão, se há `hermes_project_agents` com `workspace = remotePath` numa instância Hermes dessa VPS e o projeto dele não existe, recria o projeto **com aquele id** (tarefas `agent_tasks` e estado do agente voltam); senão cria um novo.
 
 **IPC:** `hermes:local:link|status` (auth), `hermes:local:publish|pull|push` (admin); Zod em `@cwm/config` (`HermesLocalPublishSchema`, `HermesLocalSyncApplySchema`).
 

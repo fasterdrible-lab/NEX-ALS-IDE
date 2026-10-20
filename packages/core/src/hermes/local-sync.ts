@@ -8,6 +8,7 @@ import { getPrismaClient } from '@cwm/db'
 import type { TerminalService } from '../terminal/terminal.service.js'
 import type { SftpService, SftpSession } from '../sftp/sftp.service.js'
 import { ProjectsService } from '../projects/projects.service.js'
+import { ProjectSchema } from '@cwm/config'
 
 const execFileP = promisify(execFile)
 
@@ -139,11 +140,9 @@ export class HermesLocalSync {
     const row = await this.getRow(localPath)
     if (!row) return null
     const project = await this.db.project.findUnique({ where: { id: row.projectId }, include: { vpsServer: true } })
-    if (!project) {
-      // Projeto apagado em Projetos: a ligação perdeu o sentido.
-      await this.db.$executeRawUnsafe(`DELETE FROM hermes_local_links WHERE id = ?`, row.id)
-      return null
-    }
+    // Projeto apagado em Projetos: sem ligação ativa, mas a linha fica — apagar aqui perdia o vínculo
+    // sem aviso (2026-10-20). Enviar/Ligar de novo substituem a linha antiga.
+    if (!project) return null
     return {
       localPath: row.localPath, projectId: project.id, projectName: project.name,
       vpsId: project.vpsServerId, vpsName: project.vpsServer.name, remotePath: project.remotePath,
@@ -206,12 +205,50 @@ export class HermesLocalSync {
       description: `Enviado da pasta local ${localPath}`,
       remotePath, vpsServerId: input.vpsId, gitRepo: '',
     })
-    const now = Date.now()
-    await this.db.$executeRawUnsafe(
-      `INSERT INTO hermes_local_links (id, localKey, localPath, projectId, manifest, lastSyncAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      crypto.randomUUID(), localKey(localPath), localPath, project.id, JSON.stringify(manifest), now, now,
-    )
-    return (await this.getLink(localPath))!
+    return this.saveLink(localPath, project.id, manifest)
+  }
+
+  /**
+   * Liga a pasta local a uma pasta que JÁ existe na VPS (projeto enviado antes e cujo cadastro ou
+   * ligação se perdeu), sem copiar nada. Reaproveita o projeto da mesma VPS+pasta; se ele foi
+   * apagado mas o Hermes ainda tem histórico nessa pasta, recria o projeto com o mesmo id (tarefas e
+   * estado do agente voltam). Base da sincronização = arquivos idênticos nos dois lados; o que
+   * difere aparece em Trazer/Enviar (como conflito quando existe nos dois).
+   */
+  async relink(input: { localPath: string; vpsId: string; remotePath: string; name: string }): Promise<LocalLink> {
+    const localPath = path.resolve(input.localPath)
+    const remotePath = input.remotePath.trim().replace(/\/+$/, '')
+    const pathErr = validatePublishPath(remotePath)
+    if (pathErr) throw new Error(pathErr)
+    const st = await fs.stat(localPath).catch(() => null)
+    if (!st?.isDirectory()) throw new Error(`Pasta local não encontrada: ${localPath}`)
+    const existing = await this.getLink(localPath)
+    if (existing) throw new Error(`Esta pasta já está ligada ao projeto "${existing.projectName}" (${existing.vpsName}:${existing.remotePath}).`)
+    const vps = await this.db.vpsServer.findUnique({ where: { id: input.vpsId } })
+    if (!vps) throw new Error('VPS não encontrada.')
+
+    const [local, remote] = await Promise.all([this.hashLocal(localPath), this.hashRemote(input.vpsId, remotePath)])
+    const base: Hashes = {}
+    for (const [p, h] of Object.entries(local)) if (remote[p] === h) base[p] = h
+
+    let project = await this.db.project.findFirst({ where: { vpsServerId: input.vpsId, remotePath } })
+    if (!project) {
+      const orphans = await this.db.$queryRawUnsafe(
+        `SELECT a.projectId FROM hermes_project_agents a JOIN hermes_instances i ON i.id = a.hermesInstanceId
+         WHERE a.workspace = ? AND i.vpsServerId = ? ORDER BY a.updatedAt DESC`, remotePath, input.vpsId,
+      ) as { projectId: string }[]
+      let reuseId: string | undefined
+      for (const o of orphans) {
+        if (!(await this.db.project.findUnique({ where: { id: o.projectId } }))) { reuseId = o.projectId; break }
+      }
+      const data = ProjectSchema.parse({
+        name: input.name.trim() || path.basename(localPath),
+        description: `Ligado à pasta local ${localPath}`,
+        remotePath, vpsServerId: input.vpsId, gitRepo: '',
+      })
+      project = await this.db.project.create({ data: reuseId ? { ...data, id: reuseId } : data })
+    }
+    return this.saveLink(localPath, project.id, base)
   }
 
   /** O que mudou desde a última sincronização, nos dois sentidos. */
@@ -296,6 +333,17 @@ export class HermesLocalSync {
   }
 
   // ── internos ──
+
+  /** Grava a ligação, substituindo uma linha antiga da mesma pasta (projeto apagado). */
+  private async saveLink(localPath: string, projectId: string, manifest: Hashes): Promise<LocalLink> {
+    const now = Date.now()
+    await this.db.$executeRawUnsafe(`DELETE FROM hermes_local_links WHERE localKey = ?`, localKey(localPath))
+    await this.db.$executeRawUnsafe(
+      `INSERT INTO hermes_local_links (id, localKey, localPath, projectId, manifest, lastSyncAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      crypto.randomUUID(), localKey(localPath), localPath, projectId, JSON.stringify(manifest), now, now,
+    )
+    return (await this.getLink(localPath))!
+  }
 
   private async getRow(localPath: string): Promise<{ id: string; localPath: string; projectId: string; manifest: Hashes; lastSyncAt: number } | null> {
     const rows = await this.db.$queryRawUnsafe(`SELECT * FROM hermes_local_links WHERE localKey = ? LIMIT 1`, localKey(localPath)) as Record<string, unknown>[]

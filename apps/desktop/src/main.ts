@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, Notification, session, dialog, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, Notification, session, dialog, Menu, screen } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
 import { setupIpcHandlers, setIncidentWindowOpener } from './ipc/handlers'
@@ -28,6 +28,19 @@ function setDatabasePath(): void {
 
 function getRendererIndexPath(): string {
   return path.join(process.resourcesPath, 'renderer', 'index.html')
+}
+
+// Tamanho inicial cabendo na área útil do monitor onde a janela vai abrir, e mínimo baixo o
+// bastante para o Snap do Windows (metade/quarto da tela) — 1536px a 125% → metade = 768px.
+// Mínimo acima disso fazia o Windows recusar o encaixe e a janela passava da borda da tela.
+function windowSize(width: number, height: number) {
+  const { workAreaSize } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  return {
+    width: Math.min(width, workAreaSize.width),
+    height: Math.min(height, workAreaSize.height),
+    minWidth: 600,
+    minHeight: 400,
+  }
 }
 
 function applyWindowDefaults(win: BrowserWindow): void {
@@ -69,10 +82,7 @@ function createWindow(): void {
 
   mainWindow = new BrowserWindow({
     icon: APP_ICON,
-    width: 1280,
-    height: 820,
-    minWidth: 960,
-    minHeight: 640,
+    ...windowSize(1280, 820),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -107,10 +117,7 @@ function createDeployWindow(vpsId: string, vpsName: string): void {
 
   const win = new BrowserWindow({
     icon: APP_ICON,
-    width: 1200,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
+    ...windowSize(1200, 800),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -141,10 +148,7 @@ function createIncidentWindow(vpsId: string, vpsName: string): void {
 
   const win = new BrowserWindow({
     icon: APP_ICON,
-    width: 1440,
-    height: 900,
-    minWidth: 1100,
-    minHeight: 700,
+    ...windowSize(1440, 900),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -180,10 +184,7 @@ function createIdeWindow({ vpsId, vpsName, path: remotePath, folder }: IdeWindow
 
   const win = new BrowserWindow({
     icon: APP_ICON,
-    width: 1280,
-    height: 820,
-    minWidth: 960,
-    minHeight: 640,
+    ...windowSize(1280, 820),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,

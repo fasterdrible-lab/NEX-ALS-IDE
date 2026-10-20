@@ -1,5 +1,39 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.76.3] — 2026-10-20
+
+### Corrigido — selo do agente e "Retomar sessão" no painel do Hermes
+
+Com o projeto ACESSIBILIDADE religado, o painel mostrava **Erro** em vermelho enquanto o loop já rodava a T1, e nunca ofereceu "Retomar sessão".
+
+- O selo do agente mostra **Executando** enquanto o painel está rodando plano/tarefa/loop (o status do banco só é relido ao fim de cada execução).
+- Execução interrompida aparece como **Interrompida** (âmbar), não Erro; demais erros mostram a mensagem ao passar o mouse.
+- "Retomar sessão" só reconhecia a interrupção gravada pelo boot do Zeus ("…interrompida…"); a do próprio Hermes chega como `Interrupted` e o aviso não aparecia. Agora reconhece as duas.
+
+**Verificado:** `pnpm --filter @cwm/web typecheck`. Não testado clicando no app.
+
+## [3.76.2] — 2026-10-20
+
+### Corrigido — projeto local enviado antes não podia ser retomado
+
+O usuário reabriu a pasta ACESSIBILIDADE (enviada à VPS-1 em 3.70.0) e o botão Agent mostrou de novo o formulário de envio, que recusava: "/root/acessibilidade já existe na VPS e não está vazia". Causa: o cadastro do projeto tinha sumido de Projetos (os três projetos do banco, inclusive o criado às 11:36 — origem não identificada; nenhum código apaga projetos em massa, só o excluir da tela Projetos), e ao abrir a pasta o Zeus **apagava a ligação** junto com o registro do que estava sincronizado. A pasta e o histórico do Hermes (42 tarefas) continuavam na VPS e no banco.
+
+- A ligação da pasta não é mais apagada quando o projeto some.
+- O envio recusado por pasta já existente oferece **Ligar a esta pasta existente**: não copia nada; arquivos iguais nos dois lados ficam sincronizados, os diferentes aparecem em Trazer/Enviar alterações (conflito quando existem nos dois). Reaproveita o projeto da mesma pasta ou, se ele foi apagado e o Hermes tem histórico ali, recria o projeto com o mesmo id — tarefas e estado do agente voltam.
+
+**Verificado:** `pnpm typecheck`; core 52/52; a busca do histórico do Hermes rodada no banco real (somente leitura) acha o projeto antigo de `/root/acessibilidade`. Não testado clicando no app.
+
+## [3.76.1] — 2026-10-20
+
+### Corrigido — janela não encaixava na tela do Windows
+
+O usuário viu que a janela do Zeus não se ajustava: encaixada ao lado do VS Code, passava da borda da tela, com o botão de fechar escondido. Monitor de 1536 px úteis (125%): a metade da tela no Snap do Windows tem 768 px, mas toda janela tinha largura mínima de 960 px (Incident Mode 1100 × 700) — o Windows não conseguia encolher e ela transbordava.
+
+- Mínimo de todas as janelas (principal, IDE/projeto, Incident Mode, Deploy Assistant) baixou para 600 × 400 — cabe na metade e no quarto de tela.
+- Tamanho inicial limitado à área útil do monitor onde a janela abre (o do cursor), para nunca nascer maior que a tela.
+
+**Verificado:** `pnpm --filter @cwm/desktop typecheck`. Não testado no app (encaixe na metade da tela).
+
 ## [3.76.0] — 2026-10-19
 
 ### Adicionado — terminal na IDE local

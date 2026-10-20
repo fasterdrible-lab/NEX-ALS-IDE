@@ -32,6 +32,8 @@ const AGENT_STATUS_LABEL: Record<HermesAgentStatus, string> = {
 const AGENT_STATUS_COLOR: Record<HermesAgentStatus, string> = {
   idle: 'text-slate-400 bg-slate-800', running: 'text-purple-300 bg-purple-950/40', error: 'text-red-400 bg-red-950/40',
 }
+/** Interrupção: a do boot do Zeus (recoverInterruptedSessions, em português) ou a do próprio Hermes ("Interrupted"). */
+const isInterrupted = (lastError: string) => /interromp|interrupt/i.test(lastError)
 const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   TODO: 'Pendente', IN_PROGRESS: 'Em andamento', BLOCKED: 'Bloqueada', DONE: 'Concluída',
 }
@@ -1023,9 +1025,17 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
               <span className={`px-1.5 py-0.5 rounded font-semibold ${HERMES_STATUS_COLOR[agentInfo.hermesStatus]}`}>
                 Hermes: {HERMES_STATUS_LABEL[agentInfo.hermesStatus]}
               </span>
-              <span className={`px-1.5 py-0.5 rounded font-semibold ${AGENT_STATUS_COLOR[agentInfo.status]}`}>
-                {AGENT_STATUS_LABEL[agentInfo.status]}
-              </span>
+              {/* O status do banco só é relido ao fim de cada execução — durante o loop vale o estado da tela. */}
+              {sending || planning || looping ? (
+                <span className={`px-1.5 py-0.5 rounded font-semibold ${AGENT_STATUS_COLOR.running}`}>{AGENT_STATUS_LABEL.running}</span>
+              ) : agentInfo.status === 'error' && isInterrupted(agentInfo.lastError) ? (
+                <span className="px-1.5 py-0.5 rounded font-semibold text-amber-300 bg-amber-950/40" title={agentInfo.lastError}>Interrompida</span>
+              ) : (
+                <span className={`px-1.5 py-0.5 rounded font-semibold ${AGENT_STATUS_COLOR[agentInfo.status]}`}
+                  title={agentInfo.status === 'error' ? agentInfo.lastError : undefined}>
+                  {AGENT_STATUS_LABEL[agentInfo.status]}
+                </span>
+              )}
               {!hermesReady && (
                 <Link
                   to={`/hermes/${agentInfo.vpsId}/${encodeURIComponent(agentInfo.vpsName)}`}
@@ -1055,9 +1065,13 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
           )}
 
           {/* FASE 6 — sessão interrompida detectada no boot do NEX (ex: app fechado no meio de um loop) */}
-          {agentInfo?.status === 'error' && agentInfo.lastError.includes('interrompida') && (
+          {agentInfo?.status === 'error' && isInterrupted(agentInfo.lastError) && !(sending || planning || looping) && (
             <div className="border border-amber-700/50 bg-amber-950/30 rounded-lg p-2.5 space-y-1.5">
-              <p className="text-[10px] text-amber-300 leading-relaxed">{agentInfo.lastError}</p>
+              <p className="text-[10px] text-amber-300 leading-relaxed">
+                {agentInfo.lastError.includes('interrompida')
+                  ? agentInfo.lastError
+                  : 'A última execução do Hermes foi interrompida no meio. Clique em "Retomar sessão" para continuar de onde parou (usa --resume automaticamente).'}
+              </p>
               <button
                 onClick={() => void resumeInterrupted()}
                 disabled={!hermesReady || sending || planning || looping}
