@@ -277,6 +277,9 @@ Sim — e é o jeito recomendado de começar. **Projetos → Novo projeto** (ou 
 **Meus commits vão para o GitHub?**
 Não sozinhos: o commit fica no seu PC. Na aba **Git** do projeto, depois do primeiro commit, use **Publicar no GitHub** — o Zeus cria o repositório na sua conta (privado por padrão) e envia tudo. Daí em diante, o botão **Push** manda os próximos commits.
 
+**Tem terminal nos projetos do PC?**
+Tem. Na janela do projeto, o botão de terminal no topo (ou **Ctrl+`**) abre um PowerShell já na pasta do projeto — dá para rodar `npm install`, `npm run dev`, testes e git. O **+** abre mais abas.
+
 **Posso ter vários projetos abertos?**
 Sim, cada um na sua janela, como no VS Code. Se você abrir o Zeus de novo pelo atalho com ele já aberto, ele não cria um segundo programa — só traz a janela principal para frente.
 
@@ -487,5 +490,5 @@ Agente gera um bloco de ação
 
 ---
 
-*Zeus IDE v3.75.0 — NEX-ALS*
+*Zeus IDE v3.76.0 — NEX-ALS*
 *github.com/fasterdrible-lab/NEX-ALS-IDE*

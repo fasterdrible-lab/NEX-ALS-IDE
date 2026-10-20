@@ -411,6 +411,9 @@ export const ipc = {
   terminal: {
     open: (vpsId: string) =>
       invoke<{ success: boolean; sessionId: string; error?: string }>('terminal:open', vpsId),
+    /** IDE local: PowerShell na pasta do projeto (mesmos input/resize/close/data/exit do remoto). */
+    openLocal: (cwd: string) =>
+      invoke<{ success: boolean; sessionId: string; error?: string }>('terminal:local:open', { cwd }),
     input: (sessionId: string, data: string): void =>
       window.electron?.send('terminal:input', { sessionId, data }),
     resize: (sessionId: string, cols: number, rows: number): void =>

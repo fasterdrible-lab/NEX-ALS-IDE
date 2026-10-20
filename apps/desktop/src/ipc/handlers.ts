@@ -57,6 +57,7 @@ import {
 let openIncidentWindow: ((vpsId: string, vpsName: string) => void) | null = null
 export function setIncidentWindowOpener(fn: (vpsId: string, vpsName: string) => void): void { openIncidentWindow = fn }
 import { JobExecutor } from '../jobs/job-executor.js'
+import { LocalTerminalSession } from '../terminal/local-terminal.js'
 import { LocalLspBridge } from '../lsp/local-lsp.js'
 
 /** Janela que fez o pedido — diálogos nativos abrem presos a ela (várias janelas de IDE; a principal pode estar fechada). */
@@ -340,18 +341,42 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     }
   })
 
+  // Terminal da IDE local — PowerShell num pseudo-terminal na pasta do projeto. Usa os mesmos canais
+  // terminal:data/exit/input/resize/close do remoto; só a abertura é própria.
+  const localTerms = new Map<string, LocalTerminalSession>()
+  ipcMain.handle('terminal:local:open', (event, data: { cwd?: unknown }) => {
+    try {
+      requireAdmin()
+      if (typeof data?.cwd !== 'string' || data.cwd.length > 1024) throw new Error('Pasta inválida')
+      const session = new LocalTerminalSession(data.cwd)
+      localTerms.set(session.sessionId, session)
+      const sender = event.sender
+      session.on('data', (d: string) => { if (!sender.isDestroyed()) sender.send('terminal:data', { sessionId: session.sessionId, data: d }) })
+      session.on('close', () => {
+        localTerms.delete(session.sessionId)
+        if (!sender.isDestroyed()) sender.send('terminal:exit', { sessionId: session.sessionId })
+      })
+      // Janela fechada sem fechar as abas: não deixa PowerShell órfão rodando
+      sender.once('destroyed', () => { session.destroy(); localTerms.delete(session.sessionId) })
+      return { success: true, sessionId: session.sessionId }
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   ipcMain.on('terminal:input', (_, { sessionId, data }: { sessionId: string; data: string }) => {
-    terminalSessions.get(sessionId)?.write(data)
+    (terminalSessions.get(sessionId) ?? localTerms.get(sessionId))?.write(data)
   })
 
   ipcMain.on('terminal:resize', (_, { sessionId, cols, rows }: { sessionId: string; cols: number; rows: number }) => {
-    terminalSessions.get(sessionId)?.resize(cols, rows)
+    (terminalSessions.get(sessionId) ?? localTerms.get(sessionId))?.resize(cols, rows)
   })
 
   ipcMain.handle('terminal:close', (_, sessionId: string) => {
-    const session = terminalSessions.get(sessionId)
+    const session = terminalSessions.get(sessionId) ?? localTerms.get(sessionId)
     session?.destroy()
     terminalSessions.delete(sessionId)
+    localTerms.delete(sessionId)
     return { success: true }
   })
 

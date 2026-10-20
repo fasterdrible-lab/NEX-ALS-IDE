@@ -88,6 +88,7 @@ Usar **só a VPS-1** — a VPS-2 é produção. Marcar cada item ao passar; se a
 - [ ] Com A aberta, **Arquivo → Sair** e reabrir o Zeus → A volta aberta; fechar todas as janelas no X (A por último) e reabrir → A volta
 - [ ] Dentro da IDE de A: **Abrir pasta…** no topo abre outra pasta em outra janela
 - [ ] (v3.73.0) Projeto criado pelo **Novo projeto** → aba **Git**: README/.gitignore como novos → preparar (+) → mensagem → Commit → painel limpo, branch na barra de status; editar e salvar um arquivo → aparece como alterado (badge M na árvore) → diff abre no editor
+- [ ] (v3.76.0) IDE local → botão de terminal (ou Ctrl+`) → PowerShell já na pasta do projeto; rodar `npm -v`/`git status`; **+** abre segunda aba; fechar a janela do projeto não deixa `powershell.exe` órfão no Gerenciador de Tarefas
 - [ ] (v3.75.0) Rodar um objetivo pelo painel Agent: cada tarefa concluída tem um commit na VPS (`git log`); se o Hermes esquecer, aparece "[NEX] A tarefa terminou com N alteração(ões) sem commit" na saída e ele commita, ou a tarefa fica Bloqueada com os arquivos
 - [ ] (v3.74.0) Projeto local com commit e sem remoto → aba Git → **Publicar no GitHub** → Criar no GitHub e enviar → repositório privado aparece em github.com/fasterdrible-lab, toast com o link, o cartão some e **Push** passa a funcionar; a pasta `.git` não aparece na árvore
 - [ ] (v3.73.0) Abrir uma pasta do OneDrive **sem** git próprio (ex.: Agentix) → aba Git explica que ela só está dentro do repositório da pasta pessoal e não oferece commit

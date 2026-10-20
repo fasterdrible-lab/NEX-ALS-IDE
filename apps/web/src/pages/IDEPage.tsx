@@ -699,7 +699,7 @@ export default function IDEPage() {
   }
 
   const initTermTab = useCallback((tabId:string, container:HTMLDivElement) => {
-    if (!vpsId || termInstancesRef.current.has(tabId)) return
+    if ((isLocal ? !localRootRef.current : !vpsId) || termInstancesRef.current.has(tabId)) return
     const term = new XTerm({
       cursorBlink:true, cursorStyle:'bar', fontSize:13,
       fontFamily:'"Cascadia Code","Fira Code",Consolas,monospace',
@@ -708,12 +708,13 @@ export default function IDEPage() {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(container)
-    term.write('\x1b[90mConectando terminal SSH…\x1b[0m\r\n')
+    term.write(isLocal ? '\x1b[90mAbrindo PowerShell na pasta do projeto…\x1b[0m\r\n' : '\x1b[90mConectando terminal SSH…\x1b[0m\r\n')
 
     const inst: TermInstance = { term, fit, sessionId:null, unsubs:[], ro:null }
     termInstancesRef.current.set(tabId, inst)
 
-    ipc.terminal.open(vpsId).then(r => {
+    const opening = isLocal ? ipc.terminal.openLocal(localRootRef.current) : ipc.terminal.open(vpsId!)
+    opening.catch((e: unknown) => ({ success: false, sessionId: '', error: e instanceof Error ? e.message : String(e) })).then(r => {
       const i = termInstancesRef.current.get(tabId)
       if (!i) return
       if (!r.success || !r.sessionId) {
@@ -745,7 +746,7 @@ export default function IDEPage() {
       i.ro = ro
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vpsId])
+  }, [vpsId, isLocal, localRoot])
 
   const openNewTermTab = useCallback(() => {
     const id = `tab_${Date.now()}`
@@ -1985,8 +1986,8 @@ export default function IDEPage() {
             title="Paleta de comandos (Ctrl+Shift+P)" className="p-1.5 rounded text-slate-600 hover:text-slate-300 hover:bg-slate-700">
             <Command size={13}/>
           </button>
-          {!isLocal && (
-            <button onClick={()=>setShowTerm(v=>!v)} title="Terminal (Ctrl+`)"
+          {(!isLocal || localRoot) && (
+            <button onClick={()=>setShowTerm(v=>!v)} title={isLocal ? 'Terminal — PowerShell na pasta do projeto (Ctrl+`)' : 'Terminal (Ctrl+`)'}
               className={`p-1.5 rounded text-xs transition-colors ${showTerm?'bg-brand-600/30 text-brand-300':'text-slate-500 hover:text-slate-300 hover:bg-slate-700'}`}>
               <TerminalSquare size={14}/>
             </button>
@@ -2731,13 +2732,13 @@ export default function IDEPage() {
             })()}
           </div>
 
-          {/* terminal resize handle — oculto no modo local */}
-          {!isLocal && showTerm && (
+          {/* terminal resize handle */}
+          {showTerm && (
             <div className="h-1 bg-slate-800 hover:bg-brand-600/50 cursor-row-resize shrink-0 transition-colors active:bg-brand-500" onMouseDown={startResizeTerm}/>
           )}
 
-          {/* ─── PAINEL INFERIOR: Terminal + Problemas — oculto no modo local ─── */}
-          <div style={{ height: (!isLocal && showTerm) ? termH : 0, overflow:'hidden', flexShrink:0 }}>
+          {/* ─── PAINEL INFERIOR: Terminal + Problemas (+ Logs no modo remoto) ─── */}
+          <div style={{ height: showTerm ? termH : 0, overflow:'hidden', flexShrink:0 }}>
             <div className="flex flex-col h-full bg-[#0d1117]">
 
               {/* header: modo Terminal | Problemas + tabs do terminal ativo + fechar */}

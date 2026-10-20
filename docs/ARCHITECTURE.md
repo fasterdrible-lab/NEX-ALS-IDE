@@ -583,6 +583,17 @@ Publicar no GitHub (v3.74.0) — git:local:publish (Zod LocalGitPublishSchema, r
 Árvore: pasta .git escondida (IDEPage.hideGitDir, local e VPS)
 ```
 
+### Terminal — Modo Local (v3.76.0)
+
+```
+IDEPage.initTermTab: isLocal ? ipc.terminal.openLocal(localRoot) : ipc.terminal.open(vpsId)
+  terminal:local:open (requireAdmin, cwd validado) → LocalTerminalSession [apps/desktop/src/terminal/local-terminal.ts]
+    @lydell/node-pty (N-API, binário pronto win32-x64) → spawn powershell.exe -NoLogo, cwd = pasta, env sem ELECTRON_RUN_AS_NODE
+  data/exit → terminal:data / terminal:exit (mesmos canais do SSH); input/resize/close procuram em terminalSessions e localTerms
+  event.sender destroyed → kill (sem PowerShell órfão)
+Painel inferior (Terminal + Problemas) liberado no modo local; Logs só no remoto.
+```
+
 ### Busca em arquivos — Modo Local (Ctrl+Shift+F)
 
 ```

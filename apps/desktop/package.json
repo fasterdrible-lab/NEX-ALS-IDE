@@ -1,6 +1,6 @@
 {
   "name": "@cwm/desktop",
-  "version": "3.75.0",
+  "version": "3.76.0",
   "description": "Zeus IDE — gerenciador de ambientes VPS com IDE integrado",
   "author": "NEX-ALS",
   "private": true,
@@ -18,13 +18,14 @@
     "@cwm/config": "workspace:*",
     "@cwm/core": "workspace:*",
     "@cwm/db": "workspace:*",
+    "@lydell/node-pty": "1.1.0",
     "electron-updater": "^6.8.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/ws": "^8.5.12",
     "@electron-toolkit/utils": "^4.0.0",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12",
     "concurrently": "^9.1.0",
     "electron": "^33.3.0",
     "electron-builder": "^25.1.8",
@@ -125,4 +126,3 @@
     }
   }
 }
-

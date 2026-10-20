@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-19
-**Versão:** 3.75.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.76.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Terminal na IDE local (v3.76.0)
+
+A IDE local ganhou o painel de baixo: **Terminal** (PowerShell num pseudo-terminal na pasta do projeto, várias abas, Ctrl+`) e **Problemas**. Usa `@lydell/node-pty` (node-pty com binário pronto, N-API) — sem compilar, testado dentro do Electron empacotado.
 
 ## Commit por tarefa do Hermes conferido (v3.75.0)
 
@@ -166,7 +170,7 @@ Primeira fase da integração com o runtime agentic externo **Hermes Agent** (No
 ### Dois modos de operação
 
 - **Modo Remoto (VPS)** — explorer SFTP hierárquico, Monaco Editor com split, terminal SSH multi-tab, Git integrado, painel de Problemas, port forwarding SSH, TypeScript LSP, depuração remota DAP, chat IA (API direta ou claude -p); badge vermelho "Produção" na top bar.
-- **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; Git com o git do PC (v3.73.0), sem terminal; chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
+- **Modo Local (OneDrive/PC)** — mesmo editor usando `node:fs`; badge verde "Local"; Git com o git do PC (v3.73.0) e terminal PowerShell (v3.76.0); chat IA com provedor configurado (sem VPS necessária) ou fallback para seletor de VPS.
 
 ## Phase C — Planning Mode (v3.47.0)
 

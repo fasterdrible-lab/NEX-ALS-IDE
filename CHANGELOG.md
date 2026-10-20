@@ -1,5 +1,17 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.76.0] — 2026-10-19
+
+### Adicionado — terminal na IDE local
+
+A IDE local não tinha terminal (só a remota, via SSH): para `npm install`, `npm run dev`, testes ou git era preciso outro programa.
+
+- Botão de terminal no topo da IDE local (e **Ctrl+`**) abre o painel de baixo com **Terminal** — PowerShell num pseudo-terminal (ConPTY) **já na pasta do projeto**, cores e edição de linha como no VS Code, várias abas (**+**) — e **Problemas** (erros/avisos do editor), que também estava escondido no modo local. Logs continua só no remoto.
+- Mesmos canais do terminal SSH (`terminal:data/exit/input/resize/close`); só a abertura é nova (`terminal:local:open`, pasta validada). Fechar a janela do projeto encerra os PowerShell dela (sem processo órfão). `ELECTRON_RUN_AS_NODE` é removido do ambiente do terminal — senão qualquer app Electron iniciado nele (ex.: `pnpm dev` de outro projeto) rodaria como Node puro.
+- Motor: `@lydell/node-pty@1.1.0` — o node-pty do VS Code com binário pronto (N-API) para Windows x64, sem compilador nem `electron-rebuild`. `LocalTerminalSession` em `apps/desktop/src/terminal/local-terminal.ts`.
+
+**Verificado:** PowerShell aberto, comando executado, redimensionado e encerrado pelo node-pty no Node e **dentro do Electron 33 do app empacotado** (`win-unpacked`, com `conpty.node` no pacote); `pnpm typecheck` (5 pacotes). Não testado clicando no app.
+
 ## [3.75.0] — 2026-10-19
 
 ### Alterado — Hermes: commit por tarefa testada passa a ser conferido

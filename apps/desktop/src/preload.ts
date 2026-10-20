@@ -9,7 +9,7 @@ const ALLOWED_CHANNELS = new Set([
   'settings:get', 'settings:update',
   'diagnostics:run',
   'terminal:open', 'terminal:input', 'terminal:resize', 'terminal:close', 'terminal:exec',
-  'terminal:data', 'terminal:exit',
+  'terminal:data', 'terminal:exit', 'terminal:local:open',
   'sftp:open', 'sftp:readdir', 'sftp:readFile', 'sftp:writeFile',
   'sftp:mkdir', 'sftp:delete', 'sftp:rename', 'sftp:close', 'sftp:touch', 'sftp:readFileBase64',
   'git:status', 'git:diff', 'git:add', 'git:restore', 'git:commit',
