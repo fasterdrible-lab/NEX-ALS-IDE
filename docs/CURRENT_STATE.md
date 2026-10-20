@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-19
-**Versão:** 3.74.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.75.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Commit por tarefa do Hermes conferido (v3.75.0)
+
+Tarefa que o Hermes dá como concluída só vira Concluída se o repositório na VPS estiver sem alteração pendente (ignorando o `.hermes.md`). Sobrou alteração: o Zeus pede uma vez, na mesma sessão, para rodar os testes, garantir o `.gitignore` e commitar; continuou sujo → Bloqueada com a lista. Tarefa paralela com alteração sem commit não é mergeada (worktree e branch preservados).
 
 ## Publicar no GitHub (v3.74.0)
 

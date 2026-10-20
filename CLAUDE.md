@@ -36,7 +36,7 @@ Duas camadas de uso:
 
 ## Versão atual
 
-`3.74.0` — app renomeado para **Zeus IDE** (3.64.0; appId e pasta de dados mantidos). Hermes: 3 níveis de autonomia + regras de desenvolvimento, fechamento da entrega (DoD como gate), Quadro/Logs por execução, painel Agent na IDE, FASE 7 (incidentes de VPS com diagnóstico e reparo confirmado), projeto local do OneDrive enviado à VPS com Trazer/Enviar alterações (3.70.0), projetos locais em janelas próprias como no VS Code (3.71.0), Novo projeto cria a pasta no OneDrive (3.72.0), Git na IDE local (3.73.0) com Publicar no GitHub (3.74.0). Ver `CHANGELOG.md`.
+`3.75.0` — app renomeado para **Zeus IDE** (3.64.0; appId e pasta de dados mantidos). Hermes: 3 níveis de autonomia + regras de desenvolvimento, fechamento da entrega (DoD como gate), Quadro/Logs por execução, painel Agent na IDE, FASE 7 (incidentes de VPS com diagnóstico e reparo confirmado), projeto local do OneDrive enviado à VPS com Trazer/Enviar alterações (3.70.0), projetos locais em janelas próprias como no VS Code (3.71.0), Novo projeto cria a pasta no OneDrive (3.72.0), Git na IDE local (3.73.0) com Publicar no GitHub (3.74.0), commit por tarefa do Hermes conferido (3.75.0). Ver `CHANGELOG.md`.
 
 ## Regras de desenvolvimento
 

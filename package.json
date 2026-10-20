@@ -1,6 +1,6 @@
 {
   "name": "nex-als-ide",
-  "version": "3.74.0",
+  "version": "3.75.0",
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.js",

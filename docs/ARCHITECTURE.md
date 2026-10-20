@@ -1431,3 +1431,15 @@ status/pull/push
 **IPC:** `hermes:local:link|status` (auth), `hermes:local:publish|pull|push` (admin); Zod em `@cwm/config` (`HermesLocalPublishSchema`, `HermesLocalSyncApplySchema`).
 
 **IDE:** depois de "Trazer", a árvore e as abas sem edição pendente são recarregadas; aba com edição não salva que mudou no disco só gera aviso (salvar desfaria a mudança do Hermes).
+
+## Hermes — commit por tarefa conferido (v3.75.0)
+
+```
+HermesAgentPanel
+  tag [TAREFA_CONCLUIDA] (executeTask / resolveDecision / resolveApproval) → completeTask(task)
+    uncommittedIn(workspace) = ipc.git.status(vpsId, dir) → staged+unstaged+untracked − .hermes.md   (null = não conferiu → não trava)
+      vazio → DONE
+      sujo  → sendAndWait(buildCommitFollowUp(arquivos), taskSession)  — 1 vez: testes → .gitignore → git add -A && commit → tag
+              tag BLOQUEADA/DECISAO respeitada; senão reconfere: limpo → DONE, sujo → BLOCKED "concluída sem commit — …"
+  runParallelTask: done + worktree sujo → parallel.finish(merge=false) (worktree e branch preservados) + BLOCKED
+```

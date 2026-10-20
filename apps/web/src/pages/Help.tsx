@@ -1117,6 +1117,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
             ['Execução paralela',  'Tarefas marcadas pelo próprio Hermes como independentes rodam simultaneamente, cada uma isolada num git worktree'],
             ['Decision Request',   'Quando o Hermes precisa de uma decisão de negócio, o loop pausa e mostra opções + resposta livre'],
             ['Commit por tarefa',  'Cada tarefa termina com um commit local (Conventional Commits) — o histórico git é o caminho principal para desfazer'],
+            ['Commit por tarefa', 'Cada tarefa termina com testes rodados e um commit (nunca push). O Zeus confere o repositório na VPS: se sobrou alteração sem commit, pede ao Hermes uma vez para testar e commitar; se continuar, a tarefa fica Bloqueada com os arquivos. Peça um .gitignore — dependências e .env nunca vão para o commit'],
             ['Checkpoints',        'Toda execução usa --checkpoints: cópia da pasta antes de cada alteração. Restaurar: rode hermes na pasta do projeto (Terminal) e use /rollback'],
             ['Sincronizar contexto', 'Escreve regras + KB Global + memória do projeto em .hermes.md — o Hermes lê esse arquivo sozinho, sem configuração'],
             ['Automações (cron)',  'Em Automações, escolha o agente "Hermes" + um projeto para rodar um objetivo automaticamente, sem abrir o AI Hub'],
@@ -1210,7 +1211,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.74.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.75.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}

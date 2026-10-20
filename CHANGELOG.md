@@ -1,5 +1,17 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.75.0] — 2026-10-19
+
+### Alterado — Hermes: commit por tarefa testada passa a ser conferido
+
+O usuário perguntou se o Hermes faz commit a cada tarefa testada. O prompt de cada tarefa já pedia um commit (ETAPA 25), mas só como pedido: não dizia "com os testes passando" e o NEX não conferia — um modelo gratuito podia esquecer, e a tarefa ficava Concluída com trabalho fora do histórico.
+
+- **Prompt da tarefa:** rodar os testes e só commitar com eles passando; garantir `.gitignore` (node_modules, dist, .next, .env) antes do commit; aviso de que o NEX confere.
+- **Conferência no fechamento** (`completeTask`, usado pelo loop, pela resposta a Decision Request e pelo Autorizar/Negar): ao `[TAREFA_CONCLUIDA]`, o NEX lê `git status` da pasta do projeto na VPS (ignora o `.hermes.md` que ele mesmo escreve). Limpo → Concluída. Sobrou alteração → pede **uma vez**, na mesma sessão da tarefa, para rodar os testes, ajustar o `.gitignore` e commitar (linha "[NEX] …" na saída ao vivo); decide pelo estado do repositório depois disso, não pela tag. Ainda sujo → **Bloqueada** com a lista dos arquivos. Sem conseguir conferir (erro de SSH) a tarefa não é travada.
+- **Tarefas paralelas:** o merge leva só o que foi commitado no worktree e depois o apaga — alteração sem commit sumiria. Agora, nesse caso, não há merge: worktree e branch ficam preservados e a tarefa fica Bloqueada com o caminho.
+
+**Verificado:** `pnpm typecheck`; a regra de conferência contra o git real da VPS-1 numa pasta temporária (repositório sem commit → cobra; só `.hermes.md` → concluída; alterado + novo → cobra os dois). **Não testado com o Hermes num loop real** (precisa do painel).
+
 ## [3.74.0] — 2026-10-19
 
 ### Adicionado — Publicar no GitHub (IDE local) e pasta .git fora da árvore

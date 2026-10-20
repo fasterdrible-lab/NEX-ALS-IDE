@@ -154,8 +154,11 @@ function buildTaskPrompt(task: { title: string; description: string }): string {
     task.description,
     '',
     'Instruções de finalização (obrigatório):',
+    '- Rode os testes do projeto (se existirem) e só faça o commit com eles passando; se falharem, corrija antes.',
+    `- ${GITIGNORE_RULE}`,
     // ETAPA 25 do brief — commits frequentes, um por tarefa, para cada entrega ficar no histórico.
     '- Antes de marcar como concluída, faça um commit git com tudo desta tarefa: git add -A && git commit -m "<tipo>(<escopo>): <descrição>"',
+    '  O NEX confere o repositório depois: tarefa com alteração sem commit não é dada como concluída.',
     '  (tipo: feat, fix, refactor, test, docs, chore). Se o diretório ainda não for um repositório, rode git init antes.',
     '  Nunca faça push, reset --hard nem force — só commits locais.',
     '- Sucesso → termine sua resposta com a tag: [TAREFA_CONCLUIDA]',
@@ -189,6 +192,25 @@ const notifyLoops = () => loopListeners.forEach(fn => fn())
  * só [A-Za-z0-9_-], que é o que o main aceita.
  */
 const taskSession = (taskId: string) => `nex-task-${taskId.replace(/[^A-Za-z0-9_-]/g, '')}`.slice(0, 80)
+
+/** `git add -A` sem .gitignore levaria node_modules/.env para o histórico — a conferência de commit não pode empurrar isso. */
+const GITIGNORE_RULE = 'Antes do commit, garanta um .gitignore com node_modules/, dist/, .next/, .env e .env.local: nunca commite dependências instaladas, saída de build nem .env.'
+
+/** Hermes disse que terminou, mas o repositório tem alteração sem commit: pede (uma vez) testar e commitar. */
+function buildCommitFollowUp(files: string[]): string {
+  return [
+    'Você marcou a tarefa como concluída, mas o NEX conferiu o repositório e ainda há alterações sem commit:',
+    ...files.slice(0, 15).map(f => `- ${f}`),
+    files.length > 15 ? `- (+${files.length - 15} arquivo(s))` : '',
+    '',
+    'Faça agora, nesta ordem:',
+    '1. Rode os testes do projeto (se existirem). Se falharem, corrija até passarem.',
+    `   ${GITIGNORE_RULE} Se algum arquivo da lista acima for gerado (dependências, build, .env), ele deve ser ignorado, não commitado.`,
+    '2. Faça o commit de tudo desta tarefa: git add -A && git commit -m "<tipo>(<escopo>): <descrição>". Se a pasta não for um repositório git, rode git init antes.',
+    '3. Termine com [TAREFA_CONCLUIDA]. Se não for possível commitar com os testes passando, termine com [TAREFA_BLOQUEADA: motivo].',
+    'Nunca faça push, reset --hard nem force.',
+  ].filter(Boolean).join('\n')
+}
 
 const REMINDER_PROMPT = 'Você não incluiu nenhuma tag obrigatória. Termine AGORA com [TAREFA_CONCLUIDA], '
   + '[TAREFA_BLOQUEADA: motivo] ou [DECISAO_NECESSARIA pergunta="..." opcoes="A|B|C"]. Não repita o trabalho, apenas finalize com a tag correta.'
@@ -507,6 +529,55 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
     }
   }, [projectId, waitForChunkStream])
 
+  /**
+   * Alterações sem commit numa pasta do projeto na VPS (pasta principal ou worktree paralelo).
+   * Ignora o `.hermes.md` (escrito pelo próprio NEX). `null` = não deu para conferir — não trava a tarefa.
+   */
+  const uncommittedIn = useCallback(async (dir: string | undefined): Promise<string[] | null> => {
+    if (!agentInfo || !dir) return null
+    try {
+      const s = await ipc.git.status(agentInfo.vpsId, dir)
+      if (!s.isRepo) return ['(a pasta ainda não é um repositório git com commit)']
+      const files = [...s.staged, ...s.unstaged, ...s.untracked].map(f => f.path)
+        .filter(p => p !== '.hermes.md' && !p.endsWith('/.hermes.md'))
+      return [...new Set(files)]
+    } catch { return null }
+  }, [agentInfo])
+
+  /**
+   * Fechamento de uma tarefa que o Hermes deu como concluída: o NEX confere o repositório. Sobrou
+   * alteração sem commit → pede uma vez, na mesma sessão, para testar e commitar; decide pelo estado
+   * do repositório depois disso (não pela tag). Ainda sujo → Bloqueada com os arquivos.
+   */
+  const completeTask = useCallback(async (task: AgentTask): Promise<'done' | 'blocked' | 'decision'> => {
+    const markDone = async () => { await ipc.tasks.update(task.id, { status: 'DONE' }).catch(() => {}); return 'done' as const }
+    const left = await uncommittedIn(agentInfo?.workspace)
+    if (left === null || left.length === 0) return markDone()
+
+    setOutput(prev => `${prev}\n\n[NEX] A tarefa terminou com ${left.length} alteração(ões) sem commit — pedindo ao Hermes para rodar os testes e commitar.`)
+    const { text, ok } = await sendAndWait(buildCommitFollowUp(left), taskSession(task.id))
+    if (ok) {
+      if (approvalsRef.current.some(a => a.taskId === task.id)) return 'decision'
+      const tag = parseTaskTag(text)
+      if (tag.kind === 'blocked') {
+        await ipc.tasks.update(task.id, { status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${tag.reason}`.trim() }).catch(() => {})
+        return 'blocked'
+      }
+      if (tag.kind === 'decision') {
+        setPendingDecision({ taskId: task.id, question: tag.question, options: tag.options })
+        return 'decision'
+      }
+    }
+    const after = await uncommittedIn(agentInfo?.workspace)
+    if (after !== null && after.length === 0) return markDone()
+    const still = after ?? left
+    await ipc.tasks.update(task.id, {
+      status: 'BLOCKED',
+      description: `${task.description}\n\n[bloqueado] concluída sem commit — alterações pendentes: ${still.slice(0, 10).join(', ')}${still.length > 10 ? ` (+${still.length - 10})` : ''}`.trim(),
+    }).catch(() => {})
+    return 'blocked'
+  }, [agentInfo, uncommittedIn, sendAndWait])
+
   const executeTask = useCallback(async (task: AgentTask): Promise<'done' | 'blocked' | 'decision' | 'error'> => {
     let prompt = buildTaskPrompt(task)
     currentTaskRef.current = task.id
@@ -523,10 +594,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
       // reenvia a tarefa com o desfecho e lê a tag dali) em vez de gastar o lembrete.
       if (approvalsRef.current.some(a => a.taskId === task.id)) return 'decision'
       const tag = parseTaskTag(text)
-      if (tag.kind === 'done') {
-        await ipc.tasks.update(task.id, { status: 'DONE' }).catch(() => {})
-        return 'done'
-      }
+      if (tag.kind === 'done') return completeTask(task)
       if (tag.kind === 'blocked') {
         await ipc.tasks.update(task.id, {
           status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${tag.reason}`.trim(),
@@ -543,7 +611,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
       status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] sem tag de conclusão após lembrete`.trim(),
     }).catch(() => {})
     return 'blocked'
-  }, [sendAndWait])
+  }, [sendAndWait, completeTask])
 
   /**
    * Roda uma tarefa isolada num git worktree próprio (gerenciado pelo NEX via GitService, não via
@@ -571,6 +639,19 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
     }
 
     const tag = parseTaskTag(text)
+    // O merge leva só o que foi commitado no worktree e depois o apaga: alteração sem commit sumiria.
+    // Nesse caso não mergeia — worktree e branch ficam preservados para revisão.
+    if (tag.kind === 'done') {
+      const left = await uncommittedIn(start.worktreePath)
+      if (left && left.length > 0) {
+        await ipc.hermes.parallel.finish(projectId, start.worktreePath, start.branch, false).catch(() => {})
+        await ipc.tasks.update(task.id, {
+          status: 'BLOCKED',
+          description: `${task.description}\n\n[bloqueado] concluída sem commit no worktree ${start.worktreePath} (branch ${start.branch} preservado) — alterações pendentes: ${left.slice(0, 10).join(', ')}`.trim(),
+        }).catch(() => {})
+        return 'blocked'
+      }
+    }
     const merge = await ipc.hermes.parallel.finish(projectId, start.worktreePath, start.branch, tag.kind === 'done')
       .catch(() => ({ merged: false, output: 'erro ao finalizar' }))
 
@@ -586,7 +667,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
       status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${reason} (branch ${start.branch})`.trim(),
     }).catch(() => {})
     return 'blocked'
-  }, [projectId, waitForChunkStream])
+  }, [projectId, waitForChunkStream, uncommittedIn])
 
   const runParallelBatch = useCallback(async (candidates: AgentTask[]): Promise<void> => {
     const batch = candidates.slice(0, PARALLEL_CAP)
@@ -725,7 +806,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
       const { text, ok } = await sendAndWait(prompt, taskSession(task.id))
       if (ok) {
         const tag = parseTaskTag(text)
-        if (tag.kind === 'done') await ipc.tasks.update(task.id, { status: 'DONE' }).catch(() => {})
+        if (tag.kind === 'done') { if ((await completeTask(task)) === 'decision') stillPending = true }
         else if (tag.kind === 'blocked') {
           await ipc.tasks.update(task.id, {
             status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${tag.reason}`.trim(),
@@ -740,7 +821,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
       setLooping(false)
       if (policy.autoAdvance && !stillPending) void runLoop()
     }
-  }, [pendingDecision, tasks, sendAndWait, loadTasks, policy, runLoop])
+  }, [pendingDecision, tasks, sendAndWait, loadTasks, policy, runLoop, completeTask])
 
   /**
    * Autorizar/Negar um comando que o Hermes teve bloqueado. Autorizar = o NEX executa (main
@@ -779,7 +860,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
         currentTaskRef.current = task.id
         const tag = parseTaskTag(text)
         if (approvalsRef.current.some(x => x.taskId === task.id)) stillPending = true
-        else if (tag.kind === 'done') await ipc.tasks.update(task.id, { status: 'DONE' }).catch(() => {})
+        else if (tag.kind === 'done') { if ((await completeTask(task)) === 'decision') stillPending = true }
         else if (tag.kind === 'blocked') {
           await ipc.tasks.update(task.id, {
             status: 'BLOCKED', description: `${task.description}\n\n[bloqueado] ${tag.reason}`.trim(),
@@ -794,7 +875,7 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
       setLooping(false)
       if (policy.autoAdvance && !stillPending && approvalsRef.current.length === 0) void runLoop()
     }
-  }, [sending, planning, looping, resolvingApproval, tasks, sendAndWait, loadTasks, policy, runLoop])
+  }, [sending, planning, looping, resolvingApproval, tasks, sendAndWait, loadTasks, policy, runLoop, completeTask])
 
   const changeAutonomy = useCallback(async (level: HermesAutonomyLevel) => {
     setAutonomyLevel(level)
