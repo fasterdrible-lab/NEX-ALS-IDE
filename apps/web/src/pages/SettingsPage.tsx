@@ -3,7 +3,7 @@ import {
   Loader2, CheckCircle,
   Download, Upload, ChevronDown, ChevronUp, Eye, EyeOff,
   Trash2, Zap, Star, Check, AlertCircle, Bell, Users, Plus, ShieldCheck, Shield,
-  Terminal, RefreshCw, Copy, MessageSquare,
+  Terminal, RefreshCw, Copy, MessageSquare, Smartphone, QrCode,
 } from 'lucide-react'
 import { ipc, type AppUser } from '../lib/ipc'
 import type { AiProviderConfig } from '@cwm/config'
@@ -671,6 +671,9 @@ export default function SettingsPage() {
 
       </div>
 
+      {/* Zeus Mobile — pareamento do celular */}
+      <MobilePairingCard />
+
       {/* Provedores de IA */}
       <div className="card space-y-4">
         <div>
@@ -914,6 +917,67 @@ export default function SettingsPage() {
         </div>
       </div>
 
+    </div>
+  )
+}
+
+/**
+ * Zeus Mobile: QR com o link de pareamento do app do celular (serviço zeus-hermes da VPS). O link leva
+ * o token — só aparece a pedido, some sozinho em 2 minutos e não é guardado nesta tela.
+ */
+function MobilePairingCard() {
+  const [qr, setQr] = useState<{ url: string; link: string; img: string } | null>(null)
+  const [msg, setMsg] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (!qr) return
+    const t = setTimeout(() => setQr(null), 120_000)
+    return () => clearTimeout(t)
+  }, [qr])
+
+  const show = async () => {
+    setMsg('')
+    try {
+      const p = await ipc.zeusMobile.pairing()
+      if (!p) { setMsg('O serviço do Hermes na VPS ainda não está configurado neste PC.'); return }
+      const QRCode = await import('qrcode')
+      setQr({ ...p, img: await QRCode.toDataURL(p.link, { width: 260, margin: 1, errorCorrectionLevel: 'M' }) })
+    } catch (e) { setMsg(String(e instanceof Error ? e.message : e)) }
+  }
+
+  return (
+    <div className="card space-y-3">
+      <h2 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+        <Smartphone size={14} className="text-brand-400" /> Celular (Zeus Mobile)
+      </h2>
+      <p className="text-xs text-slate-500 leading-relaxed">
+        Acompanhe o Hermes e responda Autorizar/Negar pelo celular. Com o Tailscale ligado no celular, leia o QR com a câmera
+        e, no navegador, use "Adicionar à tela inicial".
+      </p>
+      {!qr ? (
+        <button onClick={() => void show()} className="btn-secondary text-sm flex items-center gap-2">
+          <QrCode size={14} /> Mostrar QR de pareamento
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <img src={qr.img} alt="QR de pareamento do celular" width={260} height={260} className="rounded bg-white p-2" />
+          <p className="text-xs text-amber-300">
+            Quem ler este QR controla o Hermes. Não fotografe nem compartilhe — ele some em 2 minutos.
+          </p>
+          <p className="text-xs text-slate-500 font-mono break-all">{qr.url}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { void navigator.clipboard.writeText(qr.link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }}
+              className="btn-ghost text-xs flex items-center gap-1"
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />} Copiar link
+            </button>
+            <button onClick={() => setQr(null)} className="btn-ghost text-xs">Esconder</button>
+          </div>
+        </div>
+      )}
+      {msg && <p className="text-xs text-amber-300">{msg}</p>}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-19
-**Versão:** 3.78.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.79.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
 
 ## Loop do Hermes no processo principal (v3.77.0)

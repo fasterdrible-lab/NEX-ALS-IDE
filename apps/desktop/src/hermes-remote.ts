@@ -36,6 +36,16 @@ export class HermesRemote {
 
   get enabled(): boolean { return this.config !== null }
 
+  /**
+   * Link de pareamento do app do celular: o token vai no fragmento (#t=), que o navegador não manda
+   * ao servidor; o app guarda e tira do endereço. Só para mostrar como QR na tela do Zeus.
+   */
+  pairingLink(): { url: string; link: string } | null {
+    this.load()
+    if (!this.config) return null
+    return { url: this.config.url, link: `${this.config.url}/#t=${this.token}` }
+  }
+
   isRemote(projectId: unknown): boolean {
     return typeof projectId === 'string' && !!this.config?.projectIds.includes(projectId)
   }

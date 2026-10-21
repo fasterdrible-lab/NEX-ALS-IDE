@@ -65,7 +65,7 @@ const ALLOWED_CHANNELS = new Set([
   'hermes:runner:snapshot', 'hermes:runner:event', 'hermes:runner:message', 'hermes:runner:resume',
   'hermes:runner:cancel', 'hermes:runner:stop', 'hermes:runner:stopRemote', 'hermes:runner:startObjective',
   'hermes:runner:loop', 'hermes:runner:next', 'hermes:runner:decision', 'hermes:runner:approval',
-  'hermes:runner:review', 'hermes:runner:corrections',
+  'hermes:runner:review', 'hermes:runner:corrections', 'zeusMobile:pairing',
   'hermes:agent:setObjective', 'hermes:agent:setAutonomy', 'hermes:agent:setDevRules',
   'hermes:dod:get', 'hermes:dod:toggle', 'hermes:dod:runChecks',
   'hermes:delivery:get', 'hermes:delivery:close', 'hermes:delivery:reevaluate', 'hermes:delivery:checkReview',

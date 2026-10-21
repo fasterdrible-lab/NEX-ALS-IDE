@@ -446,6 +446,10 @@ export const ipc = {
         invoke<HermesCommandResult>('hermes:sessions:summary', { vpsId }),
     },
   },
+  /** Zeus Mobile: link de pareamento do app do celular (null = serviço da VPS ainda não configurado). */
+  zeusMobile: {
+    pairing: () => invoke<{ url: string; link: string } | null>('zeusMobile:pairing'),
+  },
   terminal: {
     open: (vpsId: string) =>
       invoke<{ success: boolean; sessionId: string; error?: string }>('terminal:open', vpsId),

@@ -1,5 +1,16 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.79.0] — 2026-10-21
+
+### Adicionado — app do celular (Zeus Mobile, Passo 3 — primeira versão)
+
+- O serviço `zeus-hermes` passa a servir uma página para o celular em `https://vps-1.tailfd24ac.ts.net:8443` (só pela rede do Tailscale), instalável na tela inicial. Mostra os projetos e, em cada um: situação do loop, Hermes no ar, nível de autonomia, tarefas, saída ao vivo e atividade (atualizam sozinhas). Ações: **Autorizar/Negar** (com confirmação), responder **decisão**, **liberar tarefa de risco alto**, **Continuar loop/Próxima**, **Retomar**, **Parar após a tarefa** e **Cancelar**. Objetivo novo continua pelo Zeus no PC.
+- **Pareamento**: Configurações → **Celular (Zeus Mobile)** → **Mostrar QR de pareamento**. O link leva o token no fragmento (`#t=`), que o navegador não envia ao servidor; o app guarda o token só no aparelho e o tira do endereço. O QR some em 2 minutos.
+- Segurança da página: arquivos estáticos fixos (nada fora da lista é servido), CSP só `'self'`, sem embutir em outros sites, sem referrer; tudo que vem do Hermes entra como texto, nunca como HTML; os dados continuam exigindo o token.
+- Notificações no celular ficam para a próxima leva.
+
+**Verificado:** `pnpm typecheck` (6 pacotes); na VPS-1 pelo Tailscale: os 6 arquivos do app com tipo certo, cabeçalhos de segurança, `/api` sem token → 401, `server.cjs` não é servido. **Não testado no celular.**
+
 ## [3.78.0] — 2026-10-21
 
 ### Adicionado — Hermes da VPS-1 como serviço (Passos 1 e 2 do Zeus Mobile)

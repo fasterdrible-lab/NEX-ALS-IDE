@@ -164,6 +164,10 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   })
   hermesRemote.start()
   const remoteP = (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}`
+  // Zeus Mobile — QR de pareamento do celular (Configurações). O token só sai daqui a pedido do admin.
+  ipcMain.handle('zeusMobile:pairing', () =>
+    wrapHandler(async () => { requireAdmin(); return hermesRemote.pairingLink() })
+  )
   const jobExecutor = new JobExecutor(hermesSvc)
   // Claude Code subprocess streams (account-based, sem API key)
   const claudeProcs = new Map<string, { kill: () => void }>()
