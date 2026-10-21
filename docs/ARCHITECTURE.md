@@ -1486,6 +1486,23 @@ celular / Zeus do PC ──HTTPS (só Tailscale)──► tailscale serve :8443 
   `zeus-hermes.service` (root, Restart=always), `tailscale serve --bg --https=8443`. Token do PC em
   `%APPDATA%\@cwm\desktop\zeus-hermes\token`. Porta 8443 porque o nginx da VPS-1 já usa 443.
 
+### Zeus usando o serviço (Passo 2, v3.78.0)
+
+`apps/desktop/src/hermes-remote.ts` (`HermesRemote`) — config em `<userData>/zeus-hermes/`: `token` (do deploy)
+e `config.json` `{ url, projectIds }` (da migração). `isRemote(projectId)` = projeto está em `projectIds`.
+No `handlers.ts`, os canais do painel desviam para o serviço quando o projeto é remoto:
+`hermes:runner:*` (snapshot → `GET /state`; comandos → `POST /api/projects/:id/<cmd>`),
+`hermes:runner:approval` (id que o runner local não tem → `POST /api/approvals/:id`), `hermes:agent:status|setAutonomy|
+setDevRules|syncContext`, `hermes:dod:*`, `hermes:delivery:get|reevaluate`, `hermes:runs:list|get`,
+`tasks:list` (só `ownerAgent:'hermes'` + projeto remoto). Eventos: uma conexão SSE (`GET /api/events`) com
+reconexão (2 s → 30 s); `kind:'chunk'` vira `hermes:agent:chunk`, o resto `hermes:runner:event` — os mesmos
+canais do runner local, então o painel não muda. Sem Tailscale ligado, os comandos falham com mensagem clara.
+
+Migração (`scripts/migrate-to-zeus-hermes.mjs`, Zeus fechado): lê o `cwm.db` do PC (node:sqlite, só leitura) e
+leva VPS (sem senha/fingerprint), projetos, `hermes_instances`, `hermes_project_agents`, `agent_tasks`,
+`hermes_task_runs`, `knowledge_entries` e `project_memory` → `node server.cjs import` na VPS (INSERT OR REPLACE;
+a VPS vira host 127.0.0.1/root com a chave do serviço) → reinicia o serviço → grava o `config.json` no PC.
+
 ## Cópia de segurança do banco (v3.77.1)
 
 `apps/desktop/src/db-backup.ts` — `startDatabaseBackups(userData)` roda no `main.ts` logo depois de

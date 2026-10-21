@@ -421,6 +421,9 @@ export class HermesAgentRunner {
     })
   }
 
+  /** A aprovação é deste runner? (No Zeus, a que não for vem do serviço na VPS.) */
+  hasApproval(approvalId: string): boolean { return this.approvals.has(approvalId) }
+
   /**
    * Autorizar/Negar um comando que o Hermes teve bloqueado. Autorizar = o NEX executa (auditado em
    * tool_execution_log). Depois avisa o Hermes na mesma sessão; se veio de uma tarefa sequencial,

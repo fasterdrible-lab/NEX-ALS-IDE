@@ -1,5 +1,19 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.78.0] — 2026-10-21
+
+### Adicionado — Hermes da VPS-1 como serviço (Passos 1 e 2 do Zeus Mobile)
+
+O loop do Hermes passa a poder rodar num serviço sempre ligado na VPS, para continuar com o PC desligado (`docs/ZEUS_MOBILE_PLAN.md`).
+
+- **Serviço `zeus-hermes`** (`apps/server`) instalado na VPS-1: o mesmo `HermesAgentRunner`, banco próprio, systemd (reinicia sozinho), só escutando em `127.0.0.1` e publicado **só na rede privada do Tailscale** em `https://vps-1.tailfd24ac.ts.net:8443`. Toda rota pede token (o serviço guarda só o sha256); entrada validada com Zod; 10 tentativas erradas bloqueiam o IP por 15 min.
+- **Zeus usa o serviço** nos projetos migrados: o main repassa ao serviço tudo o que o painel Agent pede (loop, Autorizar/Negar, tarefas, status, DoD, entrega, logs, regras, contexto) e retransmite os eventos ao vivo para as janelas. O painel não muda. Projetos não migrados seguem com o loop no PC.
+- `scripts/deploy-zeus-hermes.mjs` (instala/atualiza o serviço) e `scripts/migrate-to-zeus-hermes.mjs` (leva os projetos da VPS do banco do PC para o serviço — exige o Zeus fechado; não apaga nada do PC; desfazer = apagar `%APPDATA%\@cwm\desktop\zeus-hermes\config.json`).
+- Criação das tabelas do Hermes movida para `ensureHermesSchema()` no core (usada pelo Zeus e pelo serviço).
+- Segurança: a primeira instalação deixava a pasta do app gravável por qualquer usuário da VPS (permissões do Windows no tar) — corrigido na VPS e no script.
+
+**Verificado:** `pnpm typecheck` (6 pacotes); core 61/61; serviço na VPS-1: health pelo Tailscale com HTTPS válido, 401 sem token, validação, portas 8443/8790 fechadas no IP público, reinstalação mantém as permissões. **Migração e uso pelo painel ainda não testados.**
+
 ## [3.77.1] — 2026-10-20
 
 ### Adicionado — cópia de segurança automática do banco

@@ -4,7 +4,8 @@ import {
   HermesLocalPathSchema, HermesLocalPublishSchema, HermesLocalSyncApplySchema, LocalGitRequestSchema, LocalGitPublishSchema,
 } from '@cwm/config'
 import type { IpcMain } from 'electron'
-import { BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
+import { app, BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
+import { HermesRemote } from '../hermes-remote.js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -155,6 +156,14 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       else broadcast('hermes:runner:event', e)
     },
   })
+  // Projetos migrados para o serviço zeus-hermes na VPS (Passo 2): os canais abaixo repassam a ele, e
+  // os eventos ao vivo dele vão para as janelas pelos mesmos canais do runner local.
+  const hermesRemote = new HermesRemote(path.join(app.getPath('userData'), 'zeus-hermes'), (e) => {
+    if (e['kind'] === 'chunk') broadcast('hermes:agent:chunk', { streamId: e['streamId'], type: e['type'], error: e['error'] })
+    else broadcast('hermes:runner:event', e)
+  })
+  hermesRemote.start()
+  const remoteP = (projectId: string) => `/api/projects/${encodeURIComponent(projectId)}`
   const jobExecutor = new JobExecutor(hermesSvc)
   // Claude Code subprocess streams (account-based, sem API key)
   const claudeProcs = new Map<string, { kill: () => void }>()
@@ -502,83 +511,122 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
   // Hermes — FASE 2: Agent Mode (envio de objetivo por projeto, streaming via SSH)
   ipcMain.handle('hermes:agent:status', (_, { projectId }: { projectId: string }) =>
-    wrapHandler(() => { requireAuth(); return hermesSvc.getAgentStatus(projectId) })
+    wrapHandler(() => {
+      requireAuth()
+      return hermesRemote.isRemote(projectId) ? hermesRemote.call('GET', `${remoteP(projectId)}/agent`) : hermesSvc.getAgentStatus(projectId)
+    })
   )
 
-  // Hermes — loop de tarefas no main (HermesAgentRunner). O painel só manda comandos e mostra o
-  // estado; tudo valida aqui. Começar uma operação devolve logo — o progresso chega por
-  // 'hermes:runner:event' (estado, saída ao vivo, atividade) em todas as janelas.
+  // Hermes — loop de tarefas no main (HermesAgentRunner) ou no serviço zeus-hermes da VPS (projetos
+  // migrados). O painel só manda comandos e mostra o estado; tudo valida aqui. Começar uma operação
+  // devolve logo — o progresso chega por 'hermes:runner:event' (estado, saída ao vivo, atividade).
   const runnerProject = (v: unknown) => HermesProjectIdSchema.parse(v)
+  /** Comando do loop: local (runner) ou repassado ao serviço. */
+  const runnerCmd = (projectId: unknown, remotePath: string, body: unknown, local: (id: string) => unknown) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      const id = runnerProject(projectId)
+      if (hermesRemote.isRemote(id)) { await hermesRemote.call('POST', `${remoteP(id)}/${remotePath}`, body ?? {}); return undefined }
+      return local(id)
+    })
   ipcMain.handle('hermes:runner:snapshot', (_, { projectId }: { projectId: unknown }) =>
     wrapHandler(async () => {
       requireAuth()
       const id = runnerProject(projectId)
+      if (hermesRemote.isRemote(id)) return hermesRemote.call('GET', `${remoteP(id)}/state`)
       return { ...hermesRunner.snapshot(id), orphanRunning: await hermesRunner.orphanRunning(id) }
     })
   )
-  ipcMain.handle('hermes:runner:message', (_, { projectId, text }: { projectId: unknown; text: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); hermesRunner.sendMessage(runnerProject(projectId), HermesRunnerTextSchema.parse(text)) })
-  )
+  ipcMain.handle('hermes:runner:message', (_, { projectId, text }: { projectId: unknown; text: unknown }) => {
+    const t = HermesRunnerTextSchema.safeParse(text)
+    if (!t.success) return { error: t.error.issues[0]?.message ?? 'Texto inválido' }
+    return runnerCmd(projectId, 'message', { text: t.data }, id => hermesRunner.sendMessage(id, t.data))
+  })
   ipcMain.handle('hermes:runner:resume', (_, { projectId }: { projectId: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); hermesRunner.resume(runnerProject(projectId)) })
-  )
+    runnerCmd(projectId, 'resume', {}, id => hermesRunner.resume(id)))
   ipcMain.handle('hermes:runner:cancel', (_, { projectId }: { projectId: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); await hermesRunner.cancel(runnerProject(projectId)) })
-  )
+    runnerCmd(projectId, 'cancel', {}, id => hermesRunner.cancel(id)))
   ipcMain.handle('hermes:runner:stop', (_, { projectId }: { projectId: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); hermesRunner.stop(runnerProject(projectId)) })
-  )
+    runnerCmd(projectId, 'stop', {}, id => hermesRunner.stop(id)))
   ipcMain.handle('hermes:runner:stopRemote', (_, { projectId }: { projectId: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); return { stopped: await hermesRunner.stopRemote(runnerProject(projectId)) } })
-  )
-  ipcMain.handle('hermes:runner:startObjective', (_, { projectId, objective }: { projectId: unknown; objective: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); hermesRunner.startObjective(runnerProject(projectId), HermesRunnerTextSchema.parse(objective)) })
-  )
-  ipcMain.handle('hermes:runner:loop', (_, { projectId, approvedTaskId }: { projectId: unknown; approvedTaskId?: unknown }) =>
     wrapHandler(async () => {
       requireAdmin()
-      hermesRunner.runLoop(runnerProject(projectId), approvedTaskId === undefined ? undefined : HermesProjectIdSchema.parse(approvedTaskId))
+      const id = runnerProject(projectId)
+      if (hermesRemote.isRemote(id)) return hermesRemote.call('POST', `${remoteP(id)}/stop-remote`, {})
+      return { stopped: await hermesRunner.stopRemote(id) }
     })
   )
+  ipcMain.handle('hermes:runner:startObjective', (_, { projectId, objective }: { projectId: unknown; objective: unknown }) => {
+    const o = HermesRunnerTextSchema.safeParse(objective)
+    if (!o.success) return { error: o.error.issues[0]?.message ?? 'Objetivo inválido' }
+    return runnerCmd(projectId, 'objective', { objective: o.data }, id => hermesRunner.startObjective(id, o.data))
+  })
+  ipcMain.handle('hermes:runner:loop', (_, { projectId, approvedTaskId }: { projectId: unknown; approvedTaskId?: unknown }) => {
+    const a = approvedTaskId === undefined ? undefined : HermesProjectIdSchema.safeParse(approvedTaskId)
+    if (a && !a.success) return { error: 'Tarefa inválida' }
+    return runnerCmd(projectId, 'loop', { approvedTaskId: a?.data }, id => hermesRunner.runLoop(id, a?.data))
+  })
   ipcMain.handle('hermes:runner:next', (_, { projectId }: { projectId: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); hermesRunner.runNext(runnerProject(projectId)) })
-  )
-  ipcMain.handle('hermes:runner:decision', (_, { projectId, answer }: { projectId: unknown; answer: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); hermesRunner.resolveDecision(runnerProject(projectId), HermesRunnerTextSchema.parse(answer)) })
-  )
+    runnerCmd(projectId, 'next', {}, id => hermesRunner.runNext(id)))
+  ipcMain.handle('hermes:runner:decision', (_, { projectId, answer }: { projectId: unknown; answer: unknown }) => {
+    const a = HermesRunnerTextSchema.safeParse(answer)
+    if (!a.success) return { error: a.error.issues[0]?.message ?? 'Resposta inválida' }
+    return runnerCmd(projectId, 'decision', { answer: a.data }, id => hermesRunner.resolveDecision(id, a.data))
+  })
   // Governança — Autorizar = o NEX executa o comando (tool_execution_log, exec_dangerous); Negar só descarta.
+  // O id diz de onde veio: do runner local ou, se não for dele, do serviço na VPS.
   ipcMain.handle('hermes:runner:approval', (_, { approvalId, approve }: { approvalId: unknown; approve: unknown }) =>
     wrapHandler(async () => {
       requireAdmin()
-      if (typeof approvalId !== 'string' || typeof approve !== 'boolean') throw new Error('Parâmetros inválidos')
-      return hermesRunner.resolveApproval(approvalId, approve)
+      if (typeof approvalId !== 'string' || !/^[A-Za-z0-9-]{1,64}$/.test(approvalId) || typeof approve !== 'boolean') throw new Error('Parâmetros inválidos')
+      if (hermesRunner.hasApproval(approvalId) || !hermesRemote.enabled) return hermesRunner.resolveApproval(approvalId, approve)
+      return hermesRemote.call('POST', `/api/approvals/${encodeURIComponent(approvalId)}`, { approve })
     })
   )
   ipcMain.handle('hermes:runner:review', (_, { projectId }: { projectId: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); hermesRunner.review(runnerProject(projectId)) })
-  )
+    runnerCmd(projectId, 'review', {}, id => hermesRunner.review(id)))
   ipcMain.handle('hermes:runner:corrections', (_, { projectId }: { projectId: unknown }) =>
-    wrapHandler(async () => { requireAdmin(); await hermesRunner.createCorrections(runnerProject(projectId)) })
-  )
+    runnerCmd(projectId, 'corrections', {}, id => hermesRunner.createCorrections(id)))
 
   // Hermes — FASE 3: Autonomous Loop (objetivo/autonomia persistidos + DoD checklist)
   ipcMain.handle('hermes:agent:setObjective', (_, { projectId, objective }: { projectId: string; objective: string }) =>
     wrapHandler(() => { requireAdmin(); return hermesSvc.setObjective(projectId, objective) })
   )
   ipcMain.handle('hermes:agent:setAutonomy', (_, { projectId, level }: { projectId: string; level: unknown }) =>
-    wrapHandler(() => { requireAdmin(); return hermesSvc.setAutonomyLevel(projectId, HermesAutonomyLevelSchema.parse(level)) })
+    wrapHandler(async () => {
+      requireAdmin()
+      const l = HermesAutonomyLevelSchema.parse(level)
+      if (hermesRemote.isRemote(projectId)) { await hermesRemote.call('POST', `${remoteP(projectId)}/autonomy`, { level: l }); return }
+      return hermesSvc.setAutonomyLevel(projectId, l)
+    })
   )
   // ETAPA 21 — Development Rules do projeto (persiste + regrava .hermes.md)
   ipcMain.handle('hermes:agent:setDevRules', (_, { projectId, devRules }: { projectId: string; devRules: unknown }) =>
-    wrapHandler(() => { requireAdmin(); return hermesSvc.setDevRules(projectId, HermesDevRulesSchema.parse(devRules)) })
+    wrapHandler(() => {
+      requireAdmin()
+      const r = HermesDevRulesSchema.parse(devRules)
+      return hermesRemote.isRemote(projectId)
+        ? hermesRemote.call('POST', `${remoteP(projectId)}/dev-rules`, { devRules: r })
+        : hermesSvc.setDevRules(projectId, r)
+    })
   )
   // Quadro de tarefas / painel de agentes / logs por execução (ETAPAS 12, 13, 37 — v3.67.0)
   ipcMain.handle('hermes:runs:list', (_, { projectId, taskId }: { projectId: string; taskId?: string }) =>
-    wrapHandler(() => { requireAuth(); return hermesRunLog.list(projectId, taskId) })
+    wrapHandler(() => {
+      requireAuth()
+      if (!hermesRemote.isRemote(projectId)) return hermesRunLog.list(projectId, taskId)
+      return hermesRemote.call('GET', `${remoteP(projectId)}/runs${taskId ? `?taskId=${encodeURIComponent(taskId)}` : ''}`)
+    })
   )
   ipcMain.handle('hermes:runs:get', (_, { runId }: { runId: string }) =>
-    wrapHandler(() => { requireAuth(); return hermesRunLog.get(runId) })
+    wrapHandler(async () => {
+      requireAuth()
+      const local = await hermesRunLog.get(runId)
+      if (local || !hermesRemote.enabled || !/^[A-Za-z0-9-]{1,64}$/.test(runId)) return local
+      return hermesRemote.call('GET', `/api/runs/${encodeURIComponent(runId)}`).catch(() => null)
+    })
   )
+
 
   // ── Projeto local (OneDrive) → VPS para o Hermes; "Trazer/Enviar alterações" ──
   // O renderer só escolhe caminhos; o que mudou é recalculado aqui a cada aplicação.
@@ -781,7 +829,10 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
   // Fechamento da entrega — revisão + checks reexecutados pelo NEX + DoD como gate + relatório (v3.66.0)
   ipcMain.handle('hermes:delivery:get', (_, { projectId }: { projectId: string }) =>
-    wrapHandler(() => { requireAuth(); return hermesSvc.getDelivery(projectId) })
+    wrapHandler(() => {
+      requireAuth()
+      return hermesRemote.isRemote(projectId) ? hermesRemote.call('GET', `${remoteP(projectId)}/delivery`) : hermesSvc.getDelivery(projectId)
+    })
   )
   ipcMain.handle('hermes:delivery:close', (_, { projectId, reviewText }: { projectId: string; reviewText: unknown }) =>
     wrapHandler(() => { requireAdmin(); return hermesSvc.closeDelivery(projectId, HermesReviewTextSchema.parse(reviewText)) })
@@ -796,16 +847,32 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
   )
   ipcMain.handle('hermes:delivery:reevaluate', (_, { projectId }: { projectId: string }) =>
-    wrapHandler(() => { requireAdmin(); return hermesSvc.reevaluateDelivery(projectId) })
+    wrapHandler(() => {
+      requireAdmin()
+      return hermesRemote.isRemote(projectId)
+        ? hermesRemote.call('POST', `${remoteP(projectId)}/delivery/reevaluate`, {})
+        : hermesSvc.reevaluateDelivery(projectId)
+    })
   )
   ipcMain.handle('hermes:dod:get', (_, { projectId }: { projectId: string }) =>
-    wrapHandler(() => { requireAuth(); return hermesSvc.getDodChecklist(projectId) })
+    wrapHandler(() => {
+      requireAuth()
+      return hermesRemote.isRemote(projectId) ? hermesRemote.call('GET', `${remoteP(projectId)}/dod`) : hermesSvc.getDodChecklist(projectId)
+    })
   )
   ipcMain.handle('hermes:dod:toggle', (_, { projectId, itemId, done }: { projectId: string; itemId: string; done: boolean }) =>
-    wrapHandler(() => { requireAdmin(); return hermesSvc.toggleDodItem(projectId, itemId, done) })
+    wrapHandler(() => {
+      requireAdmin()
+      return hermesRemote.isRemote(projectId)
+        ? hermesRemote.call('POST', `${remoteP(projectId)}/dod/toggle`, { itemId, done })
+        : hermesSvc.toggleDodItem(projectId, itemId, done)
+    })
   )
   ipcMain.handle('hermes:dod:runChecks', (_, { projectId }: { projectId: string }) =>
-    wrapHandler(() => { requireAdmin(); return hermesSvc.runDodAutoChecks(projectId) })
+    wrapHandler(() => {
+      requireAdmin()
+      return hermesRemote.isRemote(projectId) ? hermesRemote.call('POST', `${remoteP(projectId)}/dod/run`, {}) : hermesSvc.runDodAutoChecks(projectId)
+    })
   )
 
   // Hermes — FASE 5: visibilidade de skills/sessões (só leitura) + adapter de contexto NEX→Hermes
@@ -816,7 +883,12 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     wrapHandler(() => { requireAuth(); return hermesSvc.getSessionsSummary(vpsId) })
   )
   ipcMain.handle('hermes:agent:syncContext', (_, { projectId }: { projectId: string }) =>
-    wrapHandler(() => { requireAdmin(); return hermesSvc.syncProjectContext(projectId) })
+    wrapHandler(() => {
+      requireAdmin()
+      return hermesRemote.isRemote(projectId)
+        ? hermesRemote.call('POST', `${remoteP(projectId)}/sync-context`, {})
+        : hermesSvc.syncProjectContext(projectId)
+    })
   )
 
   // ── IDE-18: DAP — abre DevTools externo para depuração remota ─────────
@@ -2233,7 +2305,14 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
   // ── Tasks (Ponto 6 — Planejamento Persistente) ────────────────────────────────
   ipcMain.handle('tasks:list', (_, filters?: { status?: TaskStatus; ownerAgent?: string; projectId?: string }) =>
-    wrapHandler(() => { requireAuth(); return tasksSvc.list(filters) })
+    wrapHandler(() => {
+      requireAuth()
+      // Tarefas do Hermes de projeto migrado vivem no serviço da VPS.
+      if (filters?.projectId && filters.ownerAgent === 'hermes' && hermesRemote.isRemote(filters.projectId)) {
+        return hermesRemote.call('GET', `${remoteP(filters.projectId)}/tasks`)
+      }
+      return tasksSvc.list(filters)
+    })
   )
   ipcMain.handle('tasks:get', (_, id: string) =>
     wrapHandler(() => { requireAuth(); return tasksSvc.get(id) })

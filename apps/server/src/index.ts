@@ -4,7 +4,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { z } from 'zod'
 import { initializeDatabase, getPrismaClient } from '@cwm/db'
-import { HermesAutonomyLevelSchema, HermesProjectIdSchema, HermesRunnerTextSchema } from '@cwm/config'
+import { HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesProjectIdSchema, HermesRunnerTextSchema } from '@cwm/config'
 import {
   TerminalService, SftpService, GitService, KnowledgeService, ProjectMemoryService, TasksService,
   HermesService, HermesRunLog, HermesAgentRunner, ensureHermesSchema, type RunnerEvent,
@@ -23,7 +23,7 @@ const DATA_DIR = process.env['ZEUS_DATA_DIR'] ?? '/opt/zeus-hermes/data'
 const PORT = Number(process.env['ZEUS_PORT'] ?? 8790)
 const HOST = '127.0.0.1'
 const MAX_BODY = 64 * 1024
-const VERSION = '3.77.1'
+const VERSION = '3.78.0'
 
 fs.mkdirSync(DATA_DIR, { recursive: true })
 process.env['DATABASE_URL'] = `file:${path.join(DATA_DIR, 'zeus.db')}`
@@ -130,6 +130,23 @@ route('POST', '/api/projects/:id/decision', ({ id, body }) => runner.resolveDeci
 route('POST', '/api/projects/:id/review', ({ id }) => runner.review(id))
 route('POST', '/api/projects/:id/corrections', ({ id }) => runner.createCorrections(id))
 route('POST', '/api/projects/:id/autonomy', ({ id, body }) => hermes.setAutonomyLevel(id, parse(z.object({ level: HermesAutonomyLevelSchema }), body).level))
+// O que o painel Agent do Zeus lê/grava além do loop (o Zeus repassa para cá nos projetos migrados).
+route('GET', '/api/projects/:id/agent', ({ id }) => hermes.getAgentStatus(id))
+route('POST', '/api/projects/:id/dev-rules', ({ id, body }) => hermes.setDevRules(id, parse(z.object({ devRules: HermesDevRulesSchema }), body).devRules))
+route('POST', '/api/projects/:id/sync-context', ({ id }) => hermes.syncProjectContext(id))
+route('GET', '/api/projects/:id/dod', ({ id }) => hermes.getDodChecklist(id))
+route('POST', '/api/projects/:id/dod/toggle', ({ id, body }) => {
+  const b = parse(z.object({ itemId: z.string().min(1).max(64), done: z.boolean() }), body)
+  return hermes.toggleDodItem(id, b.itemId, b.done)
+})
+route('POST', '/api/projects/:id/dod/run', ({ id }) => hermes.runDodAutoChecks(id))
+route('GET', '/api/projects/:id/delivery', ({ id }) => hermes.getDelivery(id))
+route('POST', '/api/projects/:id/delivery/reevaluate', ({ id }) => hermes.reevaluateDelivery(id))
+route('GET', '/api/projects/:id/runs', ({ id, url }) => {
+  const taskId = url.searchParams.get('taskId')
+  return runLog.list(id, taskId === null ? undefined : parse(HermesProjectIdSchema, taskId))
+})
+route('GET', '/api/runs/:id', ({ id }) => runLog.get(id))
 // Governança — Autorizar = o serviço executa o comando (tool_execution_log); Negar só descarta.
 route('POST', '/api/approvals/:id', ({ id, body }) => runner.resolveApproval(id, parse(z.object({ approve: z.boolean() }), body).approve))
 
@@ -167,10 +184,40 @@ const server = http.createServer((req, res) => {
   })
 })
 
+/**
+ * `node server.cjs import <arquivo.json>` — recebe os dados de projetos migrados do Zeus do PC
+ * (scripts/migrate-to-zeus-hermes.mjs). A VPS vira "esta máquina": host 127.0.0.1, usuário root,
+ * sem senha, com a chave própria do serviço. INSERT OR REPLACE: rodar de novo atualiza.
+ */
+const IMPORT_TABLES = ['vps_servers', 'projects', 'hermes_instances', 'hermes_project_agents', 'agent_tasks',
+  'hermes_task_runs', 'knowledge_entries', 'project_memory'] as const
+async function importData(file: string): Promise<void> {
+  const data = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, Record<string, unknown>[]>
+  const db = getPrismaClient()
+  for (const t of IMPORT_TABLES) {
+    for (const row of data[t] ?? []) {
+      const r = { ...row }
+      if (t === 'vps_servers') Object.assign(r, { host: '127.0.0.1', port: 22, username: 'root', sshPassword: null, sshHostFingerprint: null })
+      const cols = Object.keys(r).filter(c => /^[A-Za-z_][A-Za-z0-9_]*$/.test(c))
+      await db.$executeRawUnsafe(
+        `INSERT OR REPLACE INTO ${t} (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+        ...cols.map(c => r[c]),
+      )
+    }
+    console.log(`[import] ${t}: ${(data[t] ?? []).length}`)
+  }
+  await db.$executeRawUnsafe(`INSERT OR IGNORE INTO settings (id) VALUES ('default')`)
+  await db.$executeRawUnsafe(`UPDATE settings SET sshKeyPath = ? WHERE id = 'default'`, path.resolve(DATA_DIR, '..', 'ssh', 'id_ed25519'))
+}
+
 async function main(): Promise<void> {
   await initializeDatabase()
   await ensureHermesSchema()
   await runLog.ensureTable()
+  if (process.argv[2] === 'import') {
+    await importData(process.argv[3] ?? '')
+    process.exit(0)
+  }
   const n = await hermes.recoverInterruptedSessions().catch(() => 0)
   if (n > 0) console.log(`[zeus-hermes] ${n} sessão(ões) interrompida(s) marcada(s) para retomada`)
   if (!fs.existsSync(TOKEN_HASH_FILE)) console.warn(`[zeus-hermes] sem ${TOKEN_HASH_FILE} — toda rota /api vai recusar`)
