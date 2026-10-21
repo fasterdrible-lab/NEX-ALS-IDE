@@ -18,6 +18,7 @@ export {
   HermesLocalSync, validatePublishPath, SYNC_EXCLUDE_DIRS,
   type LocalLink, type LocalSyncStatus, type LocalSyncApplyResult, type SyncChange, type SyncChangeKind,
 } from './local-sync.js'
+export { ensureHermesSchema } from './hermes-schema.js'
 export {
   HermesAgentRunner,
   type RunnerMode, type RunnerApproval, type RunnerActivity, type RunnerState, type RunnerSnapshot, type RunnerEvent,

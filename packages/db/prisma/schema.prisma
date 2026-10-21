@@ -3,6 +3,14 @@ generator client {
   output   = "../generated/client"
 }
 
+// Serviço zeus-hermes na VPS (apps/server): mesmo schema, motor para Ubuntu 24.04 (OpenSSL 3).
+// Fora de packages/db/generated para não entrar no instalador do Zeus.
+generator server {
+  provider      = "prisma-client-js"
+  output        = "../../../apps/server/generated/prisma-client"
+  binaryTargets = ["debian-openssl-3.0.x"]
+}
+
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")

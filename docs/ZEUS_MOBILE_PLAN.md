@@ -154,7 +154,7 @@ Isso substitui a "Decisão de arquitetura" do início (servidor dentro do Zeus n
 ### Ordem
 
 0. ✅ **Loop do Hermes como módulo independente** (sai do `HermesAgentPanel.tsx`). Primeiro roda no main do Zeus do PC: fechar o painel já não interrompe. **Feito na v3.77.0** (`HermesAgentRunner`, sem dependência do Electron); falta validar pela UI com o Hermes real.
-1. **Zeus Server na VPS-1:**
+1. 🔶 **Em andamento (2026-10-21)** — serviço `zeus-hermes` (`apps/server`) escrito e testado na VPS-1 sem instalar; Tailscale nos 3 aparelhos. Detalhes em ARCHITECTURE.md → "Serviço zeus-hermes". **Zeus Server na VPS-1:**
    - o mesmo módulo como serviço (systemd), com banco próprio para tarefas/logs/aprovações do Hermes;
    - migração dos dados atuais do PC para lá;
    - acesso só pelo Tailscale.

@@ -34,5 +34,5 @@ export {
   HermesIncidentStore, buildIncidentPrompt, parseDiagnosis, buildJsonFixPrompt, type HermesIncident, type IncidentType,
   parseReview,
   HermesLocalSync, type LocalLink, type LocalSyncStatus, type LocalSyncApplyResult, type SyncChange,
-  HermesAgentRunner, type RunnerEvent, type RunnerState, type RunnerSnapshot, type RunnerApproval,
+  HermesAgentRunner, ensureHermesSchema, type RunnerEvent, type RunnerState, type RunnerSnapshot, type RunnerApproval,
 } from './hermes/index.js'

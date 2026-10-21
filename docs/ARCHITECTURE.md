@@ -1458,6 +1458,34 @@ HermesAgentPanel
 ```
 (Desde a v3.77.0 este fluxo está no `HermesAgentRunner`, não no painel — ver abaixo.)
 
+## Serviço zeus-hermes na VPS (Passo 1 do Zeus Mobile — em andamento)
+
+`apps/server` — o mesmo `HermesAgentRunner` como serviço Node na VPS-1, com banco próprio
+(`/opt/zeus-hermes/data/zeus.db`). Ainda não usado pelo Zeus (Passo 2) nem com dados migrados.
+
+```
+celular / Zeus do PC ──HTTPS (só Tailscale)──► tailscale serve :8443 ──► 127.0.0.1:8790 server.cjs
+                                                                          HermesAgentRunner
+                                                                          └─ HermesService ──SSH 127.0.0.1──► hermes
+```
+- **Transporte**: o serviço usa o mesmo código de SSH do Zeus apontando para a própria máquina
+  (VPS cadastrada no banco do serviço com host 127.0.0.1 e a chave `/opt/zeus-hermes/ssh/id_ed25519`,
+  autorizada em `/root/.ssh/authorized_keys` com `from="127.0.0.1,::1"`). Nenhuma reescrita de
+  `TerminalService`/`SftpService`/`GitService`.
+- **HTTP** (`node:http`, sem framework): `GET /health` aberto; `/api/*` com `Authorization: Bearer`
+  (o serviço guarda só o sha256 em `data/token.sha256`; 10 erros → IP bloqueado 15 min); corpo ≤ 64 KB,
+  validado com Zod; erro devolve só a mensagem. Rotas: `GET /api/projects`, `GET /api/projects/:id/state|tasks`,
+  `GET /api/events[?projectId]` (SSE com os `RunnerEvent`), `POST /api/projects/:id/{message,resume,cancel,stop,
+  stop-remote,objective,loop,next,decision,review,corrections,autonomy}`, `POST /api/approvals/:id {approve}`.
+- **Build**: `apps/server/build.mjs` (esbuild → `dist/server.cjs` + `dist/prisma-client/`). O cliente Prisma do
+  serviço vem do generator `server` do schema (`binaryTargets = debian-openssl-3.0.x`), gerado em
+  `apps/server/generated/` — fora de `packages/db/generated`, que entra no instalador do Zeus.
+- **Schema do Hermes** (tabelas fora do `initializeDatabase` + migrações) saiu do handlers.ts para
+  `ensureHermesSchema()` (`packages/core/src/hermes/hermes-schema.ts`), usado pelo Zeus e pelo serviço.
+- **Instalação**: `node scripts/deploy-zeus-hermes.mjs` — `/opt/zeus-hermes/{app,data,ssh}`, systemd
+  `zeus-hermes.service` (root, Restart=always), `tailscale serve --bg --https=8443`. Token do PC em
+  `%APPDATA%\@cwm\desktop\zeus-hermes\token`. Porta 8443 porque o nginx da VPS-1 já usa 443.
+
 ## Cópia de segurança do banco (v3.77.1)
 
 `apps/desktop/src/db-backup.ts` — `startDatabaseBackups(userData)` roda no `main.ts` logo depois de
