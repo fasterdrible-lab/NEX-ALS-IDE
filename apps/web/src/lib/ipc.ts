@@ -266,7 +266,6 @@ export const ipc = {
     delete: (id: string) => invoke<void>('accounts:delete', id),
   },
   launcher: {
-    openProject: (projectId: string) => invoke<{ success: boolean; message: string }>('launcher:openProject', projectId),
     openTerminal: (vpsId: string) => invoke<{ success: boolean; message: string }>('launcher:openTerminal', vpsId),
     checkClaude: (vpsId: string) => invoke<ClaudeCheckResult>('launcher:checkClaude', vpsId),
   },

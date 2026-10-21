@@ -182,8 +182,6 @@ export interface DiagnosticItem {
 }
 
 export interface DiagnosticResults {
-  vscode: DiagnosticItem
-  vscodeInsiders: DiagnosticItem
   ssh: DiagnosticItem
   git: DiagnosticItem
   node: DiagnosticItem

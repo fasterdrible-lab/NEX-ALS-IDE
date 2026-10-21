@@ -1679,15 +1679,6 @@ export default function SquadPage() {
                   >
                     <RefreshCw size={10} />
                   </button>
-                  <button
-                    onClick={() => ipc.local.exec(`code-insiders "${localPath}"`, localPath).catch(() =>
-                      ipc.local.exec(`code "${localPath}"`, localPath).catch(console.error)
-                    )}
-                    title="Abrir no VS Code Insiders"
-                    className="p-0.5 text-slate-600 hover:text-blue-400 transition-colors"
-                  >
-                    <ExternalLink size={10} />
-                  </button>
                 </div>
               )}
             </div>

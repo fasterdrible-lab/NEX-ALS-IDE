@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  ArrowLeft, Bot, Code2, HardDrive, Terminal, Rocket, Server, FolderOpen, GitBranch,
+  ArrowLeft, Bot, Code2, HardDrive, Terminal, Server, FolderOpen, GitBranch,
   GitCommit as GitCommitIcon, ListChecks, Loader2,
 } from 'lucide-react'
 import type { Project, GitCommit, GitStatus } from '@cwm/config'
@@ -9,7 +9,7 @@ import { ipc, type HermesProjectAgentInfo, type AgentTask } from '../lib/ipc'
 
 /**
  * Página de um projeto: ponto único para abrir o que é dele já na pasta certa — Agent (Hermes),
- * IDE, Explorer, Terminal e VS Code — com um resumo do estado (Hermes, tarefas, git).
+ * IDE, Explorer e Terminal — com um resumo do estado (Hermes, tarefas, git).
  */
 export default function ProjectHubPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -19,7 +19,6 @@ export default function ProjectHubPage() {
   const [tasks, setTasks] = useState<AgentTask[]>([])
   const [git, setGit] = useState<GitStatus | null>(null)
   const [commits, setCommits] = useState<GitCommit[]>([])
-  const [launching, setLaunching] = useState(false)
   const [launchMsg, setLaunchMsg] = useState('')
 
   useEffect(() => {
@@ -53,15 +52,6 @@ export default function ProjectHubPage() {
   const done = tasks.filter(t => t.status === 'DONE').length
   const running = tasks.find(t => t.status === 'IN_PROGRESS')
   const dirty = git ? git.staged.length + git.unstaged.length + git.untracked.length : 0
-
-  const openVsCode = async () => {
-    setLaunching(true); setLaunchMsg('')
-    try {
-      const r = await ipc.launcher.openProject(project.id)
-      setLaunchMsg(r.success ? '' : r.message)
-    } catch (e) { setLaunchMsg(String(e)) }
-    setLaunching(false)
-  }
 
   const shortcuts = [
     { label: 'Agent', hint: 'Hermes — desenvolvimento autônomo', icon: Bot, accent: 'text-purple-300 border-purple-700/50 hover:bg-purple-950/40',
@@ -105,12 +95,9 @@ export default function ProjectHubPage() {
           </button>
         ))}
       </div>
-      <button onClick={() => navigate(`/ide/${project.vpsServerId}/${vpsName}?path=${path}`)} className="btn-secondary text-xs mb-8 mr-2"
+      <button onClick={() => navigate(`/ide/${project.vpsServerId}/${vpsName}?path=${path}`)} className="btn-secondary text-xs mb-8"
         title="Abre a IDE aqui mesmo, no lugar desta tela">
         <Code2 size={13} /> IDE nesta janela
-      </button>
-      <button onClick={() => void openVsCode()} disabled={launching} className="btn-secondary text-xs mb-8">
-        {launching ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />} Abrir no VS Code (Remote SSH)
       </button>
       {launchMsg && <p className="text-xs text-red-400 -mt-6 mb-8">{launchMsg}</p>}
 

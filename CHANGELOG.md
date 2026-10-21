@@ -1,5 +1,25 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.80.1] — 2026-10-21
+
+### Removido — tudo que abria ou mencionava o VS Code
+
+O Zeus não usa mais o VS Code: o trabalho é na IDE própria e no Hermes. A pedido do usuário, depois de o botão "Abrir no VS Code (Remote SSH)" falhar na VPS nova.
+
+- Botões: "Abrir no VS Code (Remote SSH)" (página do projeto), "VS Code" (projetos no Lançador), "Abrir no VS Code Insiders" (explorador do Squad). Removidos também o canal `launcher:openProject` e o `LauncherService.openProject`.
+- Diagnósticos não verificam mais VS Code / VS Code Insiders (só SSH, Git, Node.js).
+- Textos do Dashboard, Projetos locais e Manual de Uso sem comparações com o VS Code; seção "Caminho VS Code" das Configurações no Manual removida. (As colunas `vscodePath` da tabela `settings` ficam no banco, sem uso.)
+
+### Corrigido
+
+- `zeus-hermes/config.json` gravado com BOM (PowerShell 5.1) fazia o Zeus ignorar o serviço da VPS sem aviso — o BOM agora é ignorado.
+
+### Infra (sem código) — VPS dedicada ao Hermes
+
+- Hermes, Claude Code e o serviço `zeus-hermes` migrados para a VPS **ZEUS** (`200.141.20.12`, Tailscale `vps-hermes`), só do Hermes: SSH só por chave, firewall só SSH, atualizações automáticas. ACESSIBILIDADE migrado com tarefas, logs e git; serviço da VPS-1 desligado (arquivos ficam como cópia).
+
+**Verificado:** `pnpm typecheck` (6 pacotes); config 17/17, core 61/61; nenhuma menção a VS Code nas telas (busca no código).
+
 ## [3.80.0] — 2026-10-21
 
 ### Adicionado — trabalho do Hermes salvo no GitHub

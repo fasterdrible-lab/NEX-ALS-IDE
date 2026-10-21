@@ -43,7 +43,7 @@ export default function LocalProjects({ reloadToken = 0 }: { reloadToken?: numbe
       {msg && <p className="text-xs text-red-400 mb-2">{msg}</p>}
       {items.length === 0 ? (
         <div className="card text-sm text-slate-500">
-          Nenhuma pasta aberta ainda. Use <b className="text-slate-300">Abrir pasta…</b> (ou Ctrl+O): cada projeto abre na sua própria janela, como no VS Code,
+          Nenhuma pasta aberta ainda. Use <b className="text-slate-300">Abrir pasta…</b> (ou Ctrl+O): cada projeto abre na sua própria janela,
           e volta aberto quando você reabrir o Zeus. Para levar à VPS, use o botão <b className="text-slate-300">Agent</b> dentro do projeto.
         </div>
       ) : (

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Rocket, Terminal, FolderOpen, Server,
+  Terminal, FolderOpen, Server,
   Loader2, CheckCircle, XCircle, User,
   BotMessageSquare, AlertTriangle, HelpCircle, HardDrive, Code2,
   ExternalLink, Siren, Rocket as RocketIcon, Bot,
@@ -87,17 +87,6 @@ export default function Launcher() {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleOpenProject = async (projectId: string) => {
-    setLaunchStates(s => ({ ...s, [projectId]: { loading: true } }))
-    try {
-      const result = await ipc.launcher.openProject(projectId)
-      setLaunchStates(s => ({ ...s, [projectId]: { loading: false, success: result.success, message: result.message } }))
-      setTimeout(() => setLaunchStates(s => ({ ...s, [projectId]: { loading: false } })), 4000)
-    } catch (e) {
-      setLaunchStates(s => ({ ...s, [projectId]: { loading: false, success: false, message: String(e) } }))
-    }
-  }
-
   const handleOpenTerminal = (vpsId: string, vpsName: string) => {
     navigate(`/terminal/${vpsId}/${encodeURIComponent(vpsName)}`)
   }
@@ -113,7 +102,7 @@ export default function Launcher() {
         <p className="text-slate-400 mt-1">Projetos locais em janelas próprias; VPS quando precisar</p>
       </div>
 
-      {/* Local primeiro: cada pasta na sua janela (como o VS Code), sem tocar na VPS */}
+      {/* Local primeiro: cada pasta na sua janela, sem tocar na VPS */}
       <LocalProjects />
 
       {/* VPS Terminals */}
@@ -273,16 +262,6 @@ export default function Launcher() {
                       title="Página do projeto: atalhos e resumo (Hermes, tarefas, git)"
                     >
                       <FolderOpen size={13} /> Projeto
-                    </button>
-                    <button
-                      onClick={() => handleOpenProject(p.id)}
-                      disabled={state?.loading}
-                      className="btn-secondary text-xs py-1.5 px-3"
-                    >
-                      {state?.loading
-                        ? <><Loader2 size={13} className="animate-spin" /> Abrindo...</>
-                        : <><Rocket size={13} /> VS Code</>
-                      }
                     </button>
                   </div>
                 </div>

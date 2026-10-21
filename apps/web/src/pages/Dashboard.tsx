@@ -48,7 +48,7 @@ export default function Dashboard() {
           <Rocket size={40} className="mx-auto text-slate-600 mb-3" />
           <h2 className="text-lg font-semibold text-slate-300 mb-2">Comece agora</h2>
           <p className="text-slate-500 mb-5 max-w-sm mx-auto text-sm">
-            Cadastre suas VPS e projetos para abrir ambientes VS Code remotos com um clique.
+            Cadastre suas VPS e projetos para trabalhar neles pela IDE e pelo Hermes.
           </p>
           <div className="flex gap-3 justify-center">
             <Link to="/vps" className="btn-primary">

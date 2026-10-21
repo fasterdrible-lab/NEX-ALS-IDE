@@ -117,7 +117,7 @@ const sections: Section[] = [
         <Step n={2}><strong className="text-slate-100">Configure um provedor de IA</strong> — <em>Configurações → Provedores de IA</em> (ou use sua conta do Claude Code, sem API Key). No editor, o botão roxo <strong>IA</strong> abre o chat; o 🤖 liga o agente que lê e escreve arquivos.</Step>
         <Step n={3}><strong className="text-slate-100">Cadastre sua VPS</strong> (quando for publicar) — <em>VPS</em> → Nova VPS: IP, porta, usuário e chave/senha SSH → <strong>Testar</strong>.</Step>
         <Step n={4}><strong className="text-slate-100">Publique e use o Hermes</strong> — na janela do projeto, botão <strong>Agent</strong> → escolha a VPS e uma pasta nova lá → <strong>Enviar e abrir o Hermes</strong>. Depois, <strong>Trazer alterações</strong> devolve ao PC o que o Hermes mudar.</Step>
-        <Step n={5}><strong className="text-slate-100">Vários projetos ao mesmo tempo</strong> — cada pasta fica na sua janela (como no VS Code), com o nome do projeto na barra de tarefas, e as que estavam abertas voltam quando você reabre o Zeus.</Step>
+        <Step n={5}><strong className="text-slate-100">Vários projetos ao mesmo tempo</strong> — cada pasta fica na sua janela, com o nome do projeto na barra de tarefas, e as que estavam abertas voltam quando você reabre o Zeus.</Step>
       </div>
     ),
   },
@@ -509,7 +509,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
   {
     id: 'multimonitor',
     icon: ExternalLink,
-    title: 'Janelas — um projeto por janela (como no VS Code)',
+    title: 'Janelas — um projeto por janela',
     color: 'bg-cyan-600/20 text-cyan-400',
     content: (
       <div className="space-y-3">
@@ -541,7 +541,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
             ['Abrir o Zeus de novo', 'Pelo atalho, com o Zeus aberto: não cria um segundo app, só traz a janela principal (um segundo app interromperia o Hermes)'],
           ]}/>
         </div>
-        <Tip>Ctrl+W não fecha a janela de propósito — no VS Code esse atalho fecha uma aba, e aqui fecharia o projeto inteiro.</Tip>
+        <Tip>Ctrl+W não fecha a janela de propósito — fecharia o projeto inteiro.</Tip>
       </div>
     ),
   },
@@ -756,9 +756,8 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     content: (
       <div className="space-y-4">
         <div className="space-y-2">
-          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">VS Code e SSH</p>
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">SSH</p>
           <KV items={[
-            ['Caminho VS Code', 'Executável. Padrão: code (precisa estar no PATH)'],
             ['Chave SSH', 'Caminho para chave privada. Vazio usa ~/.ssh/id_rsa'],
           ]}/>
         </div>
@@ -971,7 +970,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
             ['Squad', 'Todos os 22 agentes usam a conta Pro automaticamente'],
             ['Streaming', 'Texto aparece em tempo real igual ao modo API'],
           ]}/>
-          <Info>O Claude Code v2.1+ já vem autenticado se você usou antes no VS Code. A IDE detecta automaticamente.</Info>
+          <Info>O Claude Code v2.1+ já vem autenticado se você já fez login nele neste PC. A IDE detecta automaticamente.</Info>
         </div>
 
         <div className="space-y-2">
@@ -1181,7 +1180,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
             ['Interface', 'React 18 + Tailwind CSS'],
             ['Banco de dados', 'SQLite local (Prisma ORM)'],
             ['SSH/SFTP', 'ssh2 (nativo Windows/Linux)'],
-            ['Editor', 'Monaco Editor (VS Code engine)'],
+            ['Editor', 'Monaco Editor'],
             ['Terminal', 'xterm.js multi-abas'],
             ['Segurança', 'AES-256, contextIsolation, fingerprint SSH'],
             ['IA', 'Anthropic · OpenAI · Gemini · DeepSeek · OpenRouter · Ollama'],
@@ -1211,7 +1210,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.80.0</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.80.1</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}

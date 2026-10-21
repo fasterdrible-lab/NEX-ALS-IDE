@@ -42,7 +42,7 @@ export default function Diagnostics() {
         <div className="card text-center py-16">
           <Activity size={40} className="mx-auto text-slate-700 mb-3" />
           <p className="text-slate-400 mb-2">Clique em "Iniciar diagnóstico" para verificar o ambiente</p>
-          <p className="text-xs text-slate-600">Verifica: VS Code, VS Code Insiders, SSH, Git, Node.js</p>
+          <p className="text-xs text-slate-600">Verifica: SSH, Git, Node.js</p>
         </div>
       )}
 
@@ -76,7 +76,6 @@ export default function Diagnostics() {
           <div className="mt-8 card">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Como corrigir problemas</p>
             <ul className="space-y-2 text-xs text-slate-500">
-              <li><span className="text-slate-300">VS Code não encontrado:</span> Instale VS Code ou configure o caminho em Configurações → "Caminho do VS Code"</li>
               <li><span className="text-slate-300">SSH não encontrado (Windows):</span> Ative o OpenSSH em Configurações do Windows → Apps → Recursos opcionais → OpenSSH Client</li>
               <li><span className="text-slate-300">Git não encontrado:</span> Instale Git em git-scm.com (Git Bash também fornece SSH)</li>
               <li><span className="text-slate-300">Node.js não encontrado:</span> Instale Node.js 22 LTS em nodejs.org</li>

@@ -16,17 +16,13 @@ async function checkCommand(cmd: string, label: string, versionFlag = '--version
 
 export class DiagnosticsService {
   async runAll(): Promise<DiagnosticResults> {
-    const [vscode, vscodeInsiders, ssh, git, node] = await Promise.allSettled([
-      checkCommand('code', 'VS Code'),
-      checkCommand('code-insiders', 'VS Code Insiders'),
+    const [ssh, git, node] = await Promise.allSettled([
       checkCommand('ssh', 'SSH', '-V'),
       checkCommand('git', 'Git'),
       checkCommand('node', 'Node.js'),
     ])
 
     return {
-      vscode: settled(vscode, 'VS Code'),
-      vscodeInsiders: settled(vscodeInsiders, 'VS Code Insiders'),
       ssh: settled(ssh, 'SSH'),
       git: settled(git, 'Git'),
       node: settled(node, 'Node.js'),

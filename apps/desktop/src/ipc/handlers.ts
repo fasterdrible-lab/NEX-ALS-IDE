@@ -237,9 +237,6 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('accounts:delete', (_, id: string) => wrapHandler(() => { requireAdmin(); return accounts.delete(id) }))
 
   // Launcher
-  ipcMain.handle('launcher:openProject', (_, projectId: string) =>
-    wrapHandler(() => launcher.openProject(projectId))
-  )
   ipcMain.handle('launcher:openTerminal', (_, vpsId: string) =>
     wrapHandler(() => launcher.openTerminal(vpsId))
   )

@@ -5,7 +5,7 @@ const ALLOWED_CHANNELS = new Set([
   'vps:list', 'vps:create', 'vps:update', 'vps:delete', 'vps:test', 'vps:clearFingerprint', 'vps:setupRemoteProject',
   'projects:list', 'projects:create', 'projects:update', 'projects:delete', 'projects:recent',
   'accounts:list', 'accounts:create', 'accounts:update', 'accounts:delete',
-  'launcher:openProject', 'launcher:openTerminal', 'launcher:checkClaude',
+  'launcher:openTerminal', 'launcher:checkClaude',
   'settings:get', 'settings:update',
   'diagnostics:run',
   'terminal:open', 'terminal:input', 'terminal:resize', 'terminal:close', 'terminal:exec',
