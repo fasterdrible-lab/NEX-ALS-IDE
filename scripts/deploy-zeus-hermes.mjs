@@ -44,7 +44,10 @@ set -euo pipefail
 B=/opt/zeus-hermes
 mkdir -p $B/data $B/ssh
 chmod 700 $B/data $B/ssh
-rm -rf $B/app.new && mkdir $B/app.new && tar -xzf /tmp/${tgz} -C $B/app.new && rm -f /tmp/${tgz}
+rm -rf $B/app.new && mkdir $B/app.new && tar -xzf /tmp/${tgz} -C $B/app.new --no-same-owner && rm -f /tmp/${tgz}
+# O tar traz as permissões do Windows (777): o serviço roda como root, então ninguém além do root
+# pode gravar no app — senão qualquer usuário da VPS trocaria o server.cjs e viraria root.
+chown -R root:root $B/app.new && chmod -R u=rwX,go=rX $B/app.new
 if [ -d $B/app ]; then rm -rf $B/app.old && mv $B/app $B/app.old; fi
 mv $B/app.new $B/app
 umask 077 && echo ${hash} > $B/data/token.sha256
