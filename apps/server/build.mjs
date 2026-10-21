@@ -36,4 +36,6 @@ fs.cpSync(src, path.join(out, 'prisma-client'), {
   // Só o motor de Linux vai para a VPS.
   filter: f => !/query_engine-windows/.test(f),
 })
+// App do celular (Passo 3): estáticos servidos pelo próprio serviço.
+fs.cpSync(path.join(root, 'public'), path.join(out, 'public'), { recursive: true })
 console.log('[server] dist/ pronto:', fs.readdirSync(out).join(', '))

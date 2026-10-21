@@ -89,7 +89,7 @@ function readBody(req: http.IncomingMessage): Promise<unknown> {
 }
 
 function send(res: http.ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' })
   res.end(JSON.stringify(body ?? null))
 }
 
@@ -150,11 +150,38 @@ route('GET', '/api/runs/:id', ({ id }) => runLog.get(id))
 // Governança — Autorizar = o serviço executa o comando (tool_execution_log); Negar só descarta.
 route('POST', '/api/approvals/:id', ({ id, body }) => runner.resolveApproval(id, parse(z.object({ approve: z.boolean() }), body).approve))
 
+// App do celular (Passo 3): arquivos estáticos em public/, ao lado do server.cjs. São só a interface —
+// sem dados; tudo o que ela mostra vem de /api com o token.
+const PUBLIC_DIR = path.join(__dirname, 'public')
+const STATIC: Record<string, string> = {
+  '/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/sw.js': 'sw.js',
+  '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg',
+}
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml',
+}
+const SECURITY_HEADERS = {
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+}
+function serveStatic(pathname: string, res: http.ServerResponse): boolean {
+  const file = STATIC[pathname]
+  if (!file) return false
+  let body: Buffer
+  try { body = fs.readFileSync(path.join(PUBLIC_DIR, file)) } catch { return false }
+  res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-cache', ...SECURITY_HEADERS })
+  res.end(body)
+  return true
+}
+
 const server = http.createServer((req, res) => {
   void (async () => {
     const ip = req.socket.remoteAddress ?? '?'
     const url = new URL(req.url ?? '/', 'http://localhost')
     if (url.pathname === '/health') return send(res, 200, { ok: true, version: VERSION })
+    if (req.method === 'GET' && serveStatic(url.pathname, res)) return
     if (blocked(ip)) return send(res, 429, { error: 'Muitas tentativas — aguarde 15 minutos' })
     if (!tokenOk(req.headers['authorization'])) { fail(ip); return send(res, 401, { error: 'Não autorizado' }) }
     failures.delete(ip)
