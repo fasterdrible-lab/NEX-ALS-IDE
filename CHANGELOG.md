@@ -1,5 +1,13 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.79.1] — 2026-10-21
+
+### Corrigido — QR de pareamento aparecia quebrado
+
+O QR era uma imagem `data:`, e o CSP do `index.html` do Zeus (sem `img-src`, cai em `default-src 'self'`) bloqueia esse tipo de imagem. Agora o QR é desenhado num `<canvas>`, sem afrouxar o CSP.
+
+**Verificado:** `pnpm --filter @cwm/web typecheck`. Não testado lendo o QR no celular.
+
 ## [3.79.0] — 2026-10-21
 
 ### Adicionado — app do celular (Zeus Mobile, Passo 3 — primeira versão)

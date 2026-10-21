@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Loader2, CheckCircle,
   Download, Upload, ChevronDown, ChevronUp, Eye, EyeOff,
@@ -926,9 +926,11 @@ export default function SettingsPage() {
  * o token — só aparece a pedido, some sozinho em 2 minutos e não é guardado nesta tela.
  */
 function MobilePairingCard() {
-  const [qr, setQr] = useState<{ url: string; link: string; img: string } | null>(null)
+  const [qr, setQr] = useState<{ url: string; link: string } | null>(null)
   const [msg, setMsg] = useState('')
   const [copied, setCopied] = useState(false)
+  // Canvas, não <img src="data:…">: o CSP do index.html não libera imagens data:.
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
     if (!qr) return
@@ -936,13 +938,19 @@ function MobilePairingCard() {
     return () => clearTimeout(t)
   }, [qr])
 
+  useEffect(() => {
+    if (!qr || !canvasRef.current) return
+    import('qrcode')
+      .then(QRCode => QRCode.toCanvas(canvasRef.current, qr.link, { width: 260, margin: 2, errorCorrectionLevel: 'M' }))
+      .catch((e: unknown) => setMsg(`Não consegui desenhar o QR: ${String(e)}`))
+  }, [qr])
+
   const show = async () => {
     setMsg('')
     try {
       const p = await ipc.zeusMobile.pairing()
       if (!p) { setMsg('O serviço do Hermes na VPS ainda não está configurado neste PC.'); return }
-      const QRCode = await import('qrcode')
-      setQr({ ...p, img: await QRCode.toDataURL(p.link, { width: 260, margin: 1, errorCorrectionLevel: 'M' }) })
+      setQr(p)
     } catch (e) { setMsg(String(e instanceof Error ? e.message : e)) }
   }
 
@@ -961,7 +969,7 @@ function MobilePairingCard() {
         </button>
       ) : (
         <div className="space-y-2">
-          <img src={qr.img} alt="QR de pareamento do celular" width={260} height={260} className="rounded bg-white p-2" />
+          <canvas ref={canvasRef} aria-label="QR de pareamento do celular" className="rounded bg-white" />
           <p className="text-xs text-amber-300">
             Quem ler este QR controla o Hermes. Não fotografe nem compartilhe — ele some em 2 minutos.
           </p>
