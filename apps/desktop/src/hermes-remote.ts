@@ -25,7 +25,8 @@ export class HermesRemote {
 
   private load(): void {
     try {
-      const c = JSON.parse(fs.readFileSync(path.join(this.dir, 'config.json'), 'utf8')) as Partial<RemoteConfig>
+      // Sem o BOM: editado no PowerShell 5.1, o arquivo ganha um e o JSON.parse falharia (serviço desligado sem aviso).
+      const c = JSON.parse(fs.readFileSync(path.join(this.dir, 'config.json'), 'utf8').replace(/^﻿/, '')) as Partial<RemoteConfig>
       const token = fs.readFileSync(path.join(this.dir, 'token'), 'utf8').trim()
       if (typeof c.url === 'string' && /^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(c.url) && Array.isArray(c.projectIds) && token) {
         this.config = { url: c.url, projectIds: c.projectIds.filter((p): p is string => typeof p === 'string') }
