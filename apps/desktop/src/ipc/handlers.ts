@@ -6,6 +6,7 @@ import {
 import type { IpcMain } from 'electron'
 import { app, BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
 import { HermesRemote } from '../hermes-remote.js'
+import { ClaudeUsageMonitor } from '../claude-usage.js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -1416,12 +1417,47 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
   )
 
+  async function setActiveClaudeAccount(id: string): Promise<void> {
+    await db.$executeRawUnsafe(`UPDATE claude_code_accounts SET isActive=0`)
+    await db.$executeRawUnsafe(`UPDATE claude_code_accounts SET isActive=1 WHERE id=?`, id)
+  }
+
   ipcMain.handle('claude:accounts:setActive', (_, id: string) =>
     wrapHandler(async () => {
-      await db.$executeRawUnsafe(`UPDATE claude_code_accounts SET isActive=0`)
-      await db.$executeRawUnsafe(`UPDATE claude_code_accounts SET isActive=1 WHERE id=?`, id)
+      if (typeof id !== 'string' || !id) throw new Error('Conta inválida')
+      await setActiveClaudeAccount(id)
+      void claudeUsage.refresh()
       return { success: true }
     })
+  )
+
+  // Uso das contas Claude (5 h e semanal) — lido a cada 5 min; perto do limite, avisa e oferece trocar.
+  // A troca só acontece com o clique do usuário (ver claude-usage.ts).
+  const claudeUsage = new ClaudeUsageMonitor(
+    async () => db.$queryRawUnsafe(`SELECT id, name, configDir, isActive FROM claude_code_accounts ORDER BY createdAt ASC`) as Promise<{ id: string; name: string; configDir: string; isActive: number }[]>,
+    (u) => broadcast('claude:usage:update', u),
+    (active, best, which, w) => {
+      if (!notificationsEnabled || !Notification.isSupported()) return
+      const volta = w.resetsAt ? ` (volta ${new Date(w.resetsAt).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })})` : ''
+      const n = new Notification({
+        title: `Claude: conta ${active.name} em ${w.pct}% do limite ${which}`,
+        body: best
+          ? `${best.name} está com ${Math.max(best.fiveHour?.pct ?? 0, best.sevenDay?.pct ?? 0)}%. Clique para passar a usar ${best.name}.${volta}`
+          : `Nenhuma outra conta com saldo disponível.${volta}`,
+      })
+      if (best) {
+        n.on('click', () => {
+          void setActiveClaudeAccount(best.id).then(() => claudeUsage.refresh())
+          const w0 = BrowserWindow.getAllWindows()[0]
+          if (w0) { if (w0.isMinimized()) w0.restore(); w0.focus() }
+        })
+      }
+      n.show()
+    },
+  )
+  claudeUsage.start()
+  ipcMain.handle('claude:usage:all', (_, opts?: { refresh?: boolean }) =>
+    wrapHandler(async () => { requireAuth(); return opts?.refresh ? claudeUsage.refresh() : claudeUsage.current })
   )
 
   ipcMain.handle('claude:accounts:delete', (_, id: string) =>

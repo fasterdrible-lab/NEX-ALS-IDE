@@ -1,5 +1,19 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.81.0] — 2026-10-21
+
+### Adicionado — saldo das contas Claude e troca em um clique
+
+O usuário alterna entre duas contas Claude quando o limite de 5 h ou o semanal acaba; precisava acompanhar o saldo e trocar sem ir até as Configurações.
+
+- **Barra lateral** → indicador "Claude: <conta> · N%" (o limite mais apertado da conta em uso). Abrindo: todas as contas cadastradas com as barras de **5 h** e **semana**, quando cada uma volta, e **Usar esta**. Conta com login vencido aparece com o aviso em vez de porcentagem.
+- O Zeus lê o uso de **todas** as contas a cada 5 min (mesma API do "Conta & Uso"; só lê o login de cada conta, não renova token).
+- **Perto do limite (≥ 90%)** da conta em uso: notificação do Windows dizendo qual outra conta tem saldo — **clicar troca** para ela. Um aviso por conta e por ciclo do limite; respeita a chave Notificações das Configurações.
+- A troca é sempre do usuário (botão ou clique na notificação), não automática: trocar sozinho para escapar do limite pode ir contra os termos da Anthropic.
+- Vale para o Squad e o AI Hub do PC (provedor Claude Code), que já usam a conta ativa a cada mensagem.
+
+**Verificado:** `pnpm typecheck` (6 pacotes); leitura real das duas contas: `fasterdrilbe` 36% (5 h) / 86% (semana); `phpos40` com login expirado desde 06/2026 (API 401). **Não testado clicando no app.**
+
 ## [3.80.1] — 2026-10-21
 
 ### Removido — tudo que abria ou mencionava o VS Code

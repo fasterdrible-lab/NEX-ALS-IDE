@@ -21,6 +21,7 @@
   - [x] VPS dedicada para o Hermes — 2026-10-21: Hostinger KVM 2 (2 vCPU, 8 GB, 96 GB), Ubuntu 24.04.5, `200.141.20.12`, cadastrada no Zeus como **ZEUS**, Tailscale `vps-hermes.tailfd24ac.ts.net`. SSH só por chave, ufw só SSH, atualizações automáticas; Node 22, Hermes v0.22.3 (Nous, mesmo modelo/fallbacks da VPS-1) com gateway como serviço de usuário (linger), Claude Code 2.1.306 logado (Pro) com as 44 regras do managed-settings; zeus-hermes em `https://vps-hermes.tailfd24ac.ts.net:8443`. ACESSIBILIDADE migrado da VPS-1 (banco do serviço + pasta com .git); serviço da VPS-1 desligado (`/opt/zeus-hermes` e `/root/acessibilidade` ficam lá como cópia). No PC: projeto → VPS ZEUS, `zeus-hermes/config.json` → vps-hermes
   - [ ] Pela tela: painel Agent do ACESSIBILIDADE mostra as 36 tarefas pela VPS nova; Continuar loop roda lá; celular com o novo endereço (gerar QR de novo); Trazer/Enviar alterações usa a VPS nova
   - [ ] Terminal do Zeus não aceita colar (Ctrl+V / botão direito) — corrigir
+  - [ ] (v3.81.0) Saldo das contas Claude na barra lateral: ver as duas contas; refazer o login da `phpos40` (expirado desde 06/2026) para ela servir de reserva; testar "Usar esta" e a notificação perto de 90%
   - [ ] Ligar o ACESSIBILIDADE ao GitHub (agora na VPS nova)
   - [ ] Passo 3b — notificações push no Android (comando aguardando aprovação, tarefa bloqueada, entrega pronta)
   - [ ] Abrir `https://vps-1.tailfd24ac.ts.net:8443/health` no celular (com o Tailscale ligado) → `{"ok":true,...}`

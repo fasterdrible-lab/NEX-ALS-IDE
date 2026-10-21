@@ -184,6 +184,14 @@ export interface HermesAgentChunk {
   approval?: HermesApprovalRequest
 }
 
+// Espelho de apps/desktop/src/claude-usage.ts
+export interface ClaudeUsageWindow { pct: number; resetsAt: string | null }
+export interface ClaudeAccountUsage {
+  id: string; name: string; active: boolean; email: string; plan: string
+  fiveHour: ClaudeUsageWindow | null; sevenDay: ClaudeUsageWindow | null
+  problem: string; checkedAt: number
+}
+
 // Espelho dos tipos do HermesAgentRunner (packages/core/src/hermes/agent-runner.ts)
 export type HermesRunnerMode = 'idle' | 'message' | 'planning' | 'loop' | 'single' | 'decision' | 'approval' | 'review'
 
@@ -719,6 +727,12 @@ export const ipc = {
       setActive: (id: string) => invoke<{ success: boolean }>('claude:accounts:setActive', id),
       delete:    (id: string) => invoke<{ success: boolean }>('claude:accounts:delete', id),
       check:     (configDir: string) => invoke<{ installed: boolean; version: string; authenticated: boolean }>('claude:accounts:check', configDir),
+    },
+    /** Uso (5 h e semanal) de todas as contas cadastradas — o main lê a cada 5 min e avisa perto do limite. */
+    allUsage: (refresh = false) => invoke<ClaudeAccountUsage[]>('claude:usage:all', { refresh }),
+    onUsage: (cb: (u: ClaudeAccountUsage[]) => void) => {
+      if (!window.electron) return () => {}
+      return window.electron.on('claude:usage:update', cb as (...args: unknown[]) => void)
     },
   },
   auth: {

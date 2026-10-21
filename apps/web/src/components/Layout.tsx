@@ -6,6 +6,7 @@ import {
   Sparkles, Users, LogOut, User, BookMarked, BookOpenCheck, ClipboardList, Search, Timer, Shield, Network, CalendarClock,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import ClaudeUsageBadge from './ClaudeUsageBadge'
 import logoUrl from '/logo-zeus.png'
 
 const navItems = [
@@ -258,6 +259,8 @@ export default function Layout() {
           className="px-3 py-3"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
         >
+          <ClaudeUsageBadge />
+
           {sessionRequired && user && (
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2 min-w-0">
@@ -291,7 +294,7 @@ export default function Layout() {
 
           <div>
             <p className="text-[10px] font-medium" style={{ color: 'rgba(26,140,255,0.6)' }}>
-              v3.80.1
+              v3.81.0
             </p>
             <p
               className="text-[9px] tracking-widest uppercase font-light"
