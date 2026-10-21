@@ -1,5 +1,18 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.82.0] — 2026-10-21
+
+### Alterado — o indicador de saldo mostra todos os provedores de IA ativos
+
+O usuário pediu que o indicador não fosse só do Claude: deve acompanhar o provedor que estiver ativo (DeepSeek, OpenAI, Claude…).
+
+- A barra lateral mostra **só os provedores com "ativo" ligado** em Configurações; fechado, o **padrão** (o que o Squad / AI Hub usam) e "+N" com os outros.
+- Cada um do jeito que o provedor permite: **Claude Code** por conta (5 h / semana, "Usar esta"); **DeepSeek** e **OpenRouter** com o saldo em dinheiro; **OpenAI, Anthropic por chave, Gemini, Groq, Mistral, xAI** como "ativo — não informa saldo pela API" (não há consulta de saldo com chave comum). Todos com **Ver cobrança** (abre a página do provedor; domínios liberados no `shell:openExternal`).
+- Saldo abaixo de 2 (na moeda do provedor) → notificação "saldo acabando", uma por dia.
+- A chave de API é lida só no main (`KeyStore`, agora exportado do core) e nunca vai para a tela. Canais: `ai:usage:all` / `ai:usage:update` (substituem `claude:usage:*` da 3.81.0); `apps/desktop/src/ai-usage.ts` (`AiUsageMonitor`), `AiUsageBadge.tsx`.
+
+**Verificado:** `pnpm typecheck` (6 pacotes). Testado contra as APIs reais: Claude Code `fasterdrilbe` 36% / 86%, `phpos40` com login vencido; a chave do **DeepSeek** salva no Zeus é **recusada** pela API (401, "api key ****a9a8 is invalid") — o indicador mostra isso. **Não testado clicando no app.**
+
 ## [3.81.0] — 2026-10-21
 
 ### Adicionado — saldo das contas Claude e troca em um clique

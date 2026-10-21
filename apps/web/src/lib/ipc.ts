@@ -184,12 +184,20 @@ export interface HermesAgentChunk {
   approval?: HermesApprovalRequest
 }
 
-// Espelho de apps/desktop/src/claude-usage.ts
+// Espelho de apps/desktop/src/ai-usage.ts
 export interface ClaudeUsageWindow { pct: number; resetsAt: string | null }
 export interface ClaudeAccountUsage {
   id: string; name: string; active: boolean; email: string; plan: string
   fiveHour: ClaudeUsageWindow | null; sevenDay: ClaudeUsageWindow | null
-  problem: string; checkedAt: number
+  problem: string
+}
+export interface AiProviderUsage {
+  provider: string; label: string; isDefault: boolean
+  /** accounts = Claude Code (contas); balance = saldo em dinheiro; none = o provedor não informa saldo */
+  kind: 'accounts' | 'balance' | 'none'
+  accounts?: ClaudeAccountUsage[]
+  balance?: { amount: number; currency: string; low: boolean }
+  problem: string; billingUrl: string; checkedAt: number
 }
 
 // Espelho dos tipos do HermesAgentRunner (packages/core/src/hermes/agent-runner.ts)
@@ -462,6 +470,14 @@ export const ipc = {
         invoke<HermesCommandResult>('hermes:sessions:summary', { vpsId }),
     },
   },
+  /** Saldo dos provedores de IA ativos (Claude Code por conta, DeepSeek, OpenRouter…) — o main lê a cada 5 min. */
+  aiUsage: {
+    all: (refresh = false) => invoke<AiProviderUsage[]>('ai:usage:all', { refresh }),
+    onUpdate: (cb: (u: AiProviderUsage[]) => void) => {
+      if (!window.electron) return () => {}
+      return window.electron.on('ai:usage:update', cb as (...args: unknown[]) => void)
+    },
+  },
   /** Zeus Mobile: link de pareamento do app do celular (null = serviço da VPS ainda não configurado). */
   zeusMobile: {
     pairing: () => invoke<{ url: string; link: string } | null>('zeusMobile:pairing'),
@@ -727,12 +743,6 @@ export const ipc = {
       setActive: (id: string) => invoke<{ success: boolean }>('claude:accounts:setActive', id),
       delete:    (id: string) => invoke<{ success: boolean }>('claude:accounts:delete', id),
       check:     (configDir: string) => invoke<{ installed: boolean; version: string; authenticated: boolean }>('claude:accounts:check', configDir),
-    },
-    /** Uso (5 h e semanal) de todas as contas cadastradas — o main lê a cada 5 min e avisa perto do limite. */
-    allUsage: (refresh = false) => invoke<ClaudeAccountUsage[]>('claude:usage:all', { refresh }),
-    onUsage: (cb: (u: ClaudeAccountUsage[]) => void) => {
-      if (!window.electron) return () => {}
-      return window.electron.on('claude:usage:update', cb as (...args: unknown[]) => void)
     },
   },
   auth: {

@@ -6,7 +6,7 @@ import {
 import type { IpcMain } from 'electron'
 import { app, BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
 import { HermesRemote } from '../hermes-remote.js'
-import { ClaudeUsageMonitor } from '../claude-usage.js'
+import { AiUsageMonitor } from '../ai-usage.js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -46,6 +46,7 @@ import {
   HermesRunLog,
   HermesAgentRunner,
   ensureHermesSchema,
+  KeyStore,
   type RunnerEvent,
   HermesIncidentStore,
   HermesLocalSync,
@@ -1426,17 +1427,29 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     wrapHandler(async () => {
       if (typeof id !== 'string' || !id) throw new Error('Conta inválida')
       await setActiveClaudeAccount(id)
-      void claudeUsage.refresh()
+      void aiUsage.refresh()
       return { success: true }
     })
   )
 
-  // Uso das contas Claude (5 h e semanal) — lido a cada 5 min; perto do limite, avisa e oferece trocar.
-  // A troca só acontece com o clique do usuário (ver claude-usage.ts).
-  const claudeUsage = new ClaudeUsageMonitor(
-    async () => db.$queryRawUnsafe(`SELECT id, name, configDir, isActive FROM claude_code_accounts ORDER BY createdAt ASC`) as Promise<{ id: string; name: string; configDir: string; isActive: number }[]>,
-    (u) => broadcast('claude:usage:update', u),
-    (active, best, which, w) => {
+  // Saldo dos provedores de IA ATIVOS (Claude Code por conta, DeepSeek, OpenRouter…) — lido a cada 5 min;
+  // perto do limite / saldo acabando, avisa. A troca de conta só acontece com o clique do usuário (ai-usage.ts).
+  const aiUsage = new AiUsageMonitor({
+    listActiveProviders: async () => {
+      const rows = await db.$queryRawUnsafe(`SELECT provider, isDefault FROM ai_providers WHERE enabled = 1`) as { provider: string; isDefault: number | bigint }[]
+      return rows.map(r => ({ provider: r.provider, isDefault: Number(r.isDefault) === 1 }))
+    },
+    listClaudeAccounts: async () => db.$queryRawUnsafe(`SELECT id, name, configDir, isActive FROM claude_code_accounts ORDER BY createdAt ASC`) as Promise<{ id: string; name: string; configDir: string; isActive: number }[]>,
+    getKey: (provider) => KeyStore.get(provider),
+    onUpdate: (u) => broadcast('ai:usage:update', u),
+    onLowBalance: (p) => {
+      if (!notificationsEnabled || !Notification.isSupported() || !p.balance) return
+      new Notification({
+        title: `${p.label}: saldo acabando`,
+        body: `Restam ${p.balance.amount.toFixed(2)} ${p.balance.currency}. Recarregue na página de cobrança do ${p.label}.`,
+      }).show()
+    },
+    onClaudeNearLimit: (active, best, which, w) => {
       if (!notificationsEnabled || !Notification.isSupported()) return
       const volta = w.resetsAt ? ` (volta ${new Date(w.resetsAt).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit' })})` : ''
       const n = new Notification({
@@ -1447,17 +1460,17 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       })
       if (best) {
         n.on('click', () => {
-          void setActiveClaudeAccount(best.id).then(() => claudeUsage.refresh())
+          void setActiveClaudeAccount(best.id).then(() => aiUsage.refresh())
           const w0 = BrowserWindow.getAllWindows()[0]
           if (w0) { if (w0.isMinimized()) w0.restore(); w0.focus() }
         })
       }
       n.show()
     },
-  )
-  claudeUsage.start()
-  ipcMain.handle('claude:usage:all', (_, opts?: { refresh?: boolean }) =>
-    wrapHandler(async () => { requireAuth(); return opts?.refresh ? claudeUsage.refresh() : claudeUsage.current })
+  })
+  aiUsage.start()
+  ipcMain.handle('ai:usage:all', (_, opts?: { refresh?: boolean }) =>
+    wrapHandler(async () => { requireAuth(); return opts?.refresh ? aiUsage.refresh() : aiUsage.current })
   )
 
   ipcMain.handle('claude:accounts:delete', (_, id: string) =>
@@ -2232,7 +2245,12 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   // ── shell:openExternal ───────────────────────────────────────────────────────
   ipcMain.handle('shell:openExternal', async (_, url: string) => {
     if (typeof url !== 'string') return { error: 'URL inválida' }
-    const allowed = ['https://claude.ai/', 'https://www.anthropic.com/']
+    // + páginas de cobrança dos provedores de IA (indicador de saldo da barra lateral)
+    const allowed = [
+      'https://claude.ai/', 'https://www.anthropic.com/', 'https://console.anthropic.com/',
+      'https://platform.openai.com/', 'https://platform.deepseek.com/', 'https://openrouter.ai/',
+      'https://aistudio.google.com/', 'https://console.groq.com/', 'https://console.mistral.ai/', 'https://console.x.ai/',
+    ]
     if (!allowed.some(p => url.startsWith(p))) return { error: 'URL não permitida' }
     await shell.openExternal(url)
     return { success: true }
