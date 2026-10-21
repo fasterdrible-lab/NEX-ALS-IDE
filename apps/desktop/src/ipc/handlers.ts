@@ -1,6 +1,6 @@
 import { getPrismaClient } from '@cwm/db'
 import {
-  HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesReviewTextSchema, HermesProjectIdSchema, HermesRunnerTextSchema,
+  HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesReviewTextSchema, HermesProjectIdSchema, HermesRunnerTextSchema, HermesGithubLinkSchema,
   HermesLocalPathSchema, HermesLocalPublishSchema, HermesLocalSyncApplySchema, LocalGitRequestSchema, LocalGitPublishSchema,
 } from '@cwm/config'
 import type { IpcMain } from 'electron'
@@ -515,9 +515,26 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
 
   // Hermes — FASE 2: Agent Mode (envio de objetivo por projeto, streaming via SSH)
   ipcMain.handle('hermes:agent:status', (_, { projectId }: { projectId: string }) =>
-    wrapHandler(() => {
+    wrapHandler(async () => {
       requireAuth()
-      return hermesRemote.isRemote(projectId) ? hermesRemote.call('GET', `${remoteP(projectId)}/agent`) : hermesSvc.getAgentStatus(projectId)
+      // `remote`: o painel só oferece "Ligar ao GitHub" para projetos do serviço na VPS.
+      if (hermesRemote.isRemote(projectId)) return { ...(await hermesRemote.call<object>('GET', `${remoteP(projectId)}/agent`)), remote: true }
+      return { ...(await hermesSvc.getAgentStatus(projectId)), remote: false }
+    })
+  )
+
+  // GitHub do projeto (serviço na VPS): chave do projeto gerada lá → repositório criado/conferido com o login
+  // do GitHub do PC → chave cadastrada como deploy key com escrita → serviço liga e faz o primeiro envio.
+  ipcMain.handle('hermes:github:link', (_, data: unknown) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      const d = HermesGithubLinkSchema.parse(data)
+      if (!hermesRemote.isRemote(d.projectId)) throw new Error('Disponível para projetos que rodam no serviço da VPS.')
+      const { publicKey } = await hermesRemote.call<{ publicKey: string }>('POST', `${remoteP(d.projectId)}/github/key`, {})
+      const repo = await localGit.githubEnsureRepo({ name: d.name, url: d.url, isPrivate: d.isPrivate })
+      await localGit.githubAddDeployKey(repo.fullName, `Zeus Hermes (serviço na VPS) — projeto ${d.projectId}`, publicKey)
+      const r = await hermesRemote.call<{ pushed: boolean; output: string; repo: string; branch: string }>('POST', `${remoteP(d.projectId)}/github/link`, { repo: repo.fullName })
+      return { ...r, created: repo.created, url: `https://github.com/${repo.fullName}` }
     })
   )
 

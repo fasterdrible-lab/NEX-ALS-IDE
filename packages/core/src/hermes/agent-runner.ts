@@ -78,6 +78,11 @@ export interface RunnerDeps {
   tasks: TasksService
   git: GitService
   emit: (e: RunnerEvent) => void
+  /**
+   * Depois de cada tarefa concluída (commit conferido). O serviço na VPS usa para enviar ao GitHub.
+   * Devolve uma linha para a saída ao vivo, ou null para não dizer nada. Falha não desfaz a tarefa.
+   */
+  afterTaskDone?: (projectId: string) => Promise<string | null>
 }
 
 const OUTPUT_CAP = 300_000
@@ -590,7 +595,11 @@ export class HermesAgentRunner {
    * → pede uma vez, na mesma sessão, para testar e commitar; decide pelo estado do repositório depois.
    */
   private async completeTask(projectId: string, task: AgentTask): Promise<TaskOutcome> {
-    const markDone = async () => { await this.setTask(projectId, task.id, { status: 'DONE' }); return 'done' as const }
+    const markDone = async () => {
+      await this.setTask(projectId, task.id, { status: 'DONE' })
+      await this.taskDoneHook(projectId)
+      return 'done' as const
+    }
     const workspace = (await this.d.hermes.getAgentStatus(projectId).catch(() => null))?.workspace
     const left = await this.uncommittedIn(projectId, workspace)
     if (left === null || left.length === 0) return markDone()
@@ -653,6 +662,7 @@ export class HermesAgentRunner {
     if (tag.kind === 'done') {
       const note = merge.merged ? '' : `\n\n[atenção] merge automático falhou — branch "${start.branch}" preservado para revisão manual.\n${merge.output.slice(0, 500)}`
       await this.setTask(projectId, task.id, { status: 'DONE', description: `${task.description}${note}` })
+      if (merge.merged) await this.taskDoneHook(projectId)
       return 'done'
     }
     const reason = tag.kind === 'blocked' ? tag.reason
@@ -660,6 +670,12 @@ export class HermesAgentRunner {
       : 'terminou sem tag de conclusão'
     await this.block(projectId, task, `${reason} (branch ${start.branch})`)
     return 'blocked'
+  }
+
+  private async taskDoneHook(projectId: string): Promise<void> {
+    if (!this.d.afterTaskDone) return
+    const line = await this.d.afterTaskDone(projectId).catch((e: unknown) => `[NEX] Não consegui rodar o passo pós-tarefa: ${e instanceof Error ? e.message : String(e)}`)
+    if (line) this.note(projectId, line)
   }
 
   private async addCorrections(projectId: string, corrections: { title: string; description: string }[]): Promise<void> {

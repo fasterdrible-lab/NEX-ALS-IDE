@@ -95,6 +95,14 @@ export const HermesLocalSyncApplySchema = z.object({
   paths: z.array(z.string().min(1).max(1024)).max(5000, 'Arquivos demais de uma vez'),
 })
 
+// Ligar um projeto do serviço zeus-hermes ao GitHub: cria o repositório (name) ou usa um existente (url)
+export const HermesGithubLinkSchema = z.object({
+  projectId: z.string().min(1).max(64),
+  name: z.string().trim().max(100).optional(),
+  url: z.string().trim().max(300).optional(),
+  isPrivate: z.boolean().optional(),
+}).refine(d => !!(d.name || d.url), 'Informe o nome do repositório novo ou o endereço de um existente')
+
 // Hermes — loop no main process: comandos do painel validados antes de chegar ao HermesAgentRunner
 export const HermesProjectIdSchema = z.string().min(1).max(64)
 export const HermesRunnerTextSchema = z.string().trim().min(1, 'Texto vazio').max(50_000, 'Texto grande demais')

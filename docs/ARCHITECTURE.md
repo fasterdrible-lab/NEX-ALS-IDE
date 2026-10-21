@@ -1486,6 +1486,17 @@ celular / Zeus do PC ──HTTPS (só Tailscale)──► tailscale serve :8443 
   `zeus-hermes.service` (root, Restart=always), `tailscale serve --bg --https=8443`. Token do PC em
   `%APPDATA%\@cwm\desktop\zeus-hermes\token`. Porta 8443 porque o nginx da VPS-1 já usa 443.
 
+### GitHub do projeto (v3.80.0)
+
+`apps/server/src/github.ts` (`GithubPush`): deploy key ed25519 por projeto em `/opt/zeus-hermes/ssh/deploy-<projectId>`;
+push com `GIT_SSH_COMMAND="ssh -i <chave> -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"` para o remoto
+`github` (não toca no `origin`), `HEAD:refs/heads/hermes`, nunca `--force`, em fila por projeto. Ligar: o Zeus do PC
+(`hermes:github:link`) pede a chave pública ao serviço → `LocalGitService.githubEnsureRepo` (cria privado ou confere
+acesso de escrita com o login do Git Credential Manager) → `githubAddDeployKey` (escrita) → serviço `github/link`
+(remote add/set-url + primeiro push; grava `projects.gitRepo = git@github.com:dono/nome.git`). Depois, o runner chama
+`afterTaskDone` (gancho opcional de `RunnerDeps`) quando uma tarefa vira DONE (commit conferido ou merge de paralela)
+e o serviço envia. `hermes:agent:status` passa `remote: true|false` — o painel só mostra a seção GitHub nos remotos.
+
 ### Zeus usando o serviço (Passo 2, v3.78.0)
 
 `apps/desktop/src/hermes-remote.ts` (`HermesRemote`) — config em `<userData>/zeus-hermes/`: `token` (do deploy)

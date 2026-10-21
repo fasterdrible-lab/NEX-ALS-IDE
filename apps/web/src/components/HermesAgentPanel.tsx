@@ -67,6 +67,81 @@ const DEV_RULES_TEMPLATE = [
 ].join('\n')
 
 const ACTIVITY_CAP = 200
+
+/** Nome de repositório sugerido a partir do projeto (mesma regra do "Publicar no GitHub"). */
+const suggestRepo = (name: string) => name.normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+  .replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 100) || 'projeto'
+
+/**
+ * GitHub de um projeto que roda no serviço da VPS. Ligar = criar o repositório privado na conta do GitHub
+ * logada no PC (ou usar um existente) e cadastrar nele a chave do projeto na VPS. Depois, o serviço envia
+ * cada tarefa concluída para o branch `hermes`; o `main` fica para juntar por Pull Request.
+ */
+function GithubSection({ agentInfo, projectName, onLinked }: { agentInfo: HermesProjectAgentInfo; projectName: string; onLinked: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [mode, setMode] = useState<'new' | 'existing'>('new')
+  const [name, setName] = useState(() => suggestRepo(projectName))
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const linked = /^git@github\.com:(.+)\.git$/.exec(agentInfo.gitRepo)?.[1]
+
+  const link = async () => {
+    setBusy(true); setMsg(null)
+    try {
+      const r = await ipc.hermes.github.link(mode === 'new' ? { projectId: agentInfo.projectId, name: name.trim() } : { projectId: agentInfo.projectId, url: url.trim() })
+      setMsg(r.pushed
+        ? { ok: true, text: `${r.created ? 'Repositório criado e ligado' : 'Repositório ligado'}: ${r.repo}. Trabalho enviado ao branch ${r.branch}.` }
+        : { ok: false, text: `Repositório ligado (${r.repo}), mas o primeiro envio falhou: ${r.output}` })
+      setOpen(false)
+      onLinked()
+    } catch (e) { setMsg({ ok: false, text: String(e instanceof Error ? e.message : e) }) }
+    setBusy(false)
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] text-slate-500 uppercase tracking-widest">GitHub</p>
+      {linked ? (
+        <p className="text-[11px] text-slate-300 break-all">
+          <span className="font-mono">{linked}</span>
+          <span className="text-slate-500"> · cada tarefa concluída vai para o branch <span className="font-mono">hermes</span></span>
+        </p>
+      ) : !open ? (
+        <div className="space-y-1">
+          <p className="text-[10px] text-slate-500 leading-relaxed">Sem GitHub: o trabalho fica só no git da VPS.</p>
+          <button onClick={() => setOpen(true)} className="text-[11px] px-2 py-1 rounded bg-slate-700 hover:bg-slate-600">Ligar ao GitHub</button>
+        </div>
+      ) : (
+        <div className="space-y-1.5 border border-slate-700/60 rounded p-2">
+          <div className="flex gap-1 text-[10px]">
+            <button onClick={() => setMode('new')} className={`px-2 py-0.5 rounded ${mode === 'new' ? 'bg-purple-700 text-white' : 'text-slate-400'}`}>Criar repositório</button>
+            <button onClick={() => setMode('existing')} className={`px-2 py-0.5 rounded ${mode === 'existing' ? 'bg-purple-700 text-white' : 'text-slate-400'}`}>Já tenho</button>
+          </div>
+          {mode === 'new' ? (
+            <input value={name} onChange={e => setName(e.target.value)} maxLength={100} aria-label="Nome do repositório"
+              className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[11px] font-mono text-slate-200 focus:outline-none focus:border-purple-500" />
+          ) : (
+            <input value={url} onChange={e => setUrl(e.target.value)} maxLength={300} placeholder="https://github.com/dono/repositorio" aria-label="Endereço do repositório"
+              className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[11px] font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500" />
+          )}
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            {mode === 'new' ? 'Privado, na conta do GitHub logada neste PC. ' : ''}
+            A VPS recebe uma chave que só grava neste repositório.
+          </p>
+          <div className="flex gap-1.5">
+            <button onClick={() => void link()} disabled={busy || (mode === 'new' ? !name.trim() : !url.trim())}
+              className="text-[11px] px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-30 flex items-center gap-1">
+              {busy && <Loader2 size={10} className="animate-spin" />} Ligar e enviar
+            </button>
+            <button onClick={() => setOpen(false)} disabled={busy} className="text-[11px] px-2 py-1 rounded text-slate-400 hover:text-slate-200">Cancelar</button>
+          </div>
+        </div>
+      )}
+      {msg && <p className={`text-[10px] break-all ${msg.ok ? 'text-emerald-400' : 'text-amber-300'}`}>{msg.text}</p>}
+    </div>
+  )
+}
 const LOOP_MODES = new Set(['loop', 'single', 'decision', 'approval'])
 
 /**
@@ -532,6 +607,9 @@ export default function HermesAgentPanel({ initialProjectId, compact = false, vp
               </button>
               {syncContextMsg && <p className="text-[10px] text-slate-500 text-center">{syncContextMsg}</p>}
             </div>
+
+            {/* GitHub — projetos do serviço na VPS: cada tarefa concluída vai para o branch hermes */}
+            {agentInfo?.remote && <GithubSection agentInfo={agentInfo} projectName={selectedProject?.name ?? ''} onLinked={() => void loadStatus(projectId)} />}
 
             {/* Development Rules (ETAPA 21) — gravadas no .hermes.md, que o Hermes lê em toda execução */}
             {agentInfo && (

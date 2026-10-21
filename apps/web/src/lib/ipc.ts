@@ -72,6 +72,10 @@ export interface HermesProjectAgentInfo {
   autonomyLevel: HermesAutonomyLevel
   devRules: string
   baseCommit: string
+  /** git@github.com:dono/nome.git — '' = sem GitHub ligado. */
+  gitRepo: string
+  /** O loop deste projeto roda no serviço zeus-hermes da VPS (não no PC). */
+  remote: boolean
 }
 
 // Log por execução do Hermes (espelha packages/core/src/hermes/run-log.ts)
@@ -395,6 +399,11 @@ export const ipc = {
       status: (localPath: string) => invoke<HermesLocalSyncStatus>('hermes:local:status', { localPath }),
       pull: (localPath: string, paths: string[]) => invoke<HermesLocalSyncResult>('hermes:local:pull', { localPath, paths }),
       push: (localPath: string, paths: string[]) => invoke<HermesLocalSyncResult>('hermes:local:push', { localPath, paths }),
+    },
+    /** Liga um projeto do serviço da VPS a um repositório do GitHub (novo, pelo nome, ou existente, pelo endereço). */
+    github: {
+      link: (data: { projectId: string; name?: string; url?: string; isPrivate?: boolean }) =>
+        invoke<{ pushed: boolean; output: string; repo: string; branch: string; created: boolean; url: string }>('hermes:github:link', data),
     },
     runs: {
       list: (projectId: string, taskId?: string) =>

@@ -17,6 +17,8 @@
   - [ ] (v3.78.0) Pela tela: painel Agent do ACESSIBILIDADE mostra as 36 tarefas; Retomar/Continuar loop roda na VPS com Ao vivo e Atividade; fechar o Zeus no meio de uma tarefa e reabrir → ela continuou; Autorizar/Negar funciona
   - [x] (v3.78.0) Loop rodando no serviço pelo painel do Zeus (2026-10-21): T1 rodou na VPS-1, Parar respeitado; terminou com HTTP 429 do modelo gratuito e voltou para Pendente
   - [ ] (v3.79.0) Passo 3 — app do celular: Zeus → Configurações → Celular → QR → abrir no celular com o Tailscale ligado → Adicionar à tela inicial; ver tarefas e Ao vivo; testar Continuar loop / Parar / Autorizar-Negar pelo celular
+  - [ ] (v3.80.0) GitHub: painel Agent do ACESSIBILIDADE → GitHub → Ligar → repositório privado criado com os 6 commits no branch `hermes`; próxima tarefa concluída aparece no GitHub
+  - [ ] VPS dedicada para o Hermes (usuário contratou KVM 1 Hostinger, Ubuntu 24.04, 2026-10-21): instalar Hermes + Claude Code + Tailscale + zeus-hermes, migrar os projetos da VPS-1, religar o GitHub; endurecer SSH (só chave)
   - [ ] Passo 3b — notificações push no Android (comando aguardando aprovação, tarefa bloqueada, entrega pronta)
   - [ ] Abrir `https://vps-1.tailfd24ac.ts.net:8443/health` no celular (com o Tailscale ligado) → `{"ok":true,...}`
   - [ ] (v3.77.0) Com o loop rodando uma tarefa: fechar o painel Agent (ou a janela da IDE) e reabrir → a tarefa continuou; Ao vivo mostra a saída de antes e segue atualizando; Parar/aprovações/decisão aparecem de onde estavam

@@ -174,6 +174,49 @@ export class LocalGitService {
     return { url: url.replace(/\.git$/, ''), created, output: (r.stdout + r.stderr).trim() }
   }
 
+  private async githubApi<T>(method: string, apiPath: string, body?: unknown): Promise<{ status: number; data: T }> {
+    const token = await this.githubToken(os.tmpdir())
+    const res = await fetch(`https://api.github.com${apiPath}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'Zeus-IDE', 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+    if (res.status === 401) throw new Error('O login do GitHub guardado no PC expirou. Faça login de novo (um git push no terminal abre a janela de login) e tente outra vez.')
+    return { status: res.status, data: await res.json().catch(() => ({})) as T }
+  }
+
+  /**
+   * Repositório do GitHub para um projeto que o Hermes trabalha na VPS: cria (privado) na conta do
+   * usuário ou confere um existente. Devolve `dono/nome`.
+   */
+  async githubEnsureRepo(opts: { name?: string; url?: string; isPrivate?: boolean }): Promise<{ fullName: string; created: boolean }> {
+    if (opts.url) {
+      const m = /github\.com[/:]([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/.exec(opts.url.trim())
+      if (!m) throw new Error('Endereço inválido. Use https://github.com/<dono>/<repositorio>')
+      const r = await this.githubApi<{ full_name?: string; permissions?: { push?: boolean } }>('GET', `/repos/${m[1]}/${m[2]}`)
+      if (r.status === 404) throw new Error(`Repositório ${m[1]}/${m[2]} não encontrado (ou sua conta não tem acesso).`)
+      if (!r.data.full_name || r.data.permissions?.push === false) throw new Error('Sua conta não pode gravar nesse repositório.')
+      return { fullName: r.data.full_name, created: false }
+    }
+    const name = (opts.name ?? '').trim()
+    const nameErr = validateGitHubRepoName(name)
+    if (nameErr) throw new Error(nameErr)
+    const r = await this.githubApi<{ full_name?: string; message?: string }>('POST', '/user/repos', { name, private: opts.isPrivate !== false, auto_init: false })
+    if (r.status === 422) throw new Error(`Já existe um repositório "${name}" na sua conta do GitHub. Escolha outro nome ou informe o endereço dele.`)
+    if (r.status >= 300 || !r.data.full_name) throw new Error(`GitHub recusou criar o repositório (${r.status}): ${r.data.message ?? 'sem detalhe'}`)
+    return { fullName: r.data.full_name, created: true }
+  }
+
+  /** Cadastra a chave pública da VPS como deploy key com escrita — vale só para este repositório. */
+  async githubAddDeployKey(fullName: string, title: string, publicKey: string): Promise<void> {
+    if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(fullName)) throw new Error('Repositório inválido.')
+    if (!/^ssh-ed25519 [A-Za-z0-9+/=]+( \S+)?$/.test(publicKey.trim())) throw new Error('Chave pública inválida.')
+    const r = await this.githubApi<{ message?: string; errors?: { message?: string }[] }>('POST', `/repos/${fullName}/keys`, { title, key: publicKey.trim(), read_only: false })
+    // 422 "key is already in use" = já cadastrada neste repositório (ligar de novo) — segue.
+    if (r.status === 422 && /already in use/i.test(JSON.stringify(r.data))) return
+    if (r.status >= 300) throw new Error(`GitHub recusou a chave (${r.status}): ${r.data.message ?? 'sem detalhe'}`)
+  }
+
   /** Senha/token do GitHub guardado pelo Git Credential Manager. Pode abrir a janela de login do GCM se não houver. */
   private githubToken(cwd: string): Promise<string> {
     return new Promise((resolve, reject) => {

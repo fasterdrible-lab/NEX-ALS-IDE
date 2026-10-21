@@ -9,6 +9,7 @@ import {
   TerminalService, SftpService, GitService, KnowledgeService, ProjectMemoryService, TasksService,
   HermesService, HermesRunLog, HermesAgentRunner, ensureHermesSchema, type RunnerEvent,
 } from '@cwm/core'
+import { GithubPush, GITHUB_BRANCH, isRepoFullName } from './github.js'
 
 /**
  * zeus-hermes — o loop do Hermes como serviço na VPS (Passo 1 do Zeus Mobile, docs/ZEUS_MOBILE_PLAN.md).
@@ -23,7 +24,7 @@ const DATA_DIR = process.env['ZEUS_DATA_DIR'] ?? '/opt/zeus-hermes/data'
 const PORT = Number(process.env['ZEUS_PORT'] ?? 8790)
 const HOST = '127.0.0.1'
 const MAX_BODY = 64 * 1024
-const VERSION = '3.79.0'
+const VERSION = '3.80.0'
 
 fs.mkdirSync(DATA_DIR, { recursive: true })
 process.env['DATABASE_URL'] = `file:${path.join(DATA_DIR, 'zeus.db')}`
@@ -55,9 +56,27 @@ const tasks = new TasksService()
 const hermes = new HermesService(terminal, sftp, git, new KnowledgeService(), new ProjectMemoryService())
 const runLog = new HermesRunLog()
 
+const github = new GithubPush(path.resolve(DATA_DIR, '..', 'ssh'))
+
+/** Repositório ligado ao projeto (dono/nome) e a pasta dele na VPS; null se não houver. */
+async function projectRepo(projectId: string): Promise<{ fullName: string; workspace: string } | null> {
+  const p = await getPrismaClient().project.findUnique({ where: { id: projectId } }) as { gitRepo?: string; remotePath: string } | null
+  const m = p?.gitRepo ? /^git@github\.com:(.+)\.git$/.exec(p.gitRepo) : null
+  return p && m ? { fullName: m[1], workspace: p.remotePath } : null
+}
+
 const sseClients = new Set<{ res: http.ServerResponse; projectId: string | null }>()
 const runner = new HermesAgentRunner({
   hermes, runLog, tasks, git,
+  // Cada tarefa concluída e conferida vai para o branch `hermes` do GitHub (se o projeto estiver ligado).
+  afterTaskDone: async (projectId: string) => {
+    const repo = await projectRepo(projectId)
+    if (!repo) return null
+    const r = await github.push(projectId, repo.workspace)
+    return r.pushed
+      ? `[NEX] Enviado ao GitHub: ${repo.fullName} (branch ${GITHUB_BRANCH}).`
+      : `[NEX] O envio ao GitHub falhou (a tarefa continua concluída; tenta de novo na próxima): ${r.output}`
+  },
   emit: (e: RunnerEvent) => {
     const projectId = 'projectId' in e ? e.projectId : null
     const data = `data: ${JSON.stringify(e)}\n\n`
@@ -147,6 +166,17 @@ route('GET', '/api/projects/:id/runs', ({ id, url }) => {
   return runLog.list(id, taskId === null ? undefined : parse(HermesProjectIdSchema, taskId))
 })
 route('GET', '/api/runs/:id', ({ id }) => runLog.get(id))
+// GitHub: o Zeus do PC pede a chave pública, cadastra no repositório e então liga (primeiro envio).
+route('POST', '/api/projects/:id/github/key', async ({ id }) => ({ publicKey: await github.publicKey(id) }))
+route('POST', '/api/projects/:id/github/link', async ({ id, body }) => {
+  const { repo } = parse(z.object({ repo: z.string().refine(isRepoFullName, 'Repositório inválido (use dono/nome)') }), body)
+  const db = getPrismaClient()
+  const p = await db.project.findUnique({ where: { id } }) as { remotePath: string } | null
+  if (!p) throw new HttpError(404, 'Projeto não encontrado')
+  const r = await github.link(id, p.remotePath, repo)
+  await db.project.update({ where: { id }, data: { gitRepo: `git@github.com:${repo}.git` } })
+  return { ...r, repo, branch: GITHUB_BRANCH }
+})
 // Governança — Autorizar = o serviço executa o comando (tool_execution_log); Negar só descarta.
 route('POST', '/api/approvals/:id', ({ id, body }) => runner.resolveApproval(id, parse(z.object({ approve: z.boolean() }), body).approve))
 

@@ -227,6 +227,7 @@ export class HermesService {
       autonomyLevel: agent.autonomyLevel as HermesAutonomyLevel,
       devRules: agent.devRules,
       baseCommit: agent.baseCommit,
+      gitRepo: project.gitRepo ?? '',
     }
   }
 

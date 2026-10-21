@@ -41,6 +41,8 @@ export interface HermesProjectAgentInfo {
   devRules: string
   /** HEAD do repositório quando o objetivo começou ('' se não era repo git). */
   baseCommit: string
+  /** Repositório do GitHub ligado (git@github.com:dono/nome.git) — o serviço envia o branch `hermes` a cada tarefa concluída. '' = nenhum. */
+  gitRepo: string
 }
 
 export interface DodItem {

@@ -1,5 +1,17 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.80.0] — 2026-10-21
+
+### Adicionado — trabalho do Hermes salvo no GitHub
+
+Antes, os commits do Hermes ficavam só no git da pasta na VPS — se a VPS se perdesse, o trabalho ia junto.
+
+- Painel Agent (projetos que rodam no serviço da VPS) → seção **GitHub** → **Ligar ao GitHub**: cria um repositório **privado** na conta do GitHub logada no PC (ou usa um existente) e cadastra nele a **chave do projeto na VPS** como deploy key — ela só grava naquele repositório, não dá acesso à conta.
+- A partir daí, **cada tarefa concluída e conferida** é enviada pelo serviço ao branch **`hermes`** (remoto próprio `github`, sem `--force`); o `main` fica para juntar por Pull Request. Quem envia é o serviço; o Hermes continua proibido de dar push. Envio que falha não desfaz a tarefa — aparece na saída e vai na próxima.
+- Serviço: `POST /api/projects/:id/github/key` e `/github/link` (nome do repositório validado: `dono/nome`); pushes do mesmo projeto em fila.
+
+**Verificado:** `pnpm typecheck` (6 pacotes); core 61/61; na VPS-1: chave gerada com permissão só do root, nome com comando embutido recusado, status do projeto com o campo `gitRepo`. **Não testado ligando a um repositório de verdade.**
+
 ## [3.79.1] — 2026-10-21
 
 ### Corrigido — QR de pareamento aparecia quebrado
