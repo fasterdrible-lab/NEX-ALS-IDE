@@ -1436,7 +1436,10 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   // perto do limite / saldo acabando, avisa. A troca de conta só acontece com o clique do usuário (ai-usage.ts).
   const aiUsage = new AiUsageMonitor({
     listActiveProviders: async () => {
-      const rows = await db.$queryRawUnsafe(`SELECT provider, isDefault FROM ai_providers WHERE enabled = 1`) as { provider: string; isDefault: number | bigint }[]
+      // Ativo E com chave (Claude Code é por conta e Ollama é local: não têm chave).
+      const rows = await db.$queryRawUnsafe(
+        `SELECT provider, isDefault FROM ai_providers WHERE enabled = 1 AND (provider IN ('claude-code', 'ollama') OR (apiKey != '' AND apiKey != 'MIGRATED'))`,
+      ) as { provider: string; isDefault: number | bigint }[]
       return rows.map(r => ({ provider: r.provider, isDefault: Number(r.isDefault) === 1 }))
     },
     listClaudeAccounts: async () => db.$queryRawUnsafe(`SELECT id, name, configDir, isActive FROM claude_code_accounts ORDER BY createdAt ASC`) as Promise<{ id: string; name: string; configDir: string; isActive: number }[]>,

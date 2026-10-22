@@ -104,7 +104,12 @@ export class AiUsageMonitor {
 
   async refresh(): Promise<ProviderUsage[]> {
     const providers = await this.d.listActiveProviders().catch(() => [] as ProviderRow[])
-    this.last = await Promise.all(providers.map(p => this.readProvider(p)))
+    const read = await Promise.all(providers.map(p => this.readProvider(p)))
+    // Só o que dá para usar agora: conta sem login / login recusado e provedor sem chave ou com chave
+    // recusada ficam de fora (continuam em Configurações para consertar). Pedido do usuário, 2026-10-22.
+    this.last = read
+      .map(p => (p.kind === 'accounts' && p.accounts ? { ...p, accounts: p.accounts.filter(a => !a.problem) } : p))
+      .filter(p => !p.problem && !(p.kind === 'accounts' && !p.accounts?.length))
     // Padrão primeiro: é o que o Squad / AI Hub usam.
     this.last.sort((a, b) => Number(b.isDefault) - Number(a.isDefault))
     this.d.onUpdate(this.last)
@@ -190,7 +195,9 @@ export class AiUsageMonitor {
       // Consultas demais em pouco tempo: mostra a última leitura boa em vez do erro.
       const prev = this.lastGood.get(r.id)
       if (prev) return { ...prev, active: base.active, notes: [...base.notes, 'Leitura de alguns minutos atrás (a Anthropic pediu para esperar)'] }
-      return { ...base, problem: 'A Anthropic pediu para esperar — tenta de novo em 5 min' }
+      // Login válido (o perfil respondeu): continua na lista, só sem números por ora. Sem perfil = login ruim → fica de fora.
+      if (base.email) return { ...base, notes: [...base.notes, 'Sem leitura agora (a Anthropic pediu para esperar) — tenta de novo em 5 min'] }
+      return { ...base, problem: 'Login recusado — faça login de novo nesta conta' }
     }
     if (!res.ok) return { ...base, problem: `Resposta ${res.status}` }
     const j = await res.json().catch(() => null) as Record<string, { utilization?: number; resets_at?: string } | null> | null

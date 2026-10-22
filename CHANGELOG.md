@@ -1,5 +1,17 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.82.3] — 2026-10-22
+
+### Alterado — indicador de saldo mostra só o que dá para usar
+
+A pedido do usuário: o indicador não mostra mais o que não está pronto para uso.
+
+- Provedor só aparece se estiver **ativo e com chave** (Claude Code e Ollama não precisam de chave); com a chave **recusada** pelo provedor, também sai.
+- Conta Claude sem login ou com login recusado sai da lista. Resposta 429 (consultas demais) **não** esconde conta com login válido: ela fica, com "sem leitura agora".
+- Tudo isso continua visível em Configurações, para consertar.
+
+**Verificado:** `pnpm --filter @cwm/desktop typecheck`. Pelas APIs agora: ficam `fasterdrible` (0% / 14%) e a entrada da pasta padrão (phpos40, 37% / 99%); saem a pasta própria da phpos40 (login recusado) e o DeepSeek (chave recusada).
+
 ## [3.82.2] — 2026-10-22
 
 ### Corrigido — indicador mostrava a conta Claude com o nome errado
