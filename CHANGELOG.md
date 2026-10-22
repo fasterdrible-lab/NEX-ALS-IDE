@@ -12,6 +12,8 @@ O app do celular só mostrava o que acontecia quando aberto; agora avisa quando 
 - App do celular: cartão **Notificações** na tela de projetos (Ativar / Enviar teste / Desativar); ícone PNG no manifesto e na notificação.
 - Rotas do serviço: `GET /api/push/key`, `POST /api/push/subscribe|unsubscribe|test` (endereço de push só https, validado com Zod).
 
+- **Instalar como app:** ícones PNG 192 e 512 no manifesto (o Chrome só oferece "Instalar app" com eles; antes só havia 256) e botão **Instalar o app** na tela de projetos quando o Chrome permite (`beforeinstallprompt`); sem ele, instrução do menu ⋮.
+
 **Verificado:** typecheck do serviço; na VPS ZEUS pelo Tailscale: chave pública servida, teste sem aparelho = 0 enviados, inscrição com endereço http recusada, ícone servido, `vapid.json` só root. **Não testado num celular** (receber, tocar e abrir no projeto).
 
 ## [3.82.4] — 2026-10-22

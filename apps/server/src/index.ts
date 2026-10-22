@@ -213,6 +213,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public')
 const STATIC: Record<string, string> = {
   '/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/sw.js': 'sw.js',
   '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/icon-256.png': 'icon-256.png',
+  '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png',
 }
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',

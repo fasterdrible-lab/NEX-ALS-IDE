@@ -33,6 +33,37 @@ if ('serviceWorker' in navigator) {
   })
 }
 
+// ── Instalar como app (Chrome) ──────────────────────────────────────────────
+// O Chrome avisa quando dá para instalar; guardamos o aviso e mostramos um botão na tela de projetos.
+let installPrompt = null
+window.addEventListener('beforeinstallprompt', ev => {
+  ev.preventDefault()
+  installPrompt = ev
+  if (!stopStream && token) showProjects()
+})
+window.addEventListener('appinstalled', () => { installPrompt = null })
+const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches
+
+function installCard() {
+  if (isInstalled()) return null
+  const card = h('div', { class: 'card' }, h('h2', {}, 'Instalar o app'))
+  if (installPrompt) {
+    card.append(
+      h('p', { class: 'muted' }, 'Coloca o ícone Zeus na tela inicial: abre direto, em tela cheia, sem precisar do link.'),
+      h('button', { class: 'btn full', onclick: async () => {
+        const ev = installPrompt
+        installPrompt = null
+        ev.prompt()
+        await ev.userChoice.catch(() => null)
+        showProjects()
+      } }, 'Instalar o app'),
+    )
+  } else {
+    card.append(h('p', { class: 'muted' }, 'No Chrome: toque em ⋮ (canto de cima) → "Instalar app" ou "Adicionar à tela inicial". Se abriu em outro navegador, abra este endereço no Chrome.'))
+  }
+  return card
+}
+
 // ── Notificações (Web Push) ─────────────────────────────────────────────────
 function b64ToBytes(b64) {
   const s = (b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')
@@ -176,7 +207,7 @@ async function showProjects() {
     }
     $main.replaceChildren(...projects.map(p => h('button', { class: 'list-item', onclick: () => showProject(p) },
       h('div', { class: 'grow' }, h('div', {}, p.name), h('div', { class: 'muted' }, `${p.vpsName} · ${p.remotePath}`)),
-      h('span', { class: 'muted' }, '›'))), notificationsCard())
+      h('span', { class: 'muted' }, '›'))), ...[installCard(), notificationsCard()].filter(Boolean))
   } catch (e) {
     setConn(false)
     if (e instanceof AuthError) return showLogin('Token inválido — gere um novo link de pareamento no Zeus.')
