@@ -1,5 +1,16 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.82.4] — 2026-10-22
+
+### Corrigido — colar no terminal do Zeus
+
+O usuário não conseguiu colar o código do login do Claude Code no terminal do Zeus (Lançador → Terminal): essa tela não tinha nenhum tratamento de colar, e o terminal da IDE dependia da permissão de clipboard do renderer.
+
+- Todos os terminais (Lançador → Terminal, IDE remota e PowerShell da IDE local) colam e copiam como o Windows Terminal: **Ctrl+V / Ctrl+Shift+V / Shift+Insert** cola; **Ctrl+C com texto selecionado / Ctrl+Shift+C** copia (sem seleção, Ctrl+C continua interrompendo); **botão direito** copia a seleção ou, sem seleção, cola.
+- O texto passa pelo processo principal (`clipboard:readText` / `clipboard:writeText`, até 1 MB) — `apps/web/src/lib/terminal-clipboard.ts`. Saiu o Ctrl+V antigo da IDE (evita colar duas vezes).
+
+**Verificado:** `pnpm typecheck` (6 pacotes). **Não testado no app.**
+
 ## [3.82.3] — 2026-10-22
 
 ### Alterado — indicador de saldo mostra só o que dá para usar

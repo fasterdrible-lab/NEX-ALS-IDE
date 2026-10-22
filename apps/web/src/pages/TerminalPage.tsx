@@ -7,6 +7,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { ArrowLeft, Loader2, WifiOff, TerminalSquare } from 'lucide-react'
 import { ipc } from '../lib/ipc'
+import { attachTerminalClipboard } from '../lib/terminal-clipboard'
 
 type Status = 'connecting' | 'connected' | 'error' | 'closed'
 
@@ -58,6 +59,7 @@ export default function TerminalPage() {
     term.open(containerRef.current)
     termRef.current = term
     fitRef.current = fitAddon
+    const detachClipboard = attachTerminalClipboard(term, containerRef.current)
 
     term.write('\x1b[90mConectando à VPS...\x1b[0m\r\n')
 
@@ -110,6 +112,7 @@ export default function TerminalPage() {
     })
 
     return () => {
+      detachClipboard()
       unsubData?.()
       unsubExit?.()
       resizeObserver?.disconnect()

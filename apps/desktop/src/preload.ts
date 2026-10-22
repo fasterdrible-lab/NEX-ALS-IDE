@@ -17,7 +17,7 @@ const ALLOWED_CHANNELS = new Set([
   'git:local:status', 'git:local:diff', 'git:local:add', 'git:local:restore', 'git:local:commit', 'git:local:push', 'git:local:pull', 'git:local:publish',
   'local:openFolder', 'local:readdir', 'local:readFile', 'local:readFileBase64',
   'local:writeFile', 'local:mkdir', 'local:delete', 'local:rename', 'local:touch', 'local:exec',
-  'clipboard:readImage',
+  'clipboard:readImage', 'clipboard:readText', 'clipboard:writeText',
   'config:export', 'config:import',
   'tunnel:open', 'tunnel:close', 'tunnel:list',
   'debug:openDevTools',

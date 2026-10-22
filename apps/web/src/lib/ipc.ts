@@ -502,6 +502,9 @@ export const ipc = {
   clipboard: {
     readImage: () =>
       invoke<{ filePath: string } | null>('clipboard:readImage'),
+    /** Texto pelo main (terminais) — não depende da permissão de clipboard do renderer. */
+    readText: () => invoke<string>('clipboard:readText'),
+    writeText: (text: string) => invoke<{ success: boolean }>('clipboard:writeText', text),
   },
   debug: {
     openDevTools: (wsUrl: string) =>

@@ -18,6 +18,7 @@ import {
   BookMarked, Lightbulb, ListChecks,
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
+import { attachTerminalClipboard } from '../lib/terminal-clipboard'
 import HermesAgentPanel from '../components/HermesAgentPanel'
 import LocalHermesPanel from '../components/LocalHermesPanel'
 import GitHubPublish from '../components/GitHubPublish'
@@ -710,7 +711,8 @@ export default function IDEPage() {
     term.open(container)
     term.write(isLocal ? '\x1b[90mAbrindo PowerShell na pasta do projeto…\x1b[0m\r\n' : '\x1b[90mConectando terminal SSH…\x1b[0m\r\n')
 
-    const inst: TermInstance = { term, fit, sessionId:null, unsubs:[], ro:null }
+    // Copiar/colar (Ctrl+V, botão direito, Ctrl+C com seleção) — mesmo comportamento em todos os terminais
+    const inst: TermInstance = { term, fit, sessionId:null, unsubs:[attachTerminalClipboard(term, container)], ro:null }
     termInstancesRef.current.set(tabId, inst)
 
     const opening = isLocal ? ipc.terminal.openLocal(localRootRef.current) : ipc.terminal.open(vpsId!)
@@ -866,17 +868,6 @@ export default function IDEPage() {
           setOpenFiles(f => f.find(x=>x.path===last.path) ? f : [...f, last])
           setActiveTab(last.path)
           setGitDiff(null)
-        }
-      }
-
-      // Ctrl+V no terminal — Electron intercepta o paste antes do xterm; repassamos manualmente
-      if (ctrl && e.key === 'v' && showTerm && bottomPanel === 'terminal' && activeTermId) {
-        const inst = termInstancesRef.current.get(activeTermId)
-        if (inst?.sessionId) {
-          e.preventDefault()
-          navigator.clipboard.readText().then(text => {
-            if (text) inst.term.paste(text)
-          }).catch(() => {})
         }
       }
     }

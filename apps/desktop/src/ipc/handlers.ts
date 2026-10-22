@@ -2176,6 +2176,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     }
   })
 
+  // ── Clipboard de texto para os terminais (colar/copiar) — pelo main, sem depender da permissão
+  // de área de transferência do renderer, que falhava no terminal do Lançador.
+  ipcMain.handle('clipboard:readText', () => clipboard.readText().slice(0, 1_000_000))
+  ipcMain.handle('clipboard:writeText', (_, text: unknown) => {
+    if (typeof text !== 'string' || text.length > 1_000_000) return { error: 'Texto inválido' }
+    clipboard.writeText(text)
+    return { success: true }
+  })
+
   // ── Clipboard — salva imagem do clipboard em arquivo temp e retorna o path ──
   ipcMain.handle('clipboard:readImage', async () => {
     const img = clipboard.readImage()
