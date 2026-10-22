@@ -170,6 +170,8 @@ export default function PlanningPage() {
   }
 
   const deleteTask = async (id: string) => {
+    const t = tasks.find(x => x.id === id)
+    if (!window.confirm(`Excluir a tarefa "${t?.title ?? ''}"?`)) return
     await ipc.tasks.delete(id).catch(() => {})
     setTasks(prev => prev.filter(t => t.id !== id))
   }

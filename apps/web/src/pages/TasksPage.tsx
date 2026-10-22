@@ -77,6 +77,8 @@ export default function TasksPage() {
   }
 
   async function handleDelete(id: string) {
+    const t = tasks.find(x => x.id === id)
+    if (!window.confirm(`Excluir a tarefa "${t?.title ?? ''}"?`)) return
     setDeletingId(id)
     try {
       await ipc.tasks.delete(id)

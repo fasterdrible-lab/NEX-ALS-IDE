@@ -1,5 +1,17 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.82.1] — 2026-10-21
+
+### Corrigido — exclusões sem confirmação
+
+A conta Claude `phpos40` sumiu do Zeus logo depois de o usuário refazer o login dela (o login na pasta continuava válido): a lixeira em Configurações → Claude Code apagava a conta **na hora, sem perguntar**. Tarefas (telas Tarefas e Planejar) tinham o mesmo problema — pode explicar as tarefas que sumiram em 2026-10-20.
+
+- Remover conta Claude, excluir tarefa (Tarefas e Planejar) agora pedem confirmação, com o nome. Projetos já pediam.
+- Texto do cartão Claude Code: "Suas contas Claude Pro/Max — o saldo de cada uma aparece na barra lateral" (antes: "para contornar o limite de 5h").
+- (Dados, sem código) cadastro da `phpos40` recriado com o mesmo id, apontando para a pasta com o login novo; cópia do banco antes em `backups/cwm-antes-religar-phpos40-2026-10-21.db`. Conferido que as duas contas são distintas (conta, organização e token diferentes).
+
+**Verificado:** `pnpm --filter @cwm/web typecheck`; login da `phpos40` lido pela API (200, 59% / 89%).
+
 ## [3.82.0] — 2026-10-21
 
 ### Alterado — o indicador de saldo mostra todos os provedores de IA ativos

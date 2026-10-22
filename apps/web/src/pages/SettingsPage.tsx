@@ -171,7 +171,10 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
     await loadAccounts()
   }
 
-  const deleteAccount = async (id: string) => {
+  // Confirmação: um clique sem querer na lixeira apagava a conta na hora (aconteceu com a phpos40, 2026-10-21).
+  // O login da conta fica na pasta dela — remover aqui só tira o cadastro do Zeus.
+  const deleteAccount = async (id: string, name: string) => {
+    if (!window.confirm(`Remover a conta "${name}" do Zeus?\n\nO login dela continua na pasta; para usar de novo, adicione a conta outra vez.`)) return
     await ipc.claude.accounts.delete(id)
     await loadAccounts()
   }
@@ -208,7 +211,7 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
             <span className="text-xs px-1.5 py-0.5 rounded font-medium text-brand-300 bg-brand-600/20">Conta — sem API Key</span>
             {isDefault && <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium text-yellow-300 bg-yellow-600/20"><Star size={10} /> Padrão</span>}
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">Alterne entre contas Claude Pro para contornar o limite de 5h</p>
+          <p className="text-xs text-slate-500 mt-0.5">Suas contas Claude Pro/Max — o saldo de cada uma aparece na barra lateral</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {activeStatus?.status === 'checking' && <Loader2 size={13} className="animate-spin text-slate-500" />}
@@ -263,7 +266,7 @@ function ClaudeCodeCard({ configs, onRefresh }: { configs: AiProviderConfig[]; o
                         Usar esta
                       </button>
                     )}
-                    <button onClick={() => void deleteAccount(acc.id)}
+                    <button onClick={() => void deleteAccount(acc.id, acc.name)} title="Remover esta conta do Zeus"
                       className="p-1 rounded text-slate-600 hover:text-red-400 hover:bg-red-900/20 transition-colors">
                       <Trash2 size={11} />
                     </button>
