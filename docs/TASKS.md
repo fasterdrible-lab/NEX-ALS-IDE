@@ -23,7 +23,8 @@
   - [x] Terminal do Zeus não aceita colar — corrigido na v3.82.4 (Ctrl+V, botão direito e Ctrl+C com seleção em todos os terminais); falta conferir no app
   - [ ] (v3.82.0) Saldo dos provedores ativos na barra lateral (Claude Code por conta, DeepSeek): chave do DeepSeek é recusada pela API — trocar em Configurações; refazer o login da `phpos40` (expirado desde 06/2026) para ela servir de reserva; testar "Usar esta" e a notificação perto de 90%
   - [x] Ligar o ACESSIBILIDADE ao GitHub — 2026-10-22: ligado a `fasterdrible-lab/AcessiCheck` (repositório existente), branch `hermes` com os 6 commits (b57d2ea). O `main` do repositório tem histórico próprio (uploads pelo site + README), sem nada em comum com o do Hermes: para juntar, tornar `hermes` o branch principal ou unir com `--allow-unrelated-histories` (usuário decide depois)
-  - [ ] Passo 3b — notificações push no Android (comando aguardando aprovação, tarefa bloqueada, entrega pronta)
+  - [x] Passo 3b — notificações no celular (Web Push pelo serviço da VPS) — v3.83.0, 2026-10-22
+  - [ ] (v3.83.0) No celular: abrir o app instalado (QR novo, endereço vps-hermes) → Notificações → Ativar → Enviar teste chega; com um loop rodando, um Autorizar/Negar gera aviso e tocar abre direto no projeto
   - [ ] Abrir `https://vps-1.tailfd24ac.ts.net:8443/health` no celular (com o Tailscale ligado) → `{"ok":true,...}`
   - [ ] (v3.77.0) Com o loop rodando uma tarefa: fechar o painel Agent (ou a janela da IDE) e reabrir → a tarefa continuou; Ao vivo mostra a saída de antes e segue atualizando; Parar/aprovações/decisão aparecem de onde estavam
   - [ ] (v3.77.0) Mesmo projeto aberto em duas janelas (principal + IDE) → as duas mostram o mesmo loop; Parar numa vale para as duas

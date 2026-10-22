@@ -10,6 +10,7 @@ import {
   HermesService, HermesRunLog, HermesAgentRunner, ensureHermesSchema, type RunnerEvent,
 } from '@cwm/core'
 import { GithubPush, GITHUB_BRANCH, isRepoFullName } from './github.js'
+import { PushNotifier } from './push.js'
 
 /**
  * zeus-hermes — o loop do Hermes como serviço na VPS (Passo 1 do Zeus Mobile, docs/ZEUS_MOBILE_PLAN.md).
@@ -24,7 +25,7 @@ const DATA_DIR = process.env['ZEUS_DATA_DIR'] ?? '/opt/zeus-hermes/data'
 const PORT = Number(process.env['ZEUS_PORT'] ?? 8790)
 const HOST = '127.0.0.1'
 const MAX_BODY = 64 * 1024
-const VERSION = '3.80.0'
+const VERSION = '3.83.0'
 
 fs.mkdirSync(DATA_DIR, { recursive: true })
 process.env['DATABASE_URL'] = `file:${path.join(DATA_DIR, 'zeus.db')}`
@@ -65,6 +66,12 @@ async function projectRepo(projectId: string): Promise<{ fullName: string; works
   return p && m ? { fullName: m[1], workspace: p.remotePath } : null
 }
 
+// Notificações no celular (Web Push): avisa quando o loop precisa de você ou para.
+const push = new PushNotifier(DATA_DIR, {
+  listTasks: (projectId) => tasks.list({ projectId, ownerAgent: 'hermes' }),
+  getDelivery: (projectId) => hermes.getDelivery(projectId),
+})
+
 const sseClients = new Set<{ res: http.ServerResponse; projectId: string | null }>()
 const runner = new HermesAgentRunner({
   hermes, runLog, tasks, git,
@@ -78,6 +85,7 @@ const runner = new HermesAgentRunner({
       : `[NEX] O envio ao GitHub falhou (a tarefa continua concluída; tenta de novo na próxima): ${r.output}`
   },
   emit: (e: RunnerEvent) => {
+    push.onRunnerEvent(e)
     const projectId = 'projectId' in e ? e.projectId : null
     const data = `data: ${JSON.stringify(e)}\n\n`
     for (const c of sseClients) {
@@ -177,6 +185,25 @@ route('POST', '/api/projects/:id/github/link', async ({ id, body }) => {
   await db.project.update({ where: { id }, data: { gitRepo: `git@github.com:${repo}.git` } })
   return { ...r, repo, branch: GITHUB_BRANCH }
 })
+// Notificações no celular: chave pública, inscrição do aparelho, teste.
+const PushSubSchema = z.object({
+  endpoint: z.string().url().max(2000).refine(u => u.startsWith('https://'), 'Endereço de push inválido'),
+  keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
+  label: z.string().max(100).default(''),
+})
+route('GET', '/api/push/key', async () => ({ publicKey: push.key, devices: await push.count() }))
+route('POST', '/api/push/subscribe', async ({ body }) => {
+  const s = parse(PushSubSchema, body)
+  await push.subscribe({ endpoint: s.endpoint, p256dh: s.keys.p256dh, auth: s.keys.auth, label: s.label ?? '' })
+  return { devices: await push.count() }
+})
+route('POST', '/api/push/unsubscribe', async ({ body }) => {
+  await push.unsubscribe(parse(z.object({ endpoint: z.string().max(2000) }), body).endpoint)
+  return { devices: await push.count() }
+})
+route('POST', '/api/push/test', async () => ({
+  sent: await push.send({ title: 'Zeus: notificações ligadas', body: 'É assim que o Hermes vai te avisar quando precisar de você.', url: '/', tag: 'test' }),
+}))
 // Governança — Autorizar = o serviço executa o comando (tool_execution_log); Negar só descarta.
 route('POST', '/api/approvals/:id', ({ id, body }) => runner.resolveApproval(id, parse(z.object({ approve: z.boolean() }), body).approve))
 
@@ -185,11 +212,11 @@ route('POST', '/api/approvals/:id', ({ id, body }) => runner.resolveApproval(id,
 const PUBLIC_DIR = path.join(__dirname, 'public')
 const STATIC: Record<string, string> = {
   '/': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/sw.js': 'sw.js',
-  '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg',
+  '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/icon-256.png': 'icon-256.png',
 }
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png',
 }
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
@@ -271,6 +298,7 @@ async function main(): Promise<void> {
   await initializeDatabase()
   await ensureHermesSchema()
   await runLog.ensureTable()
+  await push.init()
   if (process.argv[2] === 'import') {
     await importData(process.argv[3] ?? '')
     process.exit(0)

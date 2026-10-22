@@ -19,7 +19,77 @@ if (fromLink) {
   history.replaceState(null, '', location.pathname)
 }
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {})
+// Aberto pela notificação: #p=<projeto> (o service worker monta esse endereço).
+let pendingProjectId = (location.hash.match(/(?:^#|&)p=([A-Za-z0-9_-]{1,64})/) || [])[1] || ''
+if (pendingProjectId) history.replaceState(null, '', location.pathname)
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {})
+  // App já aberto e o usuário tocou numa notificação: o service worker avisa para qual projeto ir.
+  navigator.serviceWorker.addEventListener('message', ev => {
+    if (ev.data?.type !== 'open') return
+    const m = String(ev.data.url || '').match(/#p=([A-Za-z0-9_-]{1,64})/)
+    if (m) { pendingProjectId = m[1]; showProjects() }
+  })
+}
+
+// ── Notificações (Web Push) ─────────────────────────────────────────────────
+function b64ToBytes(b64) {
+  const s = (b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0))
+}
+
+function notificationsCard() {
+  const card = h('div', { class: 'card' }, h('h2', {}, 'Notificações'))
+  const msg = h('p', { class: 'muted' })
+  const row = h('div', { class: 'row' })
+  card.append(msg, row)
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    msg.textContent = 'Este navegador não recebe notificações. Instale o app pelo Chrome (⋮ → Instalar app).'
+    return card
+  }
+  const render = async () => {
+    const reg = await navigator.serviceWorker.ready
+    const sub = await reg.pushManager.getSubscription()
+    row.replaceChildren()
+    if (Notification.permission === 'denied') {
+      msg.textContent = 'Notificações bloqueadas neste celular. Libere em Configurações do Android → Apps → Chrome (ou Zeus) → Notificações.'
+      return
+    }
+    if (sub) {
+      msg.textContent = 'Ativas: o Hermes avisa quando precisar de você (aprovação, decisão, bloqueio, loop parado, entrega).'
+      row.append(
+        h('button', { class: 'btn grow', onclick: () => run(async () => {
+          const r = await api('POST', '/api/push/test')
+          msg.textContent = r.sent ? 'Teste enviado — deve chegar em alguns segundos.' : 'Nenhum aparelho recebeu o teste. Desative e ative de novo.'
+        }) }, 'Enviar teste'),
+        h('button', { class: 'btn ghost', onclick: () => run(async () => {
+          await api('POST', '/api/push/unsubscribe', { endpoint: sub.endpoint }).catch(() => {})
+          await sub.unsubscribe()
+          await render()
+        }) }, 'Desativar'),
+      )
+    } else {
+      msg.textContent = 'Receba um aviso quando o Hermes parar esperando você — mesmo com o app fechado.'
+      row.append(h('button', { class: 'btn full', onclick: () => run(async () => {
+        const perm = await Notification.requestPermission()
+        if (perm !== 'granted') { await render(); return }
+        const { publicKey } = await api('GET', '/api/push/key')
+        const s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) })
+        const j = s.toJSON()
+        await api('POST', '/api/push/subscribe', { endpoint: j.endpoint, keys: j.keys, label: (navigator.userAgentData && navigator.userAgentData.platform) || 'celular' })
+        await render()
+      }) }, 'Ativar notificações'))
+    }
+  }
+  const run = async fn => {
+    for (const b of row.querySelectorAll('button')) b.disabled = true
+    try { await fn() } catch (e) { msg.textContent = `Erro: ${e.message}` }
+    for (const b of row.querySelectorAll('button')) b.disabled = false
+  }
+  render().catch(e => { msg.textContent = `Erro: ${e.message}` })
+  return card
+}
 
 // ── utilidades ──────────────────────────────────────────────────────────────
 function h(tag, attrs, ...kids) {
@@ -98,9 +168,15 @@ async function showProjects() {
       $main.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'muted' }, 'Nenhum projeto no serviço. Projetos entram aqui quando migrados no Zeus do PC.')))
       return
     }
+    // Aberto pela notificação (#p=<projeto>): vai direto para ele.
+    if (pendingProjectId) {
+      const target = projects.find(p => p.id === pendingProjectId)
+      pendingProjectId = ''
+      if (target) return showProject(target)
+    }
     $main.replaceChildren(...projects.map(p => h('button', { class: 'list-item', onclick: () => showProject(p) },
       h('div', { class: 'grow' }, h('div', {}, p.name), h('div', { class: 'muted' }, `${p.vpsName} · ${p.remotePath}`)),
-      h('span', { class: 'muted' }, '›'))))
+      h('span', { class: 'muted' }, '›'))), notificationsCard())
   } catch (e) {
     setConn(false)
     if (e instanceof AuthError) return showLogin('Token inválido — gere um novo link de pareamento no Zeus.')

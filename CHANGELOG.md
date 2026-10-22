@@ -1,5 +1,19 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.83.0] — 2026-10-22
+
+### Adicionado — notificações no celular (Zeus Mobile, Passo 3b)
+
+O app do celular só mostrava o que acontecia quando aberto; agora avisa quando o Hermes precisa do usuário — com o app fechado e o PC desligado.
+
+- **Web Push** padrão, disparado pelo serviço `zeus-hermes` na VPS: chaves VAPID geradas na 1ª vez (`data/vapid.json`, só root), aparelhos em `push_subscriptions`, envio pela infraestrutura de push do navegador (Android: Google) com o conteúdo criptografado de ponta a ponta. Só sai conexão da VPS; receber não depende do Tailscale (abrir o app, sim).
+- **Avisa quando:** comando aguarda Autorizar/Negar; o Hermes pede uma decisão; o Semi-autônomo para antes de tarefa de risco alto; tarefa(s) bloqueada(s); o loop para com tarefas pendentes sem o usuário ter pedido (ex.: 429, conexão caiu); a entrega é revisada (aprovada / com ressalvas / bloqueada). Tarefa concluída comum não avisa. Um aviso por acontecimento (eventos por projeto em fila; inscrição recusada pelo push é apagada).
+- O texto diz só projeto + o que aconteceu — **nunca o comando**; tocar abre o app **direto no projeto**. Sem botão "Autorizar" na própria notificação (autorizar exige ver o comando).
+- App do celular: cartão **Notificações** na tela de projetos (Ativar / Enviar teste / Desativar); ícone PNG no manifesto e na notificação.
+- Rotas do serviço: `GET /api/push/key`, `POST /api/push/subscribe|unsubscribe|test` (endereço de push só https, validado com Zod).
+
+**Verificado:** typecheck do serviço; na VPS ZEUS pelo Tailscale: chave pública servida, teste sem aparelho = 0 enviados, inscrição com endereço http recusada, ícone servido, `vapid.json` só root. **Não testado num celular** (receber, tocar e abrir no projeto).
+
 ## [3.82.4] — 2026-10-22
 
 ### Corrigido — colar no terminal do Zeus
