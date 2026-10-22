@@ -39,14 +39,18 @@ model Project {
   id              String         @id @default(cuid())
   name            String
   description     String         @default("")
-  remotePath      String
+  /// Pasta do projeto no PC ("" = sem pasta local). Project First (v3.84.0): local, VPS ou os dois.
+  localPath       String         @default("")
+  /// Pasta na VPS ("" = sem VPS).
+  remotePath      String         @default("")
   gitRepo         String         @default("")
-  vpsServerId     String
+  vpsServerId     String?
   claudeAccountId String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  vpsServer     VpsServer      @relation(fields: [vpsServerId], references: [id], onDelete: Cascade)
+  /// SetNull: apagar uma VPS não apaga mais os projetos dela (até v3.83 era Cascade).
+  vpsServer     VpsServer?     @relation(fields: [vpsServerId], references: [id], onDelete: SetNull)
   claudeAccount ClaudeAccount? @relation(fields: [claudeAccountId], references: [id], onDelete: SetNull)
   launchHistory LaunchHistory[]
   hermesAgent   HermesProjectAgent?

@@ -1514,6 +1514,28 @@ leva VPS (sem senha/fingerprint), projetos, `hermes_instances`, `hermes_project_
 `hermes_task_runs`, `knowledge_entries` e `project_memory` → `node server.cjs import` na VPS (INSERT OR REPLACE;
 a VPS vira host 127.0.0.1/root com a chave do serviço) → reinicia o serviço → grava o `config.json` no PC.
 
+## Project First — Fase 1: modelo de dados (v3.84.0)
+
+Projeto deixa de ser "uma pasta numa VPS". `projects` ganha `localPath` (pasta no PC, `''` = não tem);
+`remotePath` passa a ter default `''` e `vpsServerId` vira opcional, com FK `ON DELETE SET NULL`
+(antes `CASCADE`: apagar uma VPS apagava os projetos dela). Modos, calculados e não gravados
+(`projectWorkspaceMode` em `@cwm/config`): **local** (só PC), **remote** (só VPS), **hybrid** (PC ligado a
+uma pasta da VPS — o Agent no modo local). Regra de validação única `projectLocationError`: precisa de
+pasta no PC ou de VPS + caminho; VPS sem caminho (ou o contrário) é recusado. O `ProjectSchema` aplica a
+regra no create; o `update` valida o resultado já mesclado com o que está no banco.
+
+Migração (`packages/db/src/index.ts`, dentro do `initializeDatabase`): se `projects` não tem `localPath` ou
+`vpsServerId` ainda é NOT NULL → `beforeRebuild()` (no Zeus: `VACUUM INTO`
+`backups/cwm-antes-da-migracao-<ISO>.db`, fora do rodízio de 20; falhar o backup = não migra) → numa
+transação: guarda `launch_history` (o DROP da tabela antiga dispara o CASCADE), cria `projects__new`,
+copia, troca, devolve o histórico e compara as contagens (diferença = rollback). Depois, todo boot:
+`localPath` vazio é preenchido com a pasta de `hermes_local_links` do projeto. O serviço zeus-hermes usa
+o mesmo `initializeDatabase` (migra o banco da ZEUS no próximo deploy).
+
+Onde é decidido "onde morar": o Hermes continua rodando só na VPS (ZEUS — decisão do usuário em
+2026-10-22: PC desligado + celular); Hermes local fica fora. Fases seguintes: fluxo de criação (local /
+clonar / pasta existente), projeto atual em todo o app, ambientes de deploy com proteção de produção.
+
 ## Cópia de segurança do banco (v3.77.1)
 
 `apps/desktop/src/db-backup.ts` — `startDatabaseBackups(userData)` roda no `main.ts` logo depois de

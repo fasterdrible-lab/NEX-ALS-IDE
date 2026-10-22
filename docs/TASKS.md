@@ -2,6 +2,15 @@
 
 ## Em andamento
 
+- [ ] **Project First (prompt "NEX Project-First Local Development", 2026-10-22)** — Fase 0 (auditoria) entregue no chat. Decisão do usuário: Hermes continua na ZEUS (PC desligado + celular); Hermes local fora por ora.
+  - [x] Fase 1 — modelo de dados (v3.84.0): `projects.localPath`, VPS opcional, apagar VPS não apaga projeto (SET NULL), validação "PC ou VPS"; migração testada numa cópia do banco real (1 projeto, histórico, 36 tarefas e 3 agentes preservados; sem violação de FK; ACESSIBILIDADE ganhou a pasta do OneDrive; 2ª abertura não migra de novo; apagar a VPS deixa o projeto sem VPS)
+  - [x] Fase 1 no app — 2026-10-22: v3.84.0 instalada; migrou na abertura com `cwm-antes-da-migracao-2026-10-22T18-01-47-488Z.db`, contagens iguais antes/depois (1 projeto, 36 tarefas, 3 agentes, 7 execuções, 2 ligações), FK SET NULL, ACESSIBILIDADE com a pasta do OneDrive
+  - [ ] Pela tela: página do ACESSIBILIDADE mostra "PC" + pasta; IDE, Agent e Trazer/Enviar funcionam como antes
+  - [ ] Deploy do zeus-hermes 3.84.0 na ZEUS (migra o banco do serviço; mesmo código)
+  - [ ] Fase 2 — Novo projeto com 3 caminhos: criar no PC / clonar do Git / ligar pasta existente; VPS opcional; pastas recentes da IDE local viram projetos (sem apagar `local-folders.json`)
+  - [ ] Fase 3 — projeto atual em todo o app (seletor no topo; AI Hub, Squad, Planning, Tasks, Workspace, IDE, Launcher leem dele; dados antigos em "Sem projeto")
+  - [ ] Fase 4 — ambientes do projeto (agente = ZEUS, staging, produção protegida) e deploy só pelos gates; proteção contra `..` em todo `local:*`
+
 - [x] **Phase D — Infraestrutura + Aprendizado** — já entregue em partes, faltava só marcar (conferido no CHANGELOG em 2026-10-19): operador de telemetria VPS = Ponto 9 / `OperatorPage` (v3.43.0) + alertas virando incidentes com diagnóstico do Hermes (FASE 7, v3.69.0); feedback loop do Squad = ContextBuilder no stream (v3.37.0) + banner "Salvar Memória" com busca FTS5 (v3.38.0) + Memória Persistente `squad_memories` (v3.48.0); workspace intelligence = Ponto 11 / `WorkspacePage` (v3.45.0) + Aprendizado Contínuo (v3.44.0)
 - [ ] **Hermes — validação ponta a ponta pela UI (VPS-1)** — rodar o cenário "assistência técnica" do brief: plano → loop autônomo → Autorizar/Negar → DoD; corrigir o que quebrar
 - [ ] **Hermes — próximas fases do brief (gap analysis 2026-10-17)**, em ordem:

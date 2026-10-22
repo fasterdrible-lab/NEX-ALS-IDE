@@ -22,8 +22,81 @@ export async function disconnectPrisma(): Promise<void> {
   }
 }
 
+/** Colunas de "projects" a partir da v3.84.0 (Project First): VPS opcional, pasta local, sem Cascade. */
+const PROJECTS_COLUMNS = `"id" TEXT NOT NULL PRIMARY KEY,
+      "name" TEXT NOT NULL,
+      "description" TEXT NOT NULL DEFAULT '',
+      "localPath" TEXT NOT NULL DEFAULT '',
+      "remotePath" TEXT NOT NULL DEFAULT '',
+      "gitRepo" TEXT NOT NULL DEFAULT '',
+      "vpsServerId" TEXT,
+      "claudeAccountId" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "projects_vpsServerId_fkey"
+        FOREIGN KEY ("vpsServerId") REFERENCES "vps_servers"("id") ON DELETE SET NULL,
+      CONSTRAINT "projects_claudeAccountId_fkey"
+        FOREIGN KEY ("claudeAccountId") REFERENCES "claude_accounts"("id") ON DELETE SET NULL`
+
+/** true se "projects" ainda tem o formato antigo (vpsServerId obrigatório / sem localPath). */
+async function projectsNeedsRebuild(): Promise<boolean> {
+  const cols = (await getPrismaClient().$queryRawUnsafe(`PRAGMA table_info("projects")`)) as
+    { name: string; notnull: number | bigint }[]
+  const vps = cols.find(c => c.name === 'vpsServerId')
+  return !cols.some(c => c.name === 'localPath') || (vps !== undefined && Number(vps.notnull) === 1)
+}
+
+/**
+ * Reconstrói "projects" no formato novo sem perder linhas (SQLite não muda NOT NULL nem a FK com
+ * ALTER). O DROP da tabela antiga dispara o CASCADE em launch_history, então o histórico é guardado
+ * antes e devolvido depois. Tudo numa transação: se a contagem não bater, nada muda.
+ */
+async function rebuildProjectsTable(): Promise<void> {
+  const db = getPrismaClient()
+  const cols = (await db.$queryRawUnsafe(`PRAGMA table_info("projects")`)) as { name: string }[]
+  const keep = ['id', 'name', 'description', 'localPath', 'remotePath', 'gitRepo', 'vpsServerId',
+    'claudeAccountId', 'createdAt', 'updatedAt']
+  const names = cols.map(c => c.name).filter(n => keep.includes(n)).map(n => `"${n}"`).join(', ')
+  await db.$transaction(async (tx: InstanceType<typeof PrismaClient>) => {
+    const count = async (t: string) =>
+      Number(((await tx.$queryRawUnsafe(`SELECT COUNT(*) AS n FROM "${t}"`)) as { n: number | bigint }[])[0]?.n ?? 0)
+    const before = await count('projects')
+    const historyBefore = await count('launch_history')
+    await tx.$executeRawUnsafe(`DROP TABLE IF EXISTS "launch_history__bak"`)
+    await tx.$executeRawUnsafe(`CREATE TABLE "launch_history__bak" AS SELECT * FROM "launch_history"`)
+    await tx.$executeRawUnsafe(`DROP TABLE IF EXISTS "projects__new"`)
+    await tx.$executeRawUnsafe(`CREATE TABLE "projects__new" (${PROJECTS_COLUMNS})`)
+    await tx.$executeRawUnsafe(`INSERT INTO "projects__new" (${names}) SELECT ${names} FROM "projects"`)
+    await tx.$executeRawUnsafe(`DROP TABLE "projects"`)
+    await tx.$executeRawUnsafe(`ALTER TABLE "projects__new" RENAME TO "projects"`)
+    await tx.$executeRawUnsafe(`DELETE FROM "launch_history"`)
+    await tx.$executeRawUnsafe(`INSERT INTO "launch_history" SELECT * FROM "launch_history__bak"`)
+    await tx.$executeRawUnsafe(`DROP TABLE "launch_history__bak"`)
+    const after = await count('projects')
+    const historyAfter = await count('launch_history')
+    if (after !== before || historyAfter !== historyBefore) {
+      throw new Error(`contagem diferente (projetos ${before}→${after}, histórico ${historyBefore}→${historyAfter})`)
+    }
+    console.log(`[DB] projects migrada para Project First: ${after} projetos, ${historyAfter} aberturas preservados`)
+  })
+}
+
+/** Projetos já ligados a uma pasta do PC (Agent no modo local) ganham essa pasta como localPath. */
+async function backfillLocalPaths(): Promise<void> {
+  await getPrismaClient().$executeRawUnsafe(`
+    UPDATE "projects" SET "localPath" = (
+      SELECT l."localPath" FROM "hermes_local_links" l WHERE l."projectId" = "projects"."id" LIMIT 1
+    )
+    WHERE "localPath" = '' AND EXISTS (SELECT 1 FROM "hermes_local_links" l WHERE l."projectId" = "projects"."id")`)
+}
+
+export interface InitializeDatabaseOptions {
+  /** Chamado antes de reconstruir uma tabela com dados (ex.: backup com VACUUM INTO). */
+  beforeRebuild?: () => Promise<void>
+}
+
 /** Cria as tabelas se não existirem (primeiro launch). */
-export async function initializeDatabase(): Promise<void> {
+export async function initializeDatabase(options: InitializeDatabaseOptions = {}): Promise<void> {
   const db = getPrismaClient()
 
   const ddl = [
@@ -51,17 +124,7 @@ export async function initializeDatabase(): Promise<void> {
     `CREATE TABLE IF NOT EXISTS "projects" (
       "id" TEXT NOT NULL PRIMARY KEY,
       "name" TEXT NOT NULL,
-      "description" TEXT NOT NULL DEFAULT '',
-      "remotePath" TEXT NOT NULL,
-      "gitRepo" TEXT NOT NULL DEFAULT '',
-      "vpsServerId" TEXT NOT NULL,
-      "claudeAccountId" TEXT,
-      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "projects_vpsServerId_fkey"
-        FOREIGN KEY ("vpsServerId") REFERENCES "vps_servers"("id") ON DELETE CASCADE,
-      CONSTRAINT "projects_claudeAccountId_fkey"
-        FOREIGN KEY ("claudeAccountId") REFERENCES "claude_accounts"("id") ON DELETE SET NULL
+      ${PROJECTS_COLUMNS}
     )`,
     `CREATE TABLE IF NOT EXISTS "settings" (
       "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'default',
@@ -331,6 +394,13 @@ export async function initializeDatabase(): Promise<void> {
   for (const sql of migrations) {
     try { await db.$executeRawUnsafe(sql) } catch { /* coluna ou estado já existe */ }
   }
+
+  // ── Project First (v3.84.0) — sem try/catch silencioso: se falhar, o app não abre com dados pela metade
+  if (await projectsNeedsRebuild()) {
+    await options.beforeRebuild?.()
+    await rebuildProjectsTable()
+  }
+  try { await backfillLocalPaths() } catch { /* hermes_local_links ainda não existe */ }
 }
 
 export { PrismaClient }

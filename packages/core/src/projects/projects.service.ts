@@ -1,5 +1,5 @@
 import { getPrismaClient } from '@cwm/db'
-import { ProjectSchema, type ProjectInput } from '@cwm/config'
+import { ProjectFieldsSchema, ProjectSchema, projectLocationError, type ProjectInput } from '@cwm/config'
 
 export class ProjectsService {
   private get db() {
@@ -31,8 +31,11 @@ export class ProjectsService {
   }
 
   async update(id: string, input: Partial<ProjectInput>) {
-    await this.findById(id)
-    const data = ProjectSchema.partial().parse(input)
+    const current = await this.findById(id)
+    const data = ProjectFieldsSchema.partial().parse(input)
+    // A regra "PC ou VPS" vale para o resultado final, não só para os campos enviados.
+    const error = projectLocationError({ ...current, ...data })
+    if (error) throw new Error(error)
     return this.db.project.update({
       where: { id },
       data,

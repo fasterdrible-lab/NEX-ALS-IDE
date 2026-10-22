@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   encryptPassword, decryptPassword,
-  VpsServerSchema, ProjectSchema, ClaudeAccountSchema, SettingsSchema,
+  VpsServerSchema, ProjectSchema, ClaudeAccountSchema, SettingsSchema, projectLocationError, projectWorkspaceMode,
   HermesAutonomyLevelSchema, HermesDevRulesSchema, HERMES_DEV_RULES_MAX,
 } from './index'
 
@@ -79,6 +79,38 @@ describe('ProjectSchema', () => {
   it('rejects missing vpsServerId', () => {
     const r = ProjectSchema.safeParse({ name: 'Projeto', remotePath: '/var/www' })
     expect(r.success).toBe(false)
+  })
+
+  it('accepts a local-only project (Project First)', () => {
+    const r = ProjectSchema.safeParse({ name: 'Projeto', localPath: 'C:\\Users\\me\\OneDrive\\Projeto' })
+    expect(r.success).toBe(true)
+  })
+
+  it('accepts local + VPS (hybrid)', () => {
+    const r = ProjectSchema.safeParse({ name: 'P', localPath: 'C:/p', remotePath: '/root/p', vpsServerId: 'v1' })
+    expect(r.success && projectWorkspaceMode(r.data)).toBe('hybrid')
+  })
+
+  it('rejects a project with neither local folder nor VPS', () => {
+    expect(ProjectSchema.safeParse({ name: 'Projeto' }).success).toBe(false)
+  })
+
+  it('rejects relative local paths and remote paths without /', () => {
+    expect(ProjectSchema.safeParse({ name: 'P', localPath: '..\\outro' }).success).toBe(false)
+    expect(ProjectSchema.safeParse({ name: 'P', remotePath: 'root/p', vpsServerId: 'v1' }).success).toBe(false)
+  })
+})
+
+describe('projectLocationError / projectWorkspaceMode', () => {
+  it('explains what is missing', () => {
+    expect(projectLocationError({ vpsServerId: 'v1' })).toMatch(/caminho/)
+    expect(projectLocationError({ remotePath: '/root/p' })).toMatch(/VPS/)
+    expect(projectLocationError({ localPath: 'C:/p' })).toBeNull()
+  })
+
+  it('classifies local and remote', () => {
+    expect(projectWorkspaceMode({ localPath: 'C:/p', vpsServerId: null })).toBe('local')
+    expect(projectWorkspaceMode({ localPath: '', vpsServerId: 'v1' })).toBe('remote')
   })
 })
 

@@ -203,7 +203,7 @@ export class HermesLocalSync {
     const project = await this.projects.create({
       name: input.name.trim() || path.basename(localPath),
       description: `Enviado da pasta local ${localPath}`,
-      remotePath, vpsServerId: input.vpsId, gitRepo: '',
+      localPath, remotePath, vpsServerId: input.vpsId, gitRepo: '',
     })
     return this.saveLink(localPath, project.id, manifest)
   }
@@ -244,9 +244,11 @@ export class HermesLocalSync {
       const data = ProjectSchema.parse({
         name: input.name.trim() || path.basename(localPath),
         description: `Ligado à pasta local ${localPath}`,
-        remotePath, vpsServerId: input.vpsId, gitRepo: '',
+        localPath, remotePath, vpsServerId: input.vpsId, gitRepo: '',
       })
       project = await this.db.project.create({ data: reuseId ? { ...data, id: reuseId } : data })
+    } else if (!project.localPath) {
+      project = await this.db.project.update({ where: { id: project.id }, data: { localPath } })
     }
     return this.saveLink(localPath, project.id, base)
   }

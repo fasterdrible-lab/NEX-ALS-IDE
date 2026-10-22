@@ -9,7 +9,7 @@ const APP_ICON = app.isPackaged
   ? path.join(process.resourcesPath, 'icon.png')
   : path.join(__dirname, '../../build/icon.png')
 import { disconnectPrisma, initializeDatabase } from '@cwm/db'
-import { startDatabaseBackups } from './db-backup'
+import { backupDatabase, startDatabaseBackups } from './db-backup'
 import { autoUpdater } from 'electron-updater'
 import { NotificationMonitor } from '@cwm/core'
 
@@ -330,7 +330,8 @@ app.whenReady().then(async () => {
   if (!gotSingleInstanceLock) return
   if (app.isPackaged) setupCSP()
   setDatabasePath()
-  await initializeDatabase()
+  // Se o formato de alguma tabela mudar, guarda o banco antes (falha no backup = não migra).
+  await initializeDatabase({ beforeRebuild: () => backupDatabase(app.getPath('userData'), 'antes-da-migracao') })
   // Antes das migrações do handlers.ts e de qualquer tela: guarda o banco como estava ao abrir.
   await startDatabaseBackups(app.getPath('userData'))
   localFolders = new LocalFolderStore(path.join(app.getPath('userData'), 'local-folders.json'))

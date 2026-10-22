@@ -241,7 +241,9 @@ export default function Launcher() {
                     {/* Janela própria na pasta do projeto: vários projetos abertos ao mesmo tempo */}
                     <button
                       onClick={() => {
-                        ipc.window.openIde(p.vpsServerId, p.vpsServer?.name ?? p.vpsServerId, p.remotePath)
+                        (p.vpsServerId
+                          ? ipc.window.openIde(p.vpsServerId, p.vpsServer?.name ?? p.vpsServerId, p.remotePath)
+                          : ipc.window.openIdeLocal(p.localPath))
                           .catch(e => setLaunchStates(s => ({ ...s, [p.id]: { loading: false, success: false, message: String(e instanceof Error ? e.message : e) } })))
                       }}
                       className="btn-primary text-xs py-1.5 px-3"

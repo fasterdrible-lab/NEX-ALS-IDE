@@ -30,8 +30,13 @@ export default function ProjectHubPage() {
       // Resumo é best-effort: cada parte falha sozinha sem derrubar a página.
       ipc.hermes.agent.status(p.id).then(setAgent).catch(() => setAgent(null))
       ipc.tasks.list({ projectId: p.id, ownerAgent: 'hermes' }).then(setTasks).catch(() => setTasks([]))
-      ipc.git.status(p.vpsServerId, p.remotePath).then(setGit).catch(() => setGit(null))
-      ipc.git.log(p.vpsServerId, p.remotePath, 5).then(setCommits).catch(() => setCommits([]))
+      if (p.vpsServerId) {
+        ipc.git.status(p.vpsServerId, p.remotePath).then(setGit).catch(() => setGit(null))
+        ipc.git.log(p.vpsServerId, p.remotePath, 5).then(setCommits).catch(() => setCommits([]))
+      } else if (p.localPath) {
+        // Projeto só no PC (Project First): Git do Windows na pasta local
+        ipc.git.local.status(p.localPath).then(setGit).catch(() => setGit(null))
+      }
     }).catch(() => setProject(null))
   }, [projectId])
 
@@ -47,8 +52,15 @@ export default function ProjectHubPage() {
     )
   }
 
-  const vpsName = encodeURIComponent(project.vpsServer?.name ?? project.vpsServerId)
+  const vpsId = project.vpsServerId ?? ''
+  const vpsName = encodeURIComponent(project.vpsServer?.name ?? vpsId)
   const path = encodeURIComponent(project.remotePath)
+  const openIde = () => {
+    const opened = vpsId
+      ? ipc.window.openIde(vpsId, project.vpsServer?.name ?? vpsId, project.remotePath)
+      : ipc.window.openIdeLocal(project.localPath)
+    void opened.catch(e => setLaunchMsg(String(e instanceof Error ? e.message : e)))
+  }
   const done = tasks.filter(t => t.status === 'DONE').length
   const running = tasks.find(t => t.status === 'IN_PROGRESS')
   const dirty = git ? git.staged.length + git.unstaged.length + git.untracked.length : 0
@@ -58,11 +70,14 @@ export default function ProjectHubPage() {
       go: () => navigate(`/ai-hub?mode=agent&project=${project.id}`) },
     // Janela própria: a principal fica livre para abrir outro projeto ao mesmo tempo
     { label: 'IDE', hint: 'Editor + terminal na pasta do projeto, em nova janela', icon: Code2, accent: 'text-amber-300 border-amber-700/50 hover:bg-amber-950/30',
-      go: () => { void ipc.window.openIde(project.vpsServerId, project.vpsServer?.name ?? project.vpsServerId, project.remotePath).catch(e => setLaunchMsg(String(e instanceof Error ? e.message : e))) } },
-    { label: 'Explorer', hint: 'Arquivos do projeto', icon: HardDrive, accent: 'text-sky-300 border-sky-700/50 hover:bg-sky-950/30',
-      go: () => navigate(`/explorer/${project.vpsServerId}/${vpsName}?path=${path}`) },
-    { label: 'Terminal', hint: 'SSH já dentro da pasta', icon: Terminal, accent: 'text-emerald-300 border-emerald-700/50 hover:bg-emerald-950/30',
-      go: () => navigate(`/terminal/${project.vpsServerId}/${vpsName}?cwd=${path}`) },
+      go: openIde },
+    // Explorer e Terminal SSH só existem com VPS; no projeto local o terminal fica dentro da IDE
+    ...(vpsId ? [
+      { label: 'Explorer', hint: 'Arquivos do projeto', icon: HardDrive, accent: 'text-sky-300 border-sky-700/50 hover:bg-sky-950/30',
+        go: () => navigate(`/explorer/${vpsId}/${vpsName}?path=${path}`) },
+      { label: 'Terminal', hint: 'SSH já dentro da pasta', icon: Terminal, accent: 'text-emerald-300 border-emerald-700/50 hover:bg-emerald-950/30',
+        go: () => navigate(`/terminal/${vpsId}/${vpsName}?cwd=${path}`) },
+    ] : []),
   ]
 
   return (
@@ -77,7 +92,9 @@ export default function ProjectHubPage() {
           <h1 className="text-2xl font-bold text-slate-100">{project.name}</h1>
           <div className="flex items-center gap-2 flex-wrap mt-1">
             {project.vpsServer && <span className="badge-gray"><Server size={10} /> {project.vpsServer.name}</span>}
-            <span className="text-sm text-slate-400 font-mono">{project.remotePath}</span>
+            {project.remotePath && <span className="text-sm text-slate-400 font-mono">{project.remotePath}</span>}
+            {project.localPath && <span className="badge-gray" title={project.localPath}><HardDrive size={10} /> PC</span>}
+            {project.localPath && <span className="text-sm text-slate-400 font-mono truncate">{project.localPath}</span>}
           </div>
           {project.description && <p className="text-sm text-slate-500 mt-1">{project.description}</p>}
         </div>
@@ -95,10 +112,12 @@ export default function ProjectHubPage() {
           </button>
         ))}
       </div>
-      <button onClick={() => navigate(`/ide/${project.vpsServerId}/${vpsName}?path=${path}`)} className="btn-secondary text-xs mb-8"
-        title="Abre a IDE aqui mesmo, no lugar desta tela">
-        <Code2 size={13} /> IDE nesta janela
-      </button>
+      {vpsId ? (
+        <button onClick={() => navigate(`/ide/${vpsId}/${vpsName}?path=${path}`)} className="btn-secondary text-xs mb-8"
+          title="Abre a IDE aqui mesmo, no lugar desta tela">
+          <Code2 size={13} /> IDE nesta janela
+        </button>
+      ) : <div className="mb-8" />}
       {launchMsg && <p className="text-xs text-red-400 -mt-6 mb-8">{launchMsg}</p>}
 
       <div className="grid grid-cols-2 gap-3">

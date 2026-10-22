@@ -31,15 +31,45 @@ export const VpsServerSchema = z.object({
   sshPassword: z.string().optional().nullable(),
 })
 
-export const ProjectSchema = z.object({
+/**
+ * Project First (v3.84.0): o projeto vive no PC (localPath), na VPS (vpsServerId + remotePath) ou
+ * nos dois. "" / null = não tem. A regra "pelo menos um dos dois" está em `projectLocationError`,
+ * fora do objeto, para o `.partial()` do update continuar funcionando.
+ */
+export const ProjectFieldsSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, 'Nome é obrigatório'),
+  name: z.string().trim().min(1, 'Nome é obrigatório').max(120),
   description: z.string().optional().default(''),
-  remotePath: z.string().min(1, 'Caminho remoto é obrigatório'),
+  localPath: z.string().trim().max(1024).optional().default('')
+    .refine(p => p === '' || /^([a-zA-Z]:[\\/]|\\\\|\/)/.test(p), 'A pasta local precisa ser um caminho completo'),
+  remotePath: z.string().trim().max(512).optional().default('')
+    .refine(p => p === '' || p.startsWith('/'), 'O caminho na VPS começa com /'),
   gitRepo: z.string().optional().default(''),
-  vpsServerId: z.string().min(1, 'VPS é obrigatória'),
+  vpsServerId: z.string().min(1).optional().nullable(),
   claudeAccountId: z.string().optional().nullable(),
 })
+
+/** Mensagem de erro se o projeto não tem onde morar, ou tem VPS sem caminho (e vice-versa). */
+export function projectLocationError(p: { localPath?: string | null; remotePath?: string | null; vpsServerId?: string | null }): string | null {
+  const hasVps = !!p.vpsServerId
+  const hasRemote = !!p.remotePath
+  if (hasVps !== hasRemote) return hasVps ? 'Informe o caminho do projeto na VPS' : 'Escolha a VPS do caminho remoto'
+  if (!p.localPath && !hasVps) return 'Escolha a pasta do projeto no PC ou uma VPS'
+  return null
+}
+
+export const ProjectSchema = ProjectFieldsSchema.superRefine((p, ctx) => {
+  const error = projectLocationError(p)
+  if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error })
+})
+
+/** local = só no PC; remote = só na VPS; hybrid = pasta no PC ligada a uma pasta na VPS. */
+export type ProjectWorkspaceMode = 'local' | 'remote' | 'hybrid'
+
+export function projectWorkspaceMode(p: { localPath?: string | null; vpsServerId?: string | null }): ProjectWorkspaceMode {
+  if (p.localPath && p.vpsServerId) return 'hybrid'
+  return p.localPath ? 'local' : 'remote'
+}
 
 export const ClaudeAccountSchema = z.object({
   id: z.string().optional(),
@@ -120,7 +150,7 @@ export type Project = z.infer<typeof ProjectSchema> & {
   id: string
   createdAt: Date
   updatedAt: Date
-  vpsServer?: VpsServer
+  vpsServer?: VpsServer | null
   claudeAccount?: ClaudeAccount | null
 }
 export type ProjectInput = z.infer<typeof ProjectSchema>

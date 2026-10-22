@@ -6,7 +6,7 @@ import LocalProjects from '../components/LocalProjects'
 import type { Project, ProjectInput, VpsServer, ClaudeAccount } from '@cwm/config'
 
 const emptyForm = (): ProjectInput => ({
-  name: '', description: '', remotePath: '', gitRepo: '', vpsServerId: '', claudeAccountId: null,
+  name: '', description: '', localPath: '', remotePath: '', gitRepo: '', vpsServerId: '', claudeAccountId: null,
 })
 
 export default function ProjectsList() {
@@ -35,7 +35,7 @@ export default function ProjectsList() {
     setFormData(emptyForm()); setEditingId(null); setFormOpen(true); setError(null); setSetupState(null)
   }
   const openEdit = (p: Project) => {
-    setFormData({ name: p.name, description: p.description ?? '', remotePath: p.remotePath, gitRepo: p.gitRepo ?? '', vpsServerId: p.vpsServerId, claudeAccountId: p.claudeAccountId ?? null })
+    setFormData({ name: p.name, description: p.description ?? '', localPath: p.localPath, remotePath: p.remotePath, gitRepo: p.gitRepo ?? '', vpsServerId: p.vpsServerId ?? '', claudeAccountId: p.claudeAccountId ?? null })
     setEditingId(p.id); setFormOpen(true); setError(null)
   }
 
@@ -124,7 +124,8 @@ export default function ProjectsList() {
                     <span className="badge-gray" style={{ color: '#a78bfa' }}>🤖 {p.claudeAccount.name}</span>
                   )}
                 </div>
-                <p className="text-sm text-slate-400 mt-0.5 font-mono">{p.remotePath}</p>
+                {p.remotePath && <p className="text-sm text-slate-400 mt-0.5 font-mono">{p.remotePath}</p>}
+                {p.localPath && <p className="text-xs text-slate-500 mt-0.5 font-mono truncate" title={p.localPath}>PC: {p.localPath}</p>}
                 {p.gitRepo && (
                   <p className="text-xs text-slate-600 mt-0.5 flex items-center gap-1">
                     <GitBranch size={10} /> {p.gitRepo}
@@ -200,7 +201,7 @@ export default function ProjectsList() {
 
               <div>
                 <label className="label">VPS *</label>
-                <select className="input" value={formData.vpsServerId}
+                <select className="input" value={formData.vpsServerId ?? ''}
                   onChange={e => setFormData(d => ({ ...d, vpsServerId: e.target.value }))}>
                   <option value="">Selecione uma VPS</option>
                   {vpsList.map(v => <option key={v.id} value={v.id}>{v.name} ({v.host})</option>)}

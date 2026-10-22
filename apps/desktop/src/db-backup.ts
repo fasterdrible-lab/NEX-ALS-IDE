@@ -24,11 +24,12 @@ async function counts(): Promise<string> {
   return parts.join(' ')
 }
 
-export async function backupDatabase(userData: string, reason: 'abertura' | 'hora'): Promise<void> {
+/** 'antes-da-migracao' fica fora do rodízio de 20 (o nome não começa com a data). */
+export async function backupDatabase(userData: string, reason: 'abertura' | 'hora' | 'antes-da-migracao'): Promise<void> {
   const dir = path.join(userData, 'backups')
   fs.mkdirSync(dir, { recursive: true })
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const file = path.join(dir, `cwm-${stamp}-${reason}.db`)
+  const file = path.join(dir, reason === 'antes-da-migracao' ? `cwm-antes-da-migracao-${stamp}.db` : `cwm-${stamp}-${reason}.db`)
   await getPrismaClient().$executeRawUnsafe(`VACUUM INTO '${file.replace(/'/g, "''")}'`)
   fs.appendFileSync(path.join(dir, 'backups.log'), `${new Date().toISOString()} ${reason} ${path.basename(file)} ${await counts()}\n`)
   // Nome começa com a data ISO: ordem alfabética = ordem cronológica. Só as automáticas — cópias

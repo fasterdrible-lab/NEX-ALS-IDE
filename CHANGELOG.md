@@ -1,5 +1,19 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.84.0] — 2026-10-22
+
+### Alterado — Project First, Fase 1: projeto não precisa mais de VPS
+
+Até aqui todo projeto era "uma pasta numa VPS" (VPS e caminho obrigatórios), e apagar uma VPS apagava junto os projetos dela.
+
+- **Pasta no PC** (`localPath`) no projeto; **VPS e caminho remoto opcionais**. Um projeto vive no PC, na VPS ou nos dois (projeto do OneDrive ligado pelo Agent). Validação: precisa de pasta no PC ou de VPS + caminho.
+- **Apagar uma VPS não apaga mais os projetos** — eles ficam sem VPS (`ON DELETE SET NULL`, antes `CASCADE`).
+- **Migração automática na 1ª abertura**, sem perder nada: cópia do banco antes (`backups/cwm-antes-da-migracao-<data>.db`, fora do rodízio; se a cópia falhar, não migra), reconstrução da tabela numa transação com conferência das contagens (diferença = desfaz). Projetos já ligados a uma pasta do PC ganham essa pasta.
+- Página do projeto e Lançador: sem VPS, **IDE** abre a IDE local e o Git é o do PC; Explorer/Terminal SSH só aparecem com VPS. Lista de projetos mostra a pasta do PC.
+- O Hermes continua rodando na VPS ZEUS (decisão do usuário).
+
+**Verificado:** `pnpm typecheck` (6 pacotes), testes (config 23 — 6 novos — e core 61); migração rodada numa cópia do banco real: 1 projeto, histórico, 36 tarefas e 3 agentes preservados, sem violação de FK, ACESSIBILIDADE com a pasta do OneDrive, 2ª abertura não migra de novo, apagar a VPS na cópia deixa o projeto sem VPS. **Não testado no app instalado**; serviço da ZEUS ainda na 3.83.0.
+
 ## [3.83.0] — 2026-10-22
 
 ### Adicionado — notificações no celular (Zeus Mobile, Passo 3b)
