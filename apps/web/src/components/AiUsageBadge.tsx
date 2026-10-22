@@ -22,6 +22,9 @@ function when(iso: string | null): string {
   return `volta em ${h ? `${h} h ` : ''}${m} min`
 }
 
+/** Nome da conta de VERDADE (e-mail que a Anthropic confirma); o apelido do cadastro pode estar desatualizado. */
+const realName = (a: ClaudeAccountUsage) => (a.email ? a.email.split('@')[0] : a.name)
+
 const money = (b: NonNullable<AiProviderUsage['balance']>) =>
   `${b.currency === 'USD' ? 'US$' : b.currency === 'CNY' ? '¥' : `${b.currency} `}${b.amount.toFixed(2)}`
 
@@ -32,9 +35,9 @@ function summary(p: AiProviderUsage): { text: string; color: string } {
   if (p.kind === 'accounts') {
     const a = p.accounts?.find(x => x.active) ?? p.accounts?.[0]
     if (!a) return { text: 'nenhuma conta', color: GRAY }
-    if (a.problem) return { text: `${a.name} · login vencido`, color: AMBER }
+    if (a.problem) return { text: `${realName(a)} · sem login`, color: AMBER }
     const worst = Math.max(a.fiveHour?.pct ?? 0, a.sevenDay?.pct ?? 0)
-    return { text: `${a.name} · ${worst}%`, color: pctColor(worst) }
+    return { text: `${realName(a)} · ${worst}%`, color: pctColor(worst) }
   }
   return { text: 'ativo', color: GRAY }
 }
@@ -57,7 +60,11 @@ function Account({ a, busy, onUse }: { a: ClaudeAccountUsage; busy: string | nul
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-1.5">
-        <span className="text-[11px] truncate flex-1" style={{ color: 'rgba(247,249,252,0.8)' }}>{a.name}{a.plan ? ` · ${a.plan}` : ''}</span>
+        <span className="text-[11px] truncate flex-1" style={{ color: 'rgba(247,249,252,0.8)' }}
+          title={a.email ? `Conta logada: ${a.email} · cadastro no Zeus: "${a.name}"` : `Cadastro no Zeus: "${a.name}"`}>
+          {realName(a)}{a.plan ? ` · ${a.plan}` : ''}
+          {a.email && realName(a) !== a.name && <span style={{ color: 'rgba(247,249,252,0.4)' }}> (cadastro "{a.name}")</span>}
+        </span>
         {a.active ? (
           <span className="text-[9px] px-1.5 rounded" style={{ background: 'rgba(26,140,255,0.15)', color: '#7cc0ff' }}>em uso</span>
         ) : (
@@ -71,6 +78,7 @@ function Account({ a, busy, onUse }: { a: ClaudeAccountUsage; busy: string | nul
       {a.problem
         ? <p className="text-[10px]" style={{ color: AMBER }}>{a.problem}</p>
         : <><Bar label="5 h" w={a.fiveHour} /><Bar label="Semana" w={a.sevenDay} /></>}
+      {a.notes?.map(n => <p key={n} className="text-[9px] leading-snug" style={{ color: 'rgba(251,191,36,0.75)' }}>{n}</p>)}
     </div>
   )
 }

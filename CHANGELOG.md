@@ -1,5 +1,17 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.82.2] — 2026-10-22
+
+### Corrigido — indicador mostrava a conta Claude com o nome errado
+
+O usuário viu "fasterdrilbe · 98%" no Zeus enquanto o claude.ai da fasterdrible mostrava 14% na semana. A entrada "fasterdrilbe" aponta para `C:\Users\phpos\.claude` — a **mesma pasta do Claude Code do VS Code**; quando o usuário trocou de conta lá (hoje 07:33), o login da pasta passou a ser a **phpos40**, e o Zeus continuou chamando pelo apelido do cadastro. O login da pasta própria da phpos40 ficou recusado (401).
+
+- O nome mostrado vem da **conta de verdade** do login (`/api/oauth/profile`), com o apelido do cadastro entre parênteses quando difere.
+- Aviso quando **duas entradas são a mesma conta** e nota fixa na entrada da pasta padrão (`~/.claude`): "Pasta compartilhada com o Claude Code do VS Code/terminal — muda de conta quando você troca lá".
+- Resposta **429** (consultas demais) mostra a última leitura boa em vez de "Resposta 429".
+
+**Verificado:** `pnpm typecheck` (6 pacotes); perfil real das duas pastas pela API: `.claude` → php***@gmail.com (30% / 98%), pasta da phpos40 → login recusado.
+
 ## [3.82.1] — 2026-10-21
 
 ### Corrigido — exclusões sem confirmação

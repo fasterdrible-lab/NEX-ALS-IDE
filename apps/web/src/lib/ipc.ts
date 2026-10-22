@@ -190,6 +190,8 @@ export interface ClaudeAccountUsage {
   id: string; name: string; active: boolean; email: string; plan: string
   fiveHour: ClaudeUsageWindow | null; sevenDay: ClaudeUsageWindow | null
   problem: string
+  /** Avisos que não impedem a leitura (pasta compartilhada, mesma conta de outra entrada, leitura antiga). */
+  notes: string[]
 }
 export interface AiProviderUsage {
   provider: string; label: string; isDefault: boolean

@@ -26,6 +26,8 @@ export interface AccountUsage {
   sevenDay: UsageWindow | null
   /** '' = leu; senão o motivo (login expirado, sem login, sem rede). */
   problem: string
+  /** Avisos que não impedem a leitura (pasta compartilhada, mesma conta de outra entrada, leitura antiga). */
+  notes: string[]
 }
 export interface ProviderUsage {
   provider: string
@@ -76,8 +78,15 @@ async function getJson(url: string, key: string): Promise<{ status: number; data
   return { status: res.status, data: await res.json().catch(() => null) }
 }
 
+/** Pasta padrão do Claude Code (a mesma do Claude Code do VS Code/terminal) — o login dela muda quando o usuário troca de conta lá. */
+function isDefaultClaudeDir(dir: string): boolean {
+  return /[\\/]\.claude[\\/]?$/i.test(dir.trim())
+}
+
 export class AiUsageMonitor {
   private last: ProviderUsage[] = []
+  /** Última leitura boa por conta: resposta 429 (consultas demais) mostra esta em vez do erro. */
+  private lastGood = new Map<string, AccountUsage>()
   /** Avisos já dados (não repetem no mesmo ciclo do limite / no mesmo dia para saldo). */
   private warned = new Set<string>()
   private timer: ReturnType<typeof setInterval> | null = null
@@ -109,7 +118,13 @@ export class AiUsageMonitor {
     try {
       if (p.provider === 'claude-code') {
         const rows = await this.d.listClaudeAccounts().catch(() => [] as AccountRow[])
-        return { ...base, kind: 'accounts', accounts: await Promise.all(rows.map(r => this.readClaudeAccount(r))) }
+        const accounts = await Promise.all(rows.map(r => this.readClaudeAccount(r)))
+        // Duas entradas logadas na mesma conta (ex.: a pasta padrão mudou de conta pelo VS Code).
+        for (const a of accounts) {
+          const twin = a.email && accounts.find(o => o !== a && o.email === a.email)
+          if (twin) a.notes.push(`Mesma conta que "${twin.name}" — faça login da outra conta numa das duas`)
+        }
+        return { ...base, kind: 'accounts', accounts }
       }
       if (p.provider === 'deepseek' || p.provider === 'openrouter') {
         const key = await this.d.getKey(p.provider)
@@ -142,28 +157,40 @@ export class AiUsageMonitor {
   }
 
   private async readClaudeAccount(r: AccountRow): Promise<AccountUsage> {
-    const base: AccountUsage = { id: r.id, name: r.name, active: r.isActive === 1, email: '', plan: '', fiveHour: null, sevenDay: null, problem: '' }
+    const base: AccountUsage = { id: r.id, name: r.name, active: r.isActive === 1, email: '', plan: '', fiveHour: null, sevenDay: null, problem: '', notes: [] }
+    if (isDefaultClaudeDir(r.configDir)) {
+      base.notes.push('Pasta compartilhada com o Claude Code do VS Code/terminal — muda de conta quando você troca lá')
+    }
     let oauth: { accessToken?: string; expiresAt?: number; subscriptionType?: string } | undefined
     try {
       oauth = (JSON.parse(await fs.readFile(path.join(r.configDir, '.credentials.json'), 'utf8')) as { claudeAiOauth?: typeof oauth }).claudeAiOauth
     } catch { return { ...base, problem: 'Sem login nesta conta' } }
-    try {
-      const acc = (JSON.parse(await fs.readFile(path.join(r.configDir, '.claude.json'), 'utf8')) as { oauthAccount?: { emailAddress?: string } }).oauthAccount
-      base.email = acc?.emailAddress ?? ''
-    } catch { /* sem .claude.json */ }
     base.plan = oauth?.subscriptionType ?? ''
     if (!oauth?.accessToken) return { ...base, problem: 'Sem login nesta conta' }
 
+    const headers = { Authorization: `Bearer ${oauth.accessToken}`, Accept: 'application/json', 'anthropic-beta': 'oauth-2025-04-20', 'User-Agent': 'Zeus-IDE/1.0' }
+    // Conta de verdade do login (o apelido do cadastro pode estar errado — a pasta muda de conta por fora).
+    try {
+      const pr = await fetch('https://api.anthropic.com/api/oauth/profile', { headers, signal: AbortSignal.timeout(8000) })
+      if (pr.ok) {
+        const pj = await pr.json().catch(() => null) as { account?: { email?: string; email_address?: string } } | null
+        base.email = pj?.account?.email ?? pj?.account?.email_address ?? ''
+      }
+    } catch { /* segue sem o e-mail */ }
+
     let res: Response
     try {
-      res = await fetch('https://api.anthropic.com/api/oauth/usage', {
-        headers: { Authorization: `Bearer ${oauth.accessToken}`, Accept: 'application/json', 'anthropic-beta': 'oauth-2025-04-20', 'User-Agent': 'Zeus-IDE/1.0' },
-        signal: AbortSignal.timeout(8000),
-      })
+      res = await fetch('https://api.anthropic.com/api/oauth/usage', { headers, signal: AbortSignal.timeout(8000) })
     } catch { return { ...base, problem: 'Sem conexão' } }
     if (res.status === 401) {
       const expired = oauth.expiresAt && oauth.expiresAt < Date.now()
-      return { ...base, problem: expired ? 'Login expirado — use a conta uma vez ou faça login de novo' : 'Login recusado' }
+      return { ...base, problem: expired ? 'Login expirado — faça login de novo nesta conta' : 'Login recusado — faça login de novo nesta conta' }
+    }
+    if (res.status === 429) {
+      // Consultas demais em pouco tempo: mostra a última leitura boa em vez do erro.
+      const prev = this.lastGood.get(r.id)
+      if (prev) return { ...prev, active: base.active, notes: [...base.notes, 'Leitura de alguns minutos atrás (a Anthropic pediu para esperar)'] }
+      return { ...base, problem: 'A Anthropic pediu para esperar — tenta de novo em 5 min' }
     }
     if (!res.ok) return { ...base, problem: `Resposta ${res.status}` }
     const j = await res.json().catch(() => null) as Record<string, { utilization?: number; resets_at?: string } | null> | null
@@ -171,7 +198,9 @@ export class AiUsageMonitor {
       const w = j?.[k]
       return w && typeof w.utilization === 'number' ? { pct: Math.round(w.utilization), resetsAt: w.resets_at ?? null } : null
     }
-    return { ...base, fiveHour: win('five_hour'), sevenDay: win('seven_day') }
+    const good = { ...base, fiveHour: win('five_hour'), sevenDay: win('seven_day') }
+    this.lastGood.set(r.id, { ...good, notes: [] })
+    return good
   }
 
   private checkAlerts(): void {
