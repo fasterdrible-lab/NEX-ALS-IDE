@@ -1,5 +1,21 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.85.0] — 2026-10-22
+
+### Adicionado — Project First, Fase 2: Novo projeto em 3 caminhos
+
+- **Projetos → Novo projeto** tem 3 opções, todas no PC e sem VPS: **Criar no PC** (pasta nova no OneDrive, git opcional — como antes), **Clonar do Git** (endereço https:// ou git@; repositório privado usa o login do Git do Windows, o Zeus não vê a senha) e **Pasta que já existe** (nada é copiado nem alterado; o endereço do GitHub é lido do `origin`). Os três **cadastram o projeto** (antes a pasta nova ficava só na lista de recentes) e abrem na janela própria.
+- **Tornar projeto** nas pastas recentes que ainda não são projeto. A lista de recentes continua igual (nada apagado).
+- A lista de projetos mostra todos, com etiquetas **PC** e/ou da VPS.
+- Segurança: dados validados com Zod no processo principal; só aceita endereço https:// ou SSH (recusa `file://`, `ext::`, opções começando com `-`); `git clone` sem shell e com `--`; clone que falha apaga a pasta pela metade; a mesma pasta não vira dois projetos.
+- Saiu o canal antigo `local:project:create` (substituído por `projects:createLocal`).
+
+**Verificado:** `pnpm typecheck` (6 pacotes), testes do config (25 — 2 novos para as URLs perigosas); funções testadas de verdade: clone público, clone repetido recusado, repositório inexistente com erro claro e pasta apagada, pasta existente lendo o `origin`, nome inválido recusado. **Não testado pela tela.**
+
+### Corrigido — VPS SALEIA "Autenticação falhou"
+
+Não era bug do Zeus: a SALEIA só tinha autorizada a chave `saleia_vps`, e o Zeus usa a chave padrão do PC (`id_ed25519`). A chave padrão do PC foi autorizada no `authorized_keys` da SALEIA (entrou-se com a `saleia_vps`; nenhum aparelho novo ganhou acesso). Zeus ainda usa uma chave só para todas as VPS — chave por VPS fica para depois, se precisar.
+
 ## [3.84.0] — 2026-10-22
 
 ### Alterado — Project First, Fase 1: projeto não precisa mais de VPS

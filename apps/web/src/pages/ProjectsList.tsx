@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FolderOpen, Plus, Trash2, Pencil, X, Loader2, GitBranch, Server, FolderPlus, CheckCircle, AlertCircle, ChevronRight } from 'lucide-react'
+import { FolderOpen, Plus, Trash2, Pencil, X, Loader2, GitBranch, Server, FolderPlus, CheckCircle, AlertCircle, ChevronRight, Laptop } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import LocalProjects from '../components/LocalProjects'
 import type { Project, ProjectInput, VpsServer, ClaudeAccount } from '@cwm/config'
@@ -21,7 +21,8 @@ export default function ProjectsList() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [setupState, setSetupState] = useState<null | 'loading' | { success: boolean; message: string }>(null)
-  const [localOpen, setLocalOpen] = useState(false)
+  // false = fechado; string = abrir já em "Pasta que já existe" com essa pasta ('' = modo Criar)
+  const [localOpen, setLocalOpen] = useState<false | string>(false)
   const [localReload, setLocalReload] = useState(0)
 
   const reload = async () => {
@@ -78,15 +79,16 @@ export default function ProjectsList() {
           <h1 className="text-2xl font-bold text-slate-100">Projetos</h1>
           <p className="text-slate-400 mt-1">Projetos começam no PC, cada um na sua janela; a VPS entra quando for publicar (Agent)</p>
         </div>
-        <button onClick={() => setLocalOpen(true)} className="btn-primary" title="Cria a pasta do projeto no PC (OneDrive) e abre numa janela própria">
+        <button onClick={() => setLocalOpen('')} className="btn-primary" title="Criar no PC, clonar do Git ou usar uma pasta que já existe — abre numa janela própria">
           <Plus size={15} /> Novo projeto
         </button>
       </div>
 
-      <LocalProjects reloadToken={localReload} />
+      <LocalProjects reloadToken={localReload} projectPaths={list.map(p => p.localPath).filter(Boolean)}
+        onMakeProject={folder => setLocalOpen(folder)} />
 
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-2"><Server size={14} /> Projetos na VPS</h2>
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-2"><FolderOpen size={14} /> Projetos</h2>
         <button onClick={openCreate} className="btn-secondary text-xs py-1.5 px-3" disabled={vpsList.length === 0}
           title={vpsList.length === 0 ? 'Cadastre uma VPS primeiro' : 'Cadastrar um projeto que já existe numa VPS'}>
           <Plus size={13} /> Cadastrar projeto da VPS
@@ -97,7 +99,7 @@ export default function ProjectsList() {
         <div className="text-center text-slate-500 py-16">Carregando...</div>
       ) : list.length === 0 ? (
         <div className="card text-sm text-slate-500">
-          Nenhum projeto na VPS. Projetos locais vão para a VPS pelo botão <b className="text-slate-300">Agent</b> dentro da IDE do projeto (envia a pasta e cadastra aqui).
+          Nenhum projeto ainda. Use <b className="text-slate-300">Novo projeto</b>; para o Hermes trabalhar na VPS, use o botão <b className="text-slate-300">Agent</b> dentro da IDE do projeto.
         </div>
       ) : (
         <div className="grid gap-4">
@@ -120,6 +122,7 @@ export default function ProjectsList() {
                   {p.vpsServer && (
                     <span className="badge-gray"><Server size={10} /> {p.vpsServer.name}</span>
                   )}
+                  {p.localPath && <span className="badge-gray"><Laptop size={10} /> PC</span>}
                   {p.claudeAccount && (
                     <span className="badge-gray" style={{ color: '#a78bfa' }}>🤖 {p.claudeAccount.name}</span>
                   )}
@@ -236,15 +239,35 @@ export default function ProjectsList() {
         </div>
       )}
 
-      {localOpen && <NewLocalProjectModal onClose={() => setLocalOpen(false)} onCreated={() => { setLocalOpen(false); setLocalReload(n => n + 1) }} />}
+      {localOpen !== false && (
+        <NewLocalProjectModal initialFolder={localOpen || undefined} onClose={() => setLocalOpen(false)}
+          onCreated={() => { setLocalOpen(false); setLocalReload(n => n + 1); void reload() }} />
+      )}
     </div>
   )
 }
 
-/** Novo projeto local: pasta nova no OneDrive (ou onde escolher), git opcional, abre na janela própria. */
-function NewLocalProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+type NewMode = 'new' | 'clone' | 'existing'
+
+const MODES: { id: NewMode; label: string; icon: typeof FolderPlus; hint: string }[] = [
+  { id: 'new', label: 'Criar no PC', icon: FolderPlus, hint: 'Pasta nova (no OneDrive por padrão)' },
+  { id: 'clone', label: 'Clonar do Git', icon: GitBranch, hint: 'Baixa um repositório para o PC' },
+  { id: 'existing', label: 'Pasta que já existe', icon: FolderOpen, hint: 'Transforma uma pasta do PC em projeto' },
+]
+
+/** Repositório → nome da pasta (mesma regra do main: `…/meu-app.git` → `meu-app`). */
+const repoName = (url: string) => url.trim().replace(/[\\/]+$/, '').split(/[/:]/).pop()?.replace(/\.git$/i, '') ?? ''
+
+/**
+ * Novo projeto (Project First, Fase 2): 3 jeitos de começar, todos no PC. Cria o projeto no banco
+ * (sem VPS) e abre a pasta na janela própria. A VPS entra depois, pelo Agent.
+ */
+function NewLocalProjectModal({ onClose, onCreated, initialFolder }: { onClose: () => void; onCreated: () => void; initialFolder?: string }) {
+  const [mode, setMode] = useState<NewMode>(initialFolder ? 'existing' : 'new')
   const [name, setName] = useState('')
   const [parent, setParent] = useState('')
+  const [url, setUrl] = useState('')
+  const [folder, setFolder] = useState(initialFolder ?? '')
   const [git, setGit] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -252,17 +275,25 @@ function NewLocalProjectModal({ onClose, onCreated }: { onClose: () => void; onC
   useEffect(() => { ipc.local.project.defaults().then(d => setParent(p => p || d.parent)).catch(() => {}) }, [])
 
   const sep = parent.includes('/') && !parent.includes('\\') ? '/' : '\\'
-  const target = parent && name.trim() ? `${parent.replace(/[\\/]+$/, '')}${sep}${name.trim()}` : ''
+  const folderName = mode === 'clone' ? (name.trim() || repoName(url)) : name.trim()
+  const target = parent && folderName ? `${parent.replace(/[\\/]+$/, '')}${sep}${folderName}` : ''
 
-  const pickParent = async () => {
+  const pick = async (set: (f: string) => void) => {
     const f = await ipc.local.openFolder().catch(() => null)
-    if (f) setParent(f)
+    if (f) set(f)
   }
+
+  const ready = mode === 'new' ? !!(name.trim() && parent)
+    : mode === 'clone' ? !!(url.trim() && parent && folderName)
+    : !!folder.trim()
 
   const create = async () => {
     setBusy(true); setError(null)
     try {
-      const r = await ipc.local.project.create(parent, name, git)
+      const r = await ipc.projects.createLocal(
+        mode === 'new' ? { mode, parent, name, git }
+        : mode === 'clone' ? { mode, parent, url, name: name.trim() || undefined }
+        : { mode, folder, name: name.trim() || undefined })
       if (r.git === 'missing') alert('Projeto criado, mas o git não foi encontrado no PC — o repositório não foi iniciado.')
       onCreated()
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
@@ -277,30 +308,67 @@ function NewLocalProjectModal({ onClose, onCreated }: { onClose: () => void; onC
           <button onClick={onClose} className="btn-ghost p-1.5"><X size={16} /></button>
         </div>
         <div className="p-5 space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            {MODES.map(m => (
+              <button key={m.id} type="button" onClick={() => { setMode(m.id); setError(null) }} title={m.hint}
+                className={`rounded-lg border px-2 py-2.5 text-xs flex flex-col items-center gap-1 transition-colors ${mode === m.id
+                  ? 'border-blue-500 bg-blue-950/40 text-blue-200' : 'border-slate-700 text-slate-400 hover:bg-slate-800/60'}`}>
+                <m.icon size={16} /> {m.label}
+              </button>
+            ))}
+          </div>
           {error && <div className="bg-red-900/30 border border-red-800/50 text-red-300 text-sm rounded-lg px-3 py-2">{error}</div>}
-          <div>
-            <label className="label">Nome *</label>
-            <input className="input" placeholder="meu-projeto" value={name} autoFocus
-              onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && name.trim() && parent && !busy) void create() }} />
-          </div>
-          <div>
-            <label className="label">Criar dentro de</label>
-            <div className="flex gap-2">
-              <input className="input font-mono text-xs" value={parent} onChange={e => setParent(e.target.value)} />
-              <button type="button" onClick={pickParent} className="btn-secondary text-xs shrink-0"><FolderOpen size={13} /> Escolher…</button>
+
+          {mode === 'clone' && (
+            <div>
+              <label className="label">Endereço do repositório *</label>
+              <input className="input font-mono text-xs" placeholder="https://github.com/usuario/projeto.git" value={url} autoFocus
+                onChange={e => setUrl(e.target.value)} />
+              <p className="text-[11px] text-slate-500 mt-1">Repositório privado: o Git do Windows pede o login do GitHub na primeira vez.</p>
             </div>
-            {target && <p className="text-[11px] text-slate-500 mt-1 font-mono break-all">Pasta: {target}</p>}
+          )}
+
+          {mode === 'existing' ? (
+            <div>
+              <label className="label">Pasta do projeto *</label>
+              <div className="flex gap-2">
+                <input className="input font-mono text-xs" placeholder="C:\Users\…\OneDrive\meu-projeto" value={folder} onChange={e => setFolder(e.target.value)} />
+                <button type="button" onClick={() => void pick(setFolder)} className="btn-secondary text-xs shrink-0"><FolderOpen size={13} /> Escolher…</button>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Nada é copiado nem alterado na pasta; se ela tem git, o repositório é lido de lá.</p>
+            </div>
+          ) : (
+            <div>
+              <label className="label">Criar dentro de</label>
+              <div className="flex gap-2">
+                <input className="input font-mono text-xs" value={parent} onChange={e => setParent(e.target.value)} />
+                <button type="button" onClick={() => void pick(setParent)} className="btn-secondary text-xs shrink-0"><FolderOpen size={13} /> Escolher…</button>
+              </div>
+              {target && <p className="text-[11px] text-slate-500 mt-1 font-mono break-all">Pasta: {target}</p>}
+            </div>
+          )}
+
+          <div>
+            <label className="label">{mode === 'new' ? 'Nome *' : 'Nome (opcional)'}</label>
+            <input className="input" value={name} autoFocus={mode === 'new'}
+              placeholder={mode === 'clone' ? (repoName(url) || 'nome da pasta') : mode === 'existing' ? 'nome da pasta' : 'meu-projeto'}
+              onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && ready && !busy) void create() }} />
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-            <input type="checkbox" checked={git} onChange={e => setGit(e.target.checked)} />
-            Iniciar repositório git (com .gitignore para node_modules, .next, dist, .env)
-          </label>
-          <p className="text-xs text-slate-500">Nada é criado na VPS. Para publicar depois, abra o projeto e use o botão <b className="text-slate-300">Agent</b>.</p>
+
+          {mode === 'new' && (
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <input type="checkbox" checked={git} onChange={e => setGit(e.target.checked)} />
+              Iniciar repositório git (com .gitignore para node_modules, .next, dist, .env)
+            </label>
+          )}
+          <p className="text-xs text-slate-500">Nada é criado na VPS. Para o Hermes trabalhar com o PC desligado, abra o projeto e use o botão <b className="text-slate-300">Agent</b>.</p>
         </div>
         <div className="flex gap-3 justify-end p-5 border-t border-slate-800">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button onClick={() => void create()} disabled={busy || !name.trim() || !parent} className="btn-primary">
-            {busy ? <><Loader2 size={14} className="animate-spin" /> Criando...</> : <><FolderPlus size={14} /> Criar e abrir</>}
+          <button onClick={() => void create()} disabled={busy || !ready} className="btn-primary">
+            {busy
+              ? <><Loader2 size={14} className="animate-spin" /> {mode === 'clone' ? 'Clonando...' : 'Criando...'}</>
+              : <><FolderPlus size={14} /> {mode === 'existing' ? 'Criar projeto e abrir' : mode === 'clone' ? 'Clonar e abrir' : 'Criar e abrir'}</>}
           </button>
         </div>
       </div>

@@ -1,12 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-22
-**Versão:** 3.84.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.85.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
 
-## Project First — Fase 1 (v3.84.0)
+## Project First — Fases 1 e 2 (v3.84.0 / v3.85.0)
 
-Projeto pode viver só no PC: `localPath` novo, VPS opcional, e apagar uma VPS não apaga mais os projetos dela. A tabela `projects` é reconstruída na 1ª abertura (com backup antes, `backups/cwm-antes-da-migracao-*.db`). Página do projeto e Lançador abrem a IDE local quando não há VPS. Migração testada numa cópia do banco real; falta abrir no app. Hermes continua na ZEUS.
+Projeto pode viver só no PC: `localPath` novo, VPS opcional, e apagar uma VPS não apaga mais os projetos dela. A tabela `projects` foi migrada na abertura da 3.84.0 (backup `backups/cwm-antes-da-migracao-*.db`, contagens iguais). Página do projeto e Lançador abrem a IDE local quando não há VPS. Novo projeto (3.85.0): criar no PC, clonar do Git ou pasta que já existe — todos cadastram o projeto sem VPS; "Tornar projeto" nas pastas recentes. Fase 2 ainda não testada pela tela. Hermes continua na ZEUS.
 
 ## Loop do Hermes no processo principal (v3.77.0)
 

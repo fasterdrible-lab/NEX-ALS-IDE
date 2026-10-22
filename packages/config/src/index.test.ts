@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   encryptPassword, decryptPassword,
-  VpsServerSchema, ProjectSchema, ClaudeAccountSchema, SettingsSchema, projectLocationError, projectWorkspaceMode,
+  VpsServerSchema, ProjectSchema, ClaudeAccountSchema, SettingsSchema, projectLocationError, projectWorkspaceMode, LocalProjectCreateSchema,
   HermesAutonomyLevelSchema, HermesDevRulesSchema, HERMES_DEV_RULES_MAX,
 } from './index'
 
@@ -98,6 +98,22 @@ describe('ProjectSchema', () => {
   it('rejects relative local paths and remote paths without /', () => {
     expect(ProjectSchema.safeParse({ name: 'P', localPath: '..\\outro' }).success).toBe(false)
     expect(ProjectSchema.safeParse({ name: 'P', remotePath: 'root/p', vpsServerId: 'v1' }).success).toBe(false)
+  })
+})
+
+describe('LocalProjectCreateSchema (Fase 2)', () => {
+  it('accepts the three modes', () => {
+    expect(LocalProjectCreateSchema.safeParse({ mode: 'new', parent: 'C:\\Users\\me\\OneDrive', name: 'app' }).success).toBe(true)
+    expect(LocalProjectCreateSchema.safeParse({ mode: 'clone', parent: 'C:/x', url: 'https://github.com/a/b.git' }).success).toBe(true)
+    expect(LocalProjectCreateSchema.safeParse({ mode: 'clone', parent: 'C:/x', url: 'git@github.com:a/b.git' }).success).toBe(true)
+    expect(LocalProjectCreateSchema.safeParse({ mode: 'existing', folder: 'D:\\code\\app' }).success).toBe(true)
+  })
+
+  it('rejects dangerous clone URLs and relative folders', () => {
+    for (const url of ['--upload-pack=calc', 'ext::sh -c calc', 'file:///C:/x', 'http://github.com/a/b', 'https://github.com/a/b;calc']) {
+      expect(LocalProjectCreateSchema.safeParse({ mode: 'clone', parent: 'C:/x', url }).success).toBe(false)
+    }
+    expect(LocalProjectCreateSchema.safeParse({ mode: 'existing', folder: '..\\fora' }).success).toBe(false)
   })
 })
 

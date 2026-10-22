@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain, shell, Notification, session, dialog, Menu, screen } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-import { setupIpcHandlers, setIncidentWindowOpener } from './ipc/handlers'
-import { LocalFolderStore, folderKey, createLocalProject, defaultProjectsParent } from './local-folders'
+import { setupIpcHandlers, setIncidentWindowOpener, setLocalFolderOpener } from './ipc/handlers'
+import { LocalFolderStore, folderKey, defaultProjectsParent } from './local-folders'
 
 // Ícone das janelas/barra de tarefas — instalado vai em resources/ (extraResources), em dev fica em build/
 const APP_ICON = app.isPackaged
@@ -343,6 +343,7 @@ app.whenReady().then(async () => {
     try { openLocalFolderWindow(folder) } catch (e) { console.error('[local-folders] não reabriu', folder, e) }
   }
   setIncidentWindowOpener(createIncidentWindow)
+  setLocalFolderOpener(folder => { openLocalFolderWindow(folder) })
 
   // FASE 7: o alerta também vira incidente + diagnóstico do Hermes (handlers.ts) — por isso o
   // monitor roda mesmo sem suporte a notificação; o clique na notificação abre o Incident Mode.
@@ -380,16 +381,8 @@ app.whenReady().then(async () => {
     if (typeof data?.path !== 'string') return { error: 'Pasta inválida' }
     try { return openLocalFolderWindow(data.path) } catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
   })
-  // Novo projeto local: cria a pasta (OneDrive por padrão) + git opcional, e abre na janela própria
+  // Pasta sugerida para Novo projeto (OneDrive). Criar = projects:createLocal (handlers.ts), que também cadastra o projeto.
   ipcMain.handle('local:project:defaults', () => ({ parent: defaultProjectsParent() }))
-  ipcMain.handle('local:project:create', async (_, data: { parent?: unknown; name?: unknown; git?: unknown }) => {
-    if (typeof data?.parent !== 'string' || typeof data?.name !== 'string') return { error: 'Dados inválidos' }
-    try {
-      const r = await createLocalProject({ parent: data.parent, name: data.name, git: data.git !== false })
-      openLocalFolderWindow(r.folder)
-      return r
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
-  })
   ipcMain.handle('local:recent:remove', (_, data: { path?: unknown }) => {
     if (typeof data?.path === 'string') { localFolders?.remove(data.path); rebuildMenu() }
     return { success: true }

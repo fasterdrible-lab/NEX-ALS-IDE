@@ -7,7 +7,9 @@
   - [x] Fase 1 no app — 2026-10-22: v3.84.0 instalada; migrou na abertura com `cwm-antes-da-migracao-2026-10-22T18-01-47-488Z.db`, contagens iguais antes/depois (1 projeto, 36 tarefas, 3 agentes, 7 execuções, 2 ligações), FK SET NULL, ACESSIBILIDADE com a pasta do OneDrive
   - [ ] Pela tela: página do ACESSIBILIDADE mostra "PC" + pasta; IDE, Agent e Trazer/Enviar funcionam como antes
   - [ ] Deploy do zeus-hermes 3.84.0 na ZEUS (migra o banco do serviço; mesmo código)
-  - [ ] Fase 2 — Novo projeto com 3 caminhos: criar no PC / clonar do Git / ligar pasta existente; VPS opcional; pastas recentes da IDE local viram projetos (sem apagar `local-folders.json`)
+  - [x] Fase 2 — Novo projeto com 3 caminhos (v3.85.0): criar no PC / clonar do Git / pasta existente, todos cadastram o projeto sem VPS; "Tornar projeto" nas pastas recentes (`local-folders.json` intacto)
+  - [ ] Fase 2 pela tela: criar um projeto de cada jeito → aparece em Projetos com "PC" e abre a janela; Tornar projeto numa pasta recente; clonar repositório privado (login do Git do Windows)
+  - [ ] VPS SALEIA: chave padrão do PC autorizada em 2026-10-22 — clicar Testar no Zeus (fica verde e grava o fingerprint)
   - [ ] Fase 3 — projeto atual em todo o app (seletor no topo; AI Hub, Squad, Planning, Tasks, Workspace, IDE, Launcher leem dele; dados antigos em "Sem projeto")
   - [ ] Fase 4 — ambientes do projeto (agente = ZEUS, staging, produção protegida) e deploy só pelos gates; proteção contra `..` em todo `local:*`
 

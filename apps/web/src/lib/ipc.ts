@@ -1,6 +1,6 @@
 import type {
   VpsServer, VpsServerInput,
-  Project, ProjectInput,
+  Project, ProjectInput, LocalProjectCreateInput,
   ClaudeAccount, ClaudeAccountInput,
   Settings, SettingsInput,
   TestConnectionResult, DiagnosticResults, ClaudeCheckResult,
@@ -276,6 +276,9 @@ export const ipc = {
     update: (data: Partial<ProjectInput> & { id: string }) => invoke<Project>('projects:update', data),
     delete: (id: string) => invoke<void>('projects:delete', id),
     recent: () => invoke<Array<{ project: Project; launchedAt: string }>>('projects:recent'),
+    /** Project First: pasta nova / clone do Git / pasta existente no PC → projeto (sem VPS) e abre na janela própria. */
+    createLocal: (data: LocalProjectCreateInput) =>
+      invoke<{ project: Project; git?: 'ok' | 'off' | 'missing' }>('projects:createLocal', data),
   },
   accounts: {
     list: () => invoke<ClaudeAccount[]>('accounts:list'),
@@ -637,9 +640,6 @@ export const ipc = {
     openFolderWindow: () => invoke<{ folder: string | null }>('local:openFolderWindow'),
     project: {
       defaults: () => invoke<{ parent: string }>('local:project:defaults'),
-      /** Cria `<parent>/<name>` (+ git init se `git`) e abre na janela própria. */
-      create: (parent: string, name: string, git: boolean) =>
-        invoke<{ folder: string; git: 'ok' | 'off' | 'missing' }>('local:project:create', { parent, name, git }),
     },
     recent: {
       list: () => invoke<LocalRecentFolder[]>('local:recent:list'),

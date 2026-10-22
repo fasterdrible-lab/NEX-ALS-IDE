@@ -33,7 +33,7 @@ const ALLOWED_CHANNELS = new Set([
   'window:openIde', 'window:openIncident', 'window:openDeploy',
   'window:info', 'window:closeSelf', 'window:focusMain',
   'local:openFolderWindow', 'local:recent:list', 'local:recent:open', 'local:recent:remove',
-  'local:project:defaults', 'local:project:create',
+  'local:project:defaults', 'projects:createLocal',
   'memory:list', 'memory:save', 'memory:delete', 'memory:build',
   'tool:confirmRequest', 'tool:confirmResponse',
   'notifications:getEnabled', 'notifications:setEnabled',

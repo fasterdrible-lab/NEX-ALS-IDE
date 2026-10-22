@@ -14,8 +14,17 @@ function ago(ms: number): string {
  * Projetos locais à moda do VS Code: cada pasta abre na sua janela; reabrir uma pasta já aberta
  * só traz a janela dela para frente. A VPS só entra quando o projeto é publicado (Agent → Hermes).
  */
-export default function LocalProjects({ reloadToken = 0 }: { reloadToken?: number }) {
+/** Mesma pasta escrita de jeitos diferentes (barra, maiúsculas, barra no fim) — o Windows não diferencia. */
+const pathKey = (p: string) => p.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()
+
+export default function LocalProjects({ reloadToken = 0, projectPaths = [], onMakeProject }: {
+  reloadToken?: number
+  /** `localPath` dos projetos cadastrados: a pasta recente que já é projeto não oferece "Tornar projeto". */
+  projectPaths?: string[]
+  onMakeProject?: (folder: string) => void
+}) {
   const [items, setItems] = useState<LocalRecentFolder[]>([])
+  const isProject = new Set(projectPaths.map(pathKey))
   const [msg, setMsg] = useState('')
 
   const load = useCallback(() => { ipc.local.recent.list().then(setItems).catch(() => {}) }, [])
@@ -64,6 +73,10 @@ export default function LocalProjects({ reloadToken = 0 }: { reloadToken?: numbe
                 </div>
                 <span className="ml-auto text-[10px] text-slate-600 shrink-0">{ago(f.lastOpened)}</span>
               </button>
+              {onMakeProject && f.exists && !isProject.has(pathKey(f.path)) && (
+                <button onClick={() => onMakeProject(f.path)} title="Cadastrar esta pasta como projeto (não altera nada nela)"
+                  className="px-2 text-[10px] text-blue-300 hover:text-blue-200 shrink-0 whitespace-nowrap">Tornar projeto</button>
+              )}
               <button onClick={() => run(ipc.local.recent.remove(f.path))} title="Tirar da lista (não apaga a pasta)"
                 className="px-2 text-slate-600 hover:text-slate-300 shrink-0"><X size={13} /></button>
             </div>

@@ -86,20 +86,65 @@ export function defaultProjectsParent(): string {
 
 const GITIGNORE = ['node_modules/', '.next/', 'dist/', '.turbo/', 'coverage/', '.env', '.env.local', '.env.*.local', ''].join('\n')
 
-export async function createLocalProject(input: { parent: string; name: string; git: boolean }): Promise<{ folder: string; git: 'ok' | 'off' | 'missing' }> {
-  const nameErr = validateProjectFolderName(input.name)
+/** `<parent>/<name>` validado: nome aceito pelo Windows, parent existente e destino ainda livre. */
+function newFolderTarget(parent: string, name: string): string {
+  const nameErr = validateProjectFolderName(name)
   if (nameErr) throw new Error(nameErr)
-  if (!path.isAbsolute(input.parent) || !fs.statSync(input.parent, { throwIfNoEntry: false })?.isDirectory()) {
-    throw new Error(`Pasta onde criar não encontrada: ${input.parent}`)
+  if (!path.isAbsolute(parent) || !fs.statSync(parent, { throwIfNoEntry: false })?.isDirectory()) {
+    throw new Error(`Pasta onde criar não encontrada: ${parent}`)
   }
-  const folder = path.join(input.parent, input.name.trim())
-  if (fs.existsSync(folder)) throw new Error(`Já existe ${folder} — escolha outro nome ou use "Abrir pasta…".`)
+  const folder = path.join(parent, name.trim())
+  if (fs.existsSync(folder)) throw new Error(`Já existe ${folder} — escolha outro nome ou use "Pasta que já existe".`)
+  return folder
+}
+
+function runGit(args: string[], cwd: string, timeout: number): Promise<{ ok: boolean; out: string; missing: boolean }> {
+  return new Promise(resolve => {
+    execFile('git', args, { cwd, windowsHide: true, timeout, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+      const missing = (err as NodeJS.ErrnoException | null)?.code === 'ENOENT'
+      resolve({ ok: !err, out: `${stdout}${stderr}`.trim(), missing })
+    })
+  })
+}
+
+export async function createLocalProject(input: { parent: string; name: string; git: boolean }): Promise<{ folder: string; git: 'ok' | 'off' | 'missing' }> {
+  const folder = newFolderTarget(input.parent, input.name)
   fs.mkdirSync(folder)
   fs.writeFileSync(path.join(folder, 'README.md'), `# ${input.name.trim()}\n`, 'utf8')
   if (!input.git) return { folder, git: 'off' }
   fs.writeFileSync(path.join(folder, '.gitignore'), GITIGNORE, 'utf8')
-  const ok = await new Promise<boolean>(resolve => {
-    execFile('git', ['init', '-q'], { cwd: folder, windowsHide: true, timeout: 20_000 }, err => resolve(!err))
-  })
+  const { ok } = await runGit(['init', '-q'], folder, 20_000)
   return { folder, git: ok ? 'ok' : 'missing' }
+}
+
+/** Nome da pasta sugerido pelo endereço do repositório: `…/meu-app.git` → `meu-app`. */
+export function repoFolderName(url: string): string {
+  return url.replace(/[\\/]+$/, '').split(/[/:]/).pop()?.replace(/\.git$/i, '') ?? ''
+}
+
+/**
+ * `git clone` para `<parent>/<name>`. Credenciais de repositório privado ficam com o Git do Windows
+ * (Git Credential Manager) — o Zeus não vê nem guarda. Sem shell: a URL vai como argumento depois de `--`.
+ */
+export async function cloneLocalProject(input: { parent: string; url: string; name?: string }): Promise<{ folder: string }> {
+  const folder = newFolderTarget(input.parent, input.name?.trim() || repoFolderName(input.url))
+  const r = await runGit(['clone', '--', input.url, folder], input.parent, 10 * 60_000)
+  if (r.missing) throw new Error('O git não foi encontrado no PC — instale o Git for Windows para clonar.')
+  if (!r.ok) {
+    fs.rmSync(folder, { recursive: true, force: true })
+    throw new Error(`O git não conseguiu clonar: ${r.out.split('\n').filter(Boolean).pop() ?? 'sem detalhe'}`)
+  }
+  return { folder }
+}
+
+/** Pasta que já existe no PC: confere e lê o `origin` do git (se houver) para o campo Repositório. */
+export async function inspectExistingFolder(folder: string): Promise<{ folder: string; name: string; gitRepo: string }> {
+  if (!path.isAbsolute(folder) || !fs.statSync(folder, { throwIfNoEntry: false })?.isDirectory()) {
+    throw new Error(`Pasta não encontrada: ${folder}`)
+  }
+  const resolved = path.resolve(folder)
+  const origin = fs.existsSync(path.join(resolved, '.git'))
+    ? await runGit(['remote', 'get-url', 'origin'], resolved, 10_000)
+    : null
+  return { folder: resolved, name: path.basename(resolved), gitRepo: origin?.ok ? origin.out.split('\n')[0] ?? '' : '' }
 }

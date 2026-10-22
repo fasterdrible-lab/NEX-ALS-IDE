@@ -2,6 +2,7 @@ import { getPrismaClient } from '@cwm/db'
 import {
   HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesReviewTextSchema, HermesProjectIdSchema, HermesRunnerTextSchema, HermesGithubLinkSchema,
   HermesLocalPathSchema, HermesLocalPublishSchema, HermesLocalSyncApplySchema, LocalGitRequestSchema, LocalGitPublishSchema,
+  LocalProjectCreateSchema,
 } from '@cwm/config'
 import type { IpcMain } from 'electron'
 import { app, BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
@@ -60,7 +61,11 @@ import {
 /** main.ts registra como abrir a janela do Incident Mode (para o clique na notificação de diagnóstico pronto). */
 let openIncidentWindow: ((vpsId: string, vpsName: string) => void) | null = null
 export function setIncidentWindowOpener(fn: (vpsId: string, vpsName: string) => void): void { openIncidentWindow = fn }
+/** main.ts registra como abrir uma pasta do PC na janela própria (Novo projeto abre o projeto criado). */
+let openLocalFolder: ((folder: string) => void) | null = null
+export function setLocalFolderOpener(fn: (folder: string) => void): void { openLocalFolder = fn }
 import { JobExecutor } from '../jobs/job-executor.js'
+import { cloneLocalProject, createLocalProject, folderKey, inspectExistingFolder } from '../local-folders.js'
 import { LocalTerminalSession } from '../terminal/local-terminal.js'
 import { LocalLspBridge } from '../lsp/local-lsp.js'
 
@@ -231,6 +236,33 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('projects:update', (_, data) => wrapHandler(() => { requireAdmin(); return projects.update(data.id, data) }))
   ipcMain.handle('projects:delete', (_, id: string) => wrapHandler(() => { requireAdmin(); return projects.delete(id) }))
   ipcMain.handle('projects:recent', () => wrapHandler(() => { requireAuth(); return projects.getRecent(5) }))
+  // Project First, Fase 2: projeto começa no PC — pasta nova, clone do Git ou pasta que já existe. Sem VPS.
+  ipcMain.handle('projects:createLocal', (_, data: unknown) => wrapHandler(async () => {
+    requireAdmin()
+    const parsed = LocalProjectCreateSchema.safeParse(data)
+    if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Dados inválidos')
+    const input = parsed.data
+    if (input.mode === 'existing') {
+      const key = folderKey(input.folder)
+      const dup = (await projects.list()).find((p: { localPath: string }) => p.localPath && folderKey(p.localPath) === key)
+      if (dup) throw new Error(`Esta pasta já é o projeto "${dup.name}".`)
+    }
+    let folder: string, gitRepo = '', git: 'ok' | 'off' | 'missing' | undefined
+    if (input.mode === 'new') {
+      const r = await createLocalProject(input)
+      folder = r.folder; git = r.git
+    } else if (input.mode === 'clone') {
+      folder = (await cloneLocalProject(input)).folder
+      gitRepo = input.url
+    } else {
+      const r = await inspectExistingFolder(input.folder)
+      folder = r.folder; gitRepo = r.gitRepo
+    }
+    const name = (input.mode === 'existing' && input.name) || path.basename(folder)
+    const project = await projects.create({ name, description: '', localPath: folder, remotePath: '', gitRepo, vpsServerId: null, claudeAccountId: null })
+    openLocalFolder?.(folder)
+    return { project, git }
+  }))
 
   // Accounts
   ipcMain.handle('accounts:list', () => wrapHandler(() => { requireAuth(); return accounts.list() }))

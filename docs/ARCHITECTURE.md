@@ -1536,6 +1536,17 @@ Onde é decidido "onde morar": o Hermes continua rodando só na VPS (ZEUS — de
 2026-10-22: PC desligado + celular); Hermes local fica fora. Fases seguintes: fluxo de criação (local /
 clonar / pasta existente), projeto atual em todo o app, ambientes de deploy com proteção de produção.
 
+## Project First — Fase 2: Novo projeto (v3.85.0)
+
+`projects:createLocal` (handlers.ts, `requireAdmin`, `LocalProjectCreateSchema` do `@cwm/config` —
+união por `mode`): `new` → `createLocalProject`; `clone` → `cloneLocalProject` (`git clone -- <url> <pasta>`
+por `execFile`, sem shell, 10 min; URL só https:// ou SSH; falhou = apaga a pasta); `existing` →
+`inspectExistingFolder` (só lê; `git remote get-url origin` para `gitRepo`; recusa pasta que já é
+`localPath` de outro projeto, comparando por `folderKey`). Os três ficam em `apps/desktop/src/local-folders.ts`
+e terminam em `ProjectsService.create({ localPath, vpsServerId: null })` + abrir a pasta na janela própria
+(`setLocalFolderOpener`, registrado pelo main.ts). As pastas recentes (`local-folders.json`) continuam
+sendo só "recentes"; "Tornar projeto" abre o modal em `existing` com a pasta.
+
 ## Cópia de segurança do banco (v3.77.1)
 
 `apps/desktop/src/db-backup.ts` — `startDatabaseBackups(userData)` roda no `main.ts` logo depois de

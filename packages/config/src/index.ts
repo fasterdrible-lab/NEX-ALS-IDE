@@ -63,6 +63,26 @@ export const ProjectSchema = ProjectFieldsSchema.superRefine((p, ctx) => {
   if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error })
 })
 
+const AbsoluteLocalPath = z.string().trim().min(3).max(1024)
+  .refine(p => /^([a-zA-Z]:[\\/]|\\\\|\/)/.test(p), 'Use um caminho completo de pasta do PC')
+
+/**
+ * Endereço de repositório para clonar: só https:// ou SSH (git@host:caminho / ssh://). Nada de
+ * file://, ext:: ou algo começando com "-" (o git trataria como opção).
+ */
+export const GitCloneUrlSchema = z.string().trim().min(8).max(500)
+  .refine(u => /^https:\/\/[\w.-]+(:\d+)?\/[\w./~%-]+$/.test(u)
+    || /^ssh:\/\/[\w.-]+@[\w.-]+(:\d+)?\/[\w./~%-]+$/.test(u)
+    || /^[\w.-]+@[\w.-]+:[\w./~%-]+$/.test(u), 'Use o endereço https://… ou git@… do repositório')
+
+/** Fase 2 do Project First — os 3 jeitos de começar um projeto no PC. A VPS é opcional e vem depois. */
+export const LocalProjectCreateSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('new'), parent: AbsoluteLocalPath, name: z.string().trim().min(1).max(100), git: z.boolean().default(true) }),
+  z.object({ mode: z.literal('clone'), parent: AbsoluteLocalPath, url: GitCloneUrlSchema, name: z.string().trim().max(100).optional() }),
+  z.object({ mode: z.literal('existing'), folder: AbsoluteLocalPath, name: z.string().trim().max(120).optional() }),
+])
+export type LocalProjectCreateInput = z.input<typeof LocalProjectCreateSchema>
+
 /** local = só no PC; remote = só na VPS; hybrid = pasta no PC ligada a uma pasta na VPS. */
 export type ProjectWorkspaceMode = 'local' | 'remote' | 'hybrid'
 
