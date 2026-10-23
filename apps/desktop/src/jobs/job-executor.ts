@@ -11,7 +11,8 @@ export class JobExecutor {
   private timer: ReturnType<typeof setInterval> | null = null
   private readonly running = new Set<string>()
 
-  constructor(private readonly hermesSvc: HermesService) {}
+  /** `guard`: lança se o projeto não pode ter agente agora (ex.: VPS que hospeda produção). */
+  constructor(private readonly hermesSvc: HermesService, private readonly guard: (projectId: string) => Promise<void> = async () => {}) {}
 
   start(): void {
     void this.checkDueJobs()
@@ -93,6 +94,11 @@ export class JobExecutor {
       return msg
     }
 
+    try { await this.guard(job.projectId) } catch (e) {
+      const msg = `Erro: ${e instanceof Error ? e.message : String(e)}`
+      try { new Notification({ title: `⚙ ${job.title} (não rodou)`, body: msg }).show() } catch { /* Notification não disponível */ }
+      return msg
+    }
     const { success, output } = await this.hermesSvc.runObjectiveUnattended(job.projectId, job.instruction)
 
     try {

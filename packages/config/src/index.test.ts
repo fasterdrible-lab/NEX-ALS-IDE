@@ -3,6 +3,7 @@ import {
   encryptPassword, decryptPassword,
   VpsServerSchema, ProjectSchema, ClaudeAccountSchema, SettingsSchema, projectLocationError, projectWorkspaceMode, LocalProjectCreateSchema,
   HermesAutonomyLevelSchema, HermesDevRulesSchema, HERMES_DEV_RULES_MAX,
+  isUnderRemotePath, ProjectEnvironmentSchema, GitBranchSchema, SmokeUrlSchema,
 } from './index'
 
 describe('HermesAutonomyLevelSchema', () => {
@@ -146,5 +147,33 @@ describe('SettingsSchema', () => {
   it('defaults vscodePath to "code"', () => {
     const r = SettingsSchema.safeParse({})
     expect(r.success && r.data.vscodePath).toBe('code')
+  })
+})
+
+describe('Ambientes (Fase 4b)', () => {
+  it('isUnderRemotePath: dentro, igual e fora', () => {
+    expect(isUnderRemotePath('/srv/app', '/srv/app')).toBe(true)
+    expect(isUnderRemotePath('/srv/app/src/x.ts', '/srv/app/')).toBe(true)
+    expect(isUnderRemotePath('/srv/app-copia/x', '/srv/app')).toBe(false)
+    expect(isUnderRemotePath('/srv/outro', '/srv/app')).toBe(false)
+  })
+  it('isUnderRemotePath: resolve .. antes de comparar (não escapa da proteção)', () => {
+    expect(isUnderRemotePath('/srv/outro/../app/x', '/srv/app')).toBe(true)
+    expect(isUnderRemotePath('/srv/app/../outro', '/srv/app')).toBe(false)
+    expect(isUnderRemotePath('//srv//app//x', '/srv/app')).toBe(true)
+    expect(isUnderRemotePath('app/x', '/srv/app')).toBe(false)
+  })
+  it('pasta do ambiente: absoluta, sem .., sem aspas/espaço, não a raiz', () => {
+    const base = { projectId: 'p', kind: 'staging', vpsServerId: 'v' }
+    expect(ProjectEnvironmentSchema.safeParse({ ...base, remotePath: '/srv/app' }).success).toBe(true)
+    for (const remotePath of ['/', 'srv/app', '/srv/../etc', "/srv/a'b", '/srv/a b', '/srv/$(x)']) {
+      expect(ProjectEnvironmentSchema.safeParse({ ...base, remotePath }).success, remotePath).toBe(false)
+    }
+  })
+  it('branch e URL do smoke test', () => {
+    for (const b of ['main', 'release/1.2', 'feat_x-y']) expect(GitBranchSchema.safeParse(b).success, b).toBe(true)
+    for (const b of ['-x', 'a..b', 'a b', 'a;rm', 'x.lock', 'a/']) expect(GitBranchSchema.safeParse(b).success, b).toBe(false)
+    for (const u of ['', 'https://x.com/health', 'http://10.0.0.1:3000/']) expect(SmokeUrlSchema.safeParse(u).success, u).toBe(true)
+    for (const u of ['ftp://x', 'https://x.com/"a', 'javascript:alert(1)']) expect(SmokeUrlSchema.safeParse(u).success, u).toBe(false)
   })
 })

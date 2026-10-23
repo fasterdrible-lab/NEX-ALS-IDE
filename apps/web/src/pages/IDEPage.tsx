@@ -15,9 +15,10 @@ import {
   Command, Search, PanelBottom, Copy, Files, Check, FolderOpen as FolderOpenIcon,
   MessageSquare, Send, Bot, Columns2, PanelRightClose, Network, Globe, Box, Cpu,
   ExternalLink, Siren, Rocket as RocketDeployIcon, List,
-  BookMarked, Lightbulb, ListChecks,
+  BookMarked, Lightbulb, ListChecks, Server,
 } from 'lucide-react'
 import { ipc, type FileEntry, type GitStatus, type GitFileStatus } from '../lib/ipc'
+import { openTerminalGuarded, productionFor } from '../lib/production-guard'
 import { attachTerminalClipboard } from '../lib/terminal-clipboard'
 import HermesAgentPanel from '../components/HermesAgentPanel'
 import LocalHermesPanel from '../components/LocalHermesPanel'
@@ -210,6 +211,13 @@ export default function IDEPage() {
 
   // IDE-20: modo local (sem VPS) quando rota é /ide/local
   const isLocal = !vpsId
+  // Pastas de produção desta VPS (Fase 4b): só leitura aqui — o main recusa gravar nelas de qualquer jeito
+  const [prodPaths, setProdPaths] = useState<{ projectName: string; remotePath: string }[]>([])
+  useEffect(() => {
+    if (!vpsId) return
+    ipc.env.protection(vpsId).then(r => setProdPaths(r.productionPaths)).catch(() => {})
+  }, [vpsId])
+  const prodRoot = isLocal ? null : productionFor(remoteRoot, prodPaths)
   const [localRoot, setLocalRoot] = useState('')
   const localRootRef = useRef('')
 
@@ -715,7 +723,8 @@ export default function IDEPage() {
     const inst: TermInstance = { term, fit, sessionId:null, unsubs:[attachTerminalClipboard(term, container)], ro:null }
     termInstancesRef.current.set(tabId, inst)
 
-    const opening = isLocal ? ipc.terminal.openLocal(localRootRef.current) : ipc.terminal.open(vpsId!)
+    const opening: Promise<{ success: boolean; sessionId: string; error?: string; production?: string[] }> =
+      isLocal ? ipc.terminal.openLocal(localRootRef.current) : openTerminalGuarded(vpsId!)
     opening.catch((e: unknown) => ({ success: false, sessionId: '', error: e instanceof Error ? e.message : String(e) })).then(r => {
       const i = termInstancesRef.current.get(tabId)
       if (!i) return
@@ -723,6 +732,9 @@ export default function IDEPage() {
         term.write(`\r\n\x1b[31m✗ ${r.error ?? 'Falha'}\x1b[0m\r\n`)
         setTermTabs(tabs => tabs.map(t => t.id===tabId ? {...t, status:'error', errMsg:r.error??'Falha'} : t))
         return
+      }
+      if ('production' in r && r.production?.length) {
+        term.write(`\x1b[41;97m ⚠ PRODUÇÃO — esta VPS roda ${r.production.join(', ')}. Comandos aqui afetam o sistema em uso. \x1b[0m\r\n`)
       }
       i.sessionId = r.sessionId
       setTermTabs(tabs => tabs.map(t => t.id===tabId ? {...t, sessionId:r.sessionId, status:'connected'} : t))
@@ -1927,9 +1939,14 @@ export default function IDEPage() {
           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-emerald-900/60 text-emerald-400 border border-emerald-700/50 shrink-0">
             <FolderOpenIcon size={9}/> Local
           </span>
+        ) : prodRoot ? (
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-900/60 text-red-400 border border-red-700/50 shrink-0 animate-pulse" title={`Pasta de produção de ${prodRoot}: só leitura. Versão nova = deploy pela página do projeto (Ambientes).`}>
+            <ShieldAlert size={9}/> Produção · só leitura
+          </span>
         ) : (
-          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-900/60 text-red-400 border border-red-700/50 shrink-0 animate-pulse" title="Você está editando arquivos diretamente na VPS remota">
-            <ShieldAlert size={9}/> Produção
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-blue-900/50 text-blue-300 border border-blue-700/50 shrink-0"
+            title={prodPaths.length ? `Esta VPS também hospeda produção (${[...new Set(prodPaths.map(p => p.projectName))].join(', ')}) — as pastas de produção ficam só leitura` : 'Você está editando arquivos direto na VPS'}>
+            <Server size={9}/> VPS{prodPaths.length ? ' · tem produção' : ''}
           </span>
         )}
 
@@ -2663,6 +2680,8 @@ export default function IDEPage() {
                       cursorBlinking:'smooth', cursorSmoothCaretAnimation:'on',
                       padding:{top:10,bottom:10}, tabSize:2,
                       'semanticHighlighting.enabled': true,
+                      readOnly: !isLocal && !!productionFor(activeFile.path, prodPaths),
+                      readOnlyMessage: { value: 'Pasta de produção — só leitura. Versão nova = deploy pela página do projeto (Ambientes).' },
                     } as Parameters<typeof Editor>[0]['options']}/>
                 </>
               )}
@@ -2716,6 +2735,7 @@ export default function IDEPage() {
                         bracketPairColorization:{enabled:true}, smoothScrolling:true,
                         cursorBlinking:'smooth', cursorSmoothCaretAnimation:'on',
                         padding:{top:10,bottom:10}, tabSize:2,
+                        readOnly: !isLocal && !!productionFor(activeFile2.path, prodPaths),
                       }}/>
                   )}
                 </div>

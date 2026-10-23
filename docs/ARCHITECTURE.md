@@ -488,11 +488,32 @@ local:rename     ({oldPath, newPath}) → fs.rename
 local:touch      (filePath)
     → fs.mkdir({ recursive: true }) para criar pastas pai
     → fs.writeFile '' se não existir
-local:exec       ({cmd, cwd?})
+local:exec       ({cmd, cwd})
     → child_process.exec(cmd, { cwd, timeout: 120s })
     → retorna { success, output } (stdout + stderr combinados)
     → usado pelo agente autônomo em modo local (npm install, node, etc.)
 ```
+
+### Pastas permitidas (v3.86.1+) — `apps/desktop/src/local-roots.ts`
+
+Todo caminho dos canais acima (e de `local:lsp:start`, `terminal:local:open`, `git:local:*`) passa por
+`checkLocalPath()` no main antes de tocar no disco:
+
+```
+caminho → string, absoluto, sem '\0', nenhum segmento '..'
+        → path.resolve → dentro de uma pasta permitida? (comparação sem caixa no Windows,
+          prefixo + separador: "ACESSIBILIDADE-copia" não casa com "ACESSIBILIDADE")
+        → não achou: relê projects.localPath do banco e tenta de novo → senão recusa
+        → notRoot (writeFile/delete/rename/touch): a própria pasta permitida é recusada
+
+pastas permitidas (Map em memória):
+  main.ts  openLocalFolderWindow()  → allowLocalRoot(pasta)   (janelas, reabertas no início)
+  main.ts  início                    → allowLocalRoot(cada recente)
+  handlers local:openFolder          → allowLocalRoot(pasta escolhida no diálogo)
+  handlers setProjectRootsProvider   → SELECT localPath FROM projects (sob demanda)
+```
+
+Limite: comparação pelo texto do caminho — atalhos/junções do Windows não são seguidos.
 
 ## Agente Autônomo (v3.5.0+)
 
@@ -1559,6 +1580,48 @@ botão IDE; topo de AI Hub, Squad, Planejar, Workspace).
 
 `tasks:list` com `projectId` e sem `ownerAgent`, para projeto migrado ao zeus-hermes: tarefas do Hermes vêm
 do serviço (`remote: true`, só leitura em Tarefas/Planejar) + as dos outros agentes do banco do PC.
+
+## Project First — Fase 4b: ambientes e deploy pelo gate (v3.87.0)
+
+```
+agente   = projects.vpsServerId + remotePath (ZEUS, Hermes)       — não pode virar ambiente
+staging  ┐ project_environments (1 por kind/projeto, UNIQUE(projectId, kind))
+produção ┘   vpsServerId (SET NULL) · remotePath · branch · url (smoke) · deployCommands
+             project_deploys: commitSha · previousCommit · status running|ok|failed|rolled_back · smoke · log
+```
+
+Tabelas criadas em `initializeDatabase()` (`packages/db/src/index.ts`), acessadas com SQL direto (sem model
+Prisma). Validação no `@cwm/config`: `ProjectEnvironmentSchema` (pasta só `[\w./@+-]`, sem `..`, não `/`;
+`GitBranchSchema`; `SmokeUrlSchema` http/https; `DeployCommandsSchema` sem caractere de controle),
+`DeployRunSchema`, `isUnderRemotePath`/`normalizeRemotePath` (resolve `..` antes de comparar).
+
+`packages/core/src/deploy/`:
+- `EnvironmentsService` — CRUD + `productionTargets()`, `productionOnVps(vpsId)`, `productionAt(vpsId, path)`
+  (caminho relativo numa VPS com produção conta como produção).
+- `DeployService(terminal)` — tudo por `TerminalService.exec` com `bash -lc '<script>'; echo __ZEUS_EXIT:$?`
+  (código de saída marcado no fim; valores entre aspas simples, já validados):
+
+```
+probe pasta → HAS_GIT | EMPTY (git clone -- <gitRepo validado por GitCloneUrlSchema>) | NOT_EMPTY (para)
+git rev-parse HEAD (previous) → git status --porcelain --untracked-files=no (sujo = para)
+git fetch origin → commit = staging: origin/<branch> | produção: commit do último staging ok (cat-file -e)
+checkout --detach → comandos (1 por linha, # comentário, 15 min cada) → smoke (fetch do PC, 4×, <400 = ok)
+falhou depois do checkout e é produção com previous ≠ commit → checkout previous + comandos → rolled_back
+```
+
+Gate da produção dentro de `deploy()`: `confirm === project.name`; com staging, último deploy dele `ok`
+(+ smoke `ok` se tem URL) e o commit dele; sem staging, o branch. Um deploy por ambiente de cada vez.
+
+Proteção no main (`handlers.ts`), a partir do cadastro:
+- `assertNotProductionPath(vpsId, path)` — `sftp:writeFile/mkdir/delete/rename/touch` (VPS da sessão em
+  `sftpVps`) e `git:add/restore/commit/push/pull`.
+- `terminal:open` — VPS com produção devolve `needsProductionConfirm` (sem `error`, para o `invoke` não
+  virar exceção); a tela (`lib/production-guard.ts` → `openTerminalGuarded`) pergunta e repete com
+  `confirmProduction: true`; a resposta traz `production` para a faixa vermelha.
+- `assertAgentNotOnProduction(vpsId)` — `squad:action:execute` (VPS ≠ `__local__`), `runnerCmd` do Hermes
+  (menos stop/cancel) e `JobExecutor` (guard injetado) para automações do Hermes.
+- Tela: IDE (`env:protection` → `productionPaths`; Monaco `readOnly` por arquivo via `productionFor`),
+  Deploy Assistant bloqueado numa VPS com produção (só na tela — `terminal:exec` segue genérico).
 
 ## Cópia de segurança do banco (v3.77.1)
 

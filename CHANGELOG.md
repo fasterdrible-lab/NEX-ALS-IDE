@@ -1,5 +1,40 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.87.0] — 2026-10-23
+
+### Adicionado — ambientes do projeto e deploy pelo gate (Project First, Fase 4b)
+
+Até aqui não havia staging nem produção: projeto tinha uma VPS, a IDE marcava "Produção" em qualquer VPS (inclusive na ZEUS, que é do agente) e o Deploy Assistant rodava o plano da IA em qualquer VPS.
+
+- **Página do projeto → Ambientes:** staging e produção, cada um numa VPS + pasta, com branch, URL do smoke test (opcional) e comandos do deploy (um por linha, ex.: `npm ci`, `npm run build`, `pm2 restart app`). O agente continua sendo a VPS do projeto (ZEUS); a pasta dele não pode virar ambiente, e staging e produção precisam de pastas separadas.
+- **Deploy por git, commit exato:** pasta vazia → `git clone` do repositório do projeto; alteração feita direto na VPS (arquivo rastreado) → para, sem passar por cima; `git fetch` → `checkout --detach` do commit → comandos → smoke test (GET do PC, até 4 tentativas). Log ao vivo na tela e histórico em `project_deploys`.
+- **Gate da produção (conferido no main):** digitar o nome do projeto; com staging cadastrado, produção só recebe **o mesmo commit** do último deploy de staging que terminou ok (e passou no smoke test, se staging tem URL); sem staging, o último commit do branch. Se um comando ou o smoke test falhar, **produção volta sozinha para o commit anterior** (status "falhou e voltou ao anterior").
+- **Produção protegida:**
+  - **IDE só leitura** nas pastas de produção: editor sem edição, selo "Produção · só leitura"; o main recusa gravar, criar, apagar, renomear e git add/commit/push/pull/restore ali. Nas outras pastas o selo virou "VPS" (azul), com "tem produção" quando a VPS hospeda alguma.
+  - **Terminal com aviso:** abrir SSH numa VPS que hospeda produção pede confirmação (o main só abre com ela) e mostra a faixa vermelha.
+  - **Hermes e Squad fora:** o Hermes não começa nem continua trabalho (painel, loop, automação agendada) num projeto cuja VPS hospeda produção; o Squad não executa ação nessa VPS (inclui o "Aprovar → prod" dele). Parar/cancelar continuam valendo.
+  - **Deploy Assistant** não abre numa VPS que hospeda produção (indica o gate); nas outras, igual.
+- Canais novos: `env:list/save/remove/history/protection`, `deploy:run` + evento `deploy:log`. `terminal:open` aceita `{ vpsId, confirmProduction }`.
+
+**Verificado:** `pnpm typecheck` (6 pacotes); testes do config 29 (4 novos: caminho de produção com `..`, pasta, branch e URL). **Deploy de verdade na VPS-1** (cópia do banco, `/tmp/zeus-deploy-teste`, repositório público, apagado no fim) — 15 de 15: pastas iguais recusadas; produção sem o nome e antes de staging recusada; staging clonou e rodou os comandos; produção recebeu o mesmo commit; comando falhando em produção voltou ao commit anterior; alteração direto na VPS parou o deploy e bloqueou a produção; consultas de proteção (inclusive com `..`). **Não testado pela tela.**
+
+**Limites:** a proteção é por cadastro — VPS/pasta de produção que não estiver em Ambientes não é protegida; o Deploy Assistant é bloqueado só na tela (o canal `terminal:exec` genérico continua aberto porque monitores e logs usam); diagnóstico de incidentes do Hermes (somente leitura) segue valendo em qualquer VPS.
+
+## [3.86.1] — 2026-10-23
+
+### Segurança — canais `local:*` só dentro das pastas abertas (Project First, Fase 4)
+
+Até aqui a tela podia ler, gravar, apagar, renomear e rodar comando em **qualquer caminho do PC** pelos canais `local:*` — o main aceitava o caminho como vinha. Agora (`apps/desktop/src/local-roots.ts`):
+
+- Todo caminho precisa ser absoluto, **sem `..`**, sem caractere nulo e **dentro de uma pasta aberta no Zeus**: pasta aberta em janela própria (inclusive as reabertas no início), as recentes, a escolhida no "Abrir pasta" e a pasta do PC de qualquer projeto cadastrado (lida do banco na hora — projeto novo vale sem reiniciar). Fora disso: "Caminho fora das pastas abertas no Zeus" (e aviso no console do main).
+- Vale para `local:readdir/readFile/readFileBase64/writeFile/mkdir/delete/rename/touch/watch/exec/lsp:start`, o terminal PowerShell local e o git local (incluindo Publicar no GitHub).
+- **Apagar ou renomear a própria pasta do projeto** pela árvore é recusado.
+- `local:exec` exige a pasta (antes, sem ela, rodava na pasta do próprio Zeus).
+- Squad com pasta **digitada à mão** que nunca foi aberta nem é de projeto: o explorador dele recusa — escolher pela pasta (diálogo) ou pelo projeto atual.
+- Limite: não segue atalhos/junções do Windows (a comparação é pelo caminho).
+
+**Verificado:** `pnpm typecheck` (desktop); 13 casos da regra rodados de verdade (dentro com `/` e `\`, maiúsculas, projeto do banco aceitos; `..`, `..` com `\`, `C:\Windows`, pasta de nome parecido, relativo, nulo, não-texto e apagar a raiz recusados). **Não testado no app.**
+
 ## [3.86.0] — 2026-10-23
 
 ### Adicionado — Project First, Fase 3: projeto atual em todo o app

@@ -157,6 +157,64 @@ export const HermesGithubLinkSchema = z.object({
 export const HermesProjectIdSchema = z.string().min(1).max(64)
 export const HermesRunnerTextSchema = z.string().trim().min(1, 'Texto vazio').max(50_000, 'Texto grande demais')
 
+// ── Project First, Fase 4b: ambientes do projeto (staging / produção) e deploy por git ──────────
+export const EnvironmentKindSchema = z.enum(['staging', 'production'])
+export type EnvironmentKind = z.infer<typeof EnvironmentKindSchema>
+
+/** Pasta na VPS de um ambiente: vai entre aspas simples num comando SSH — mesmo assim, só caracteres seguros. */
+export const EnvironmentRemotePathSchema = z.string().trim().min(2).max(512)
+  .refine(p => p.startsWith('/') && p !== '/', 'A pasta na VPS começa com / (e não pode ser a raiz)')
+  .refine(p => !p.split('/').includes('..') && /^[\w./@+-]+$/.test(p), 'Pasta na VPS: só letras, números e . _ - / @ +, sem ..')
+
+export const GitBranchSchema = z.string().trim().min(1).max(100)
+  .refine(b => /^[\w][\w./-]*$/.test(b) && !b.includes('..') && !b.endsWith('.lock') && !b.endsWith('/'), 'Nome de branch inválido')
+
+/** Endereço do smoke test (o Zeus faz um GET do PC depois do deploy). Vazio = sem smoke test. */
+export const SmokeUrlSchema = z.string().trim().max(500)
+  .refine(u => u === '' || /^https?:\/\/[^\s"'`\\]+$/.test(u), 'Use um endereço http:// ou https://')
+
+/**
+ * Comandos do deploy, um por linha, rodados na pasta do ambiente depois do checkout (ex.: `npm ci`,
+ * `npm run build`, `pm2 restart app`). São escritos pelo admin e mostrados na confirmação — o Zeus não
+ * os monta a partir de nada que venha de fora.
+ */
+export const DeployCommandsSchema = z.string().max(4000, 'Comandos: máximo 4000 caracteres')
+  .refine(s => !/[\u0000-\u0008\u000b-\u001f\u007f]/.test(s), 'Comandos com caractere de controle')
+
+export const ProjectEnvironmentSchema = z.object({
+  projectId: z.string().min(1).max(64),
+  kind: EnvironmentKindSchema,
+  vpsServerId: z.string().min(1, 'Escolha a VPS').max(64),
+  remotePath: EnvironmentRemotePathSchema,
+  branch: GitBranchSchema.default('main'),
+  url: SmokeUrlSchema.default(''),
+  deployCommands: DeployCommandsSchema.default(''),
+})
+export type ProjectEnvironmentInput = z.input<typeof ProjectEnvironmentSchema>
+
+export const DeployRunSchema = z.object({
+  envId: z.string().min(1).max(64),
+  /** Produção: o nome do projeto digitado (conferido no main). */
+  confirm: z.string().max(200).optional(),
+})
+
+/** Caminho POSIX absoluto resolvido (`.`, `..`, barras repetidas) — sem node:path, este pacote também roda na tela. */
+export function normalizeRemotePath(p: string): string {
+  const out: string[] = []
+  for (const seg of p.split('/')) {
+    if (!seg || seg === '.') continue
+    if (seg === '..') out.pop(); else out.push(seg)
+  }
+  return '/' + out.join('/')
+}
+
+/** `p` está em `root` ou dentro dela (caminhos POSIX da VPS; relativos contam como fora). */
+export function isUnderRemotePath(p: string, root: string): boolean {
+  if (!p.startsWith('/')) return false
+  const a = normalizeRemotePath(p), r = normalizeRemotePath(root)
+  return a === r || a.startsWith(r === '/' ? '/' : r + '/')
+}
+
 // Nomes explícitos: o Rollup do apps/web lê o dist em CommonJS e não enxerga os nomes de um `export *`.
 export {
   AUTONOMY_POLICIES, AUTONOMY_LEVELS, getAutonomyPolicy, toTaskRisk, classifyTaskRisk, needsRiskGate,

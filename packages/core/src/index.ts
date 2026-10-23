@@ -37,3 +37,7 @@ export {
   HermesLocalSync, type LocalLink, type LocalSyncStatus, type LocalSyncApplyResult, type SyncChange,
   HermesAgentRunner, ensureHermesSchema, type RunnerEvent, type RunnerState, type RunnerSnapshot, type RunnerApproval,
 } from './hermes/index.js'
+export {
+  EnvironmentsService, type ProjectEnvironment, type DeployRecord, type DeployStatus, type ProductionTarget,
+} from './deploy/environments.service.js'
+export { DeployService, type DeployOptions } from './deploy/deploy.service.js'

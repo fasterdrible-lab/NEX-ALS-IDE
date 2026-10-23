@@ -292,6 +292,40 @@ export async function initializeDatabase(options: InitializeDatabaseOptions = {}
       "createdAt"   TEXT NOT NULL DEFAULT (datetime('now')),
       "updatedAt"   TEXT NOT NULL DEFAULT (datetime('now'))
     )`,
+    // Project First, Fase 4b: ambientes do projeto (um staging e uma produção no máximo) e o histórico de deploys
+    `CREATE TABLE IF NOT EXISTS "project_environments" (
+      "id"             TEXT NOT NULL PRIMARY KEY,
+      "projectId"      TEXT NOT NULL,
+      "kind"           TEXT NOT NULL,
+      "vpsServerId"    TEXT,
+      "remotePath"     TEXT NOT NULL,
+      "branch"         TEXT NOT NULL DEFAULT 'main',
+      "url"            TEXT NOT NULL DEFAULT '',
+      "deployCommands" TEXT NOT NULL DEFAULT '',
+      "createdAt"      TEXT NOT NULL DEFAULT (datetime('now')),
+      "updatedAt"      TEXT NOT NULL DEFAULT (datetime('now')),
+      CONSTRAINT "project_environments_projectId_fkey"
+        FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE,
+      CONSTRAINT "project_environments_vpsServerId_fkey"
+        FOREIGN KEY ("vpsServerId") REFERENCES "vps_servers"("id") ON DELETE SET NULL
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "project_environments_project_kind" ON "project_environments"("projectId", "kind")`,
+    `CREATE TABLE IF NOT EXISTS "project_deploys" (
+      "id"             TEXT NOT NULL PRIMARY KEY,
+      "envId"          TEXT NOT NULL,
+      "projectId"      TEXT NOT NULL,
+      "kind"           TEXT NOT NULL,
+      "commitSha"      TEXT NOT NULL DEFAULT '',
+      "previousCommit" TEXT NOT NULL DEFAULT '',
+      "status"         TEXT NOT NULL DEFAULT 'running',
+      "smoke"          TEXT NOT NULL DEFAULT '',
+      "log"            TEXT NOT NULL DEFAULT '',
+      "startedAt"      TEXT NOT NULL DEFAULT (datetime('now')),
+      "finishedAt"     TEXT,
+      CONSTRAINT "project_deploys_envId_fkey"
+        FOREIGN KEY ("envId") REFERENCES "project_environments"("id") ON DELETE CASCADE
+    )`,
+    `CREATE INDEX IF NOT EXISTS "project_deploys_env" ON "project_deploys"("envId", "startedAt")`,
     `CREATE VIRTUAL TABLE IF NOT EXISTS "squad_messages_fts" USING fts5(
       content, agentName,
       content="squad_messages",

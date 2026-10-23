@@ -489,9 +489,31 @@ export const ipc = {
   zeusMobile: {
     pairing: () => invoke<{ url: string; link: string } | null>('zeusMobile:pairing'),
   },
+  /** Ambientes do projeto (staging / produção) e deploy por git pelo gate — Project First, Fase 4b. */
+  env: {
+    list: (projectId: string) => invoke<ProjectEnvironment[]>('env:list', projectId),
+    save: (data: ProjectEnvironmentInput) => invoke<ProjectEnvironment>('env:save', data),
+    remove: (envId: string) => invoke<void>('env:remove', envId),
+    history: (envId: string) => invoke<DeployRecord[]>('env:history', envId),
+    protection: (vpsId: string, path?: string) =>
+      invoke<{
+        productionHere: { projectName: string; remotePath: string } | null
+        productionOnVps: string[]
+        productionPaths: { projectName: string; remotePath: string }[]
+      }>('env:protection', { vpsId, path }),
+  },
+  deploy: {
+    /** Produção: `confirm` = nome do projeto digitado. Resolve quando o deploy termina (ok, falhou ou voltou). */
+    run: (envId: string, confirm?: string) => invoke<DeployRecord>('deploy:run', { envId, confirm }),
+    onLog: (cb: (e: { envId: string; line: string }) => void) => {
+      if (!window.electron) return () => {}
+      return window.electron.on('deploy:log', cb as (...args: unknown[]) => void)
+    },
+  },
   terminal: {
-    open: (vpsId: string) =>
-      invoke<{ success: boolean; sessionId: string; error?: string }>('terminal:open', vpsId),
+    /** VPS que hospeda produção: a 1ª chamada volta `needsProductionConfirm`; a tela pergunta e chama de novo com `confirmProduction`. */
+    open: (vpsId: string, confirmProduction = false) =>
+      invoke<{ success: boolean; sessionId: string; error?: string; needsProductionConfirm?: boolean; production?: string[] }>('terminal:open', { vpsId, confirmProduction }),
     /** IDE local: PowerShell na pasta do projeto (mesmos input/resize/close/data/exit do remoto). */
     openLocal: (cwd: string) =>
       invoke<{ success: boolean; sessionId: string; error?: string }>('terminal:local:open', { cwd }),
@@ -882,6 +904,25 @@ export interface AgentTask {
   createdAt: string; updatedAt: string
   /** Tarefa do Hermes que vive no serviço da VPS (projeto migrado): só leitura em Planejar/Tarefas. */
   remote?: boolean
+}
+export type EnvironmentKind = 'staging' | 'production'
+export type DeployStatus = 'running' | 'ok' | 'failed' | 'rolled_back'
+export interface DeployRecord {
+  id: string; envId: string; projectId: string; kind: EnvironmentKind
+  commitSha: string; previousCommit: string; status: DeployStatus
+  /** '' = sem URL; 'ok' ou o motivo da falha */
+  smoke: string; log: string; startedAt: string; finishedAt: string | null
+}
+export interface ProjectEnvironment {
+  id: string; projectId: string; kind: EnvironmentKind
+  vpsServerId: string | null; vpsName: string; remotePath: string
+  branch: string; url: string; deployCommands: string
+  createdAt: string; updatedAt: string
+  lastDeploy: DeployRecord | null
+}
+export interface ProjectEnvironmentInput {
+  projectId: string; kind: EnvironmentKind; vpsServerId: string; remotePath: string
+  branch?: string; url?: string; deployCommands?: string
 }
 export interface AgentTaskInput {
   title: string; description?: string; status?: TaskStatus

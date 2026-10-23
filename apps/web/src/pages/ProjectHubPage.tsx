@@ -7,6 +7,7 @@ import {
 import type { Project, GitCommit, GitStatus } from '@cwm/config'
 import { ipc, type HermesProjectAgentInfo, type AgentTask } from '../lib/ipc'
 import { useCurrentProject, openProjectIde } from '../lib/current-project'
+import ProjectEnvironments from '../components/ProjectEnvironments'
 
 /**
  * Página de um projeto: ponto único para abrir o que é dele já na pasta certa — Agent (Hermes),
@@ -161,6 +162,8 @@ export default function ProjectHubPage() {
           ) : <p className="text-xs text-slate-500">{git ? 'A pasta não é um repositório git.' : 'Não foi possível ler o git da pasta.'}</p>}
         </div>
       </div>
+
+      <ProjectEnvironments project={project} />
     </div>
   )
 }

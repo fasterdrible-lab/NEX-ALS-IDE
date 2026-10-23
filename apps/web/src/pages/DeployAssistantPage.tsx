@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useWindowExit } from '../lib/useWindowExit'
 import { useParams } from 'react-router-dom'
 import {
@@ -121,6 +121,12 @@ export default function DeployAssistantPage() {
   const [rollbackGenerating, setRollbackGenerating] = useState(false)
   const [confirmStep, setConfirmStep] = useState<string | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
+  // Produção só recebe deploy pelo gate (página do projeto → Ambientes): o plano da IA não roda nesta VPS
+  const [production, setProduction] = useState<string[] | null>(null)
+  useEffect(() => {
+    if (!vpsId) { setProduction([]); return }
+    ipc.env.protection(vpsId).then(r => setProduction(r.productionOnVps)).catch(() => setProduction([]))
+  }, [vpsId])
 
   const appendLog = useCallback((line: string) => {
     setExecLog(l => [...l, line])
@@ -378,6 +384,23 @@ VPS: ${vpsName} | Diretório: ${projectPath}`
 
   const canRun = steps.length > 0 && !running && !generating
   const doneCount = steps.filter(s => s.status === 'done').length
+
+  if (production === null) {
+    return <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-500 gap-2 text-sm"><Loader2 size={14} className="animate-spin" /> Carregando…</div>
+  }
+  if (production.length > 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-950 text-slate-100 gap-3 p-8 text-center">
+        <AlertTriangle size={28} className="text-red-400" />
+        <p className="text-sm font-semibold">{vpsName} hospeda produção ({production.join(', ')})</p>
+        <p className="text-xs text-slate-400 max-w-md">
+          Produção só recebe deploy pelo gate: página do projeto → Ambientes → Promover para produção (commit que passou em staging,
+          confirmação e volta automática se falhar). O Deploy Assistant continua valendo para as outras VPS.
+        </p>
+        <button onClick={() => leave()} className="btn-secondary text-xs">Voltar</button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden">

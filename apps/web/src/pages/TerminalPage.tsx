@@ -8,6 +8,7 @@ import '@xterm/xterm/css/xterm.css'
 import { ArrowLeft, Loader2, WifiOff, TerminalSquare } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import { attachTerminalClipboard } from '../lib/terminal-clipboard'
+import { openTerminalGuarded } from '../lib/production-guard'
 
 type Status = 'connecting' | 'connected' | 'error' | 'closed'
 
@@ -26,6 +27,8 @@ export default function TerminalPage() {
 
   const [status, setStatus] = useState<Status>('connecting')
   const [errorMsg, setErrorMsg] = useState('')
+  /** Projetos com produção nesta VPS (faixa vermelha). */
+  const [production, setProduction] = useState<string[]>([])
 
   useEffect(() => {
     if (!containerRef.current || !vpsId) return
@@ -67,7 +70,8 @@ export default function TerminalPage() {
     let unsubExit: (() => void) | null = null
     let resizeObserver: ResizeObserver | null = null
 
-    ipc.terminal.open(vpsId).then(result => {
+    openTerminalGuarded(vpsId).then(result => {
+      setProduction(result.production ?? [])
       if (!result.success || !result.sessionId) {
         term.write(`\r\n\x1b[31m✗ ${result.error ?? 'Falha ao conectar'}\x1b[0m\r\n`)
         setStatus('error')
@@ -166,6 +170,12 @@ export default function TerminalPage() {
           {statusLabel}
         </div>
       </div>
+
+      {production.length > 0 && (
+        <div className="shrink-0 px-4 py-1.5 bg-red-900/40 border-b border-red-700/60 text-red-200 text-xs font-medium">
+          ⚠ PRODUÇÃO — esta VPS roda {production.join(', ')}. Comandos aqui afetam o sistema em uso; versão nova = deploy pela página do projeto.
+        </div>
+      )}
 
       {/* Área do terminal */}
       <div className="flex-1 overflow-hidden p-2">

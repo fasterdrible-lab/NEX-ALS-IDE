@@ -3,6 +3,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { setupIpcHandlers, setIncidentWindowOpener, setLocalFolderOpener } from './ipc/handlers'
 import { LocalFolderStore, folderKey, defaultProjectsParent } from './local-folders'
+import { allowLocalRoot } from './local-roots'
 
 // Ícone das janelas/barra de tarefas — instalado vai em resources/ (extraResources), em dev fica em build/
 const APP_ICON = app.isPackaged
@@ -228,6 +229,7 @@ function openLocalFolderWindow(folder: string): { focused: boolean } {
   if (!path.isAbsolute(folder) || !st?.isDirectory()) throw new Error(`Pasta não encontrada: ${folder}`)
   const resolved = path.resolve(folder)
   const key = folderKey(resolved)
+  allowLocalRoot(resolved)
   localFolders?.touch(resolved)
   rebuildMenu()
   const existing = localWindows.get(key)
@@ -335,6 +337,8 @@ app.whenReady().then(async () => {
   // Antes das migrações do handlers.ts e de qualquer tela: guarda o banco como estava ao abrir.
   await startDatabaseBackups(app.getPath('userData'))
   localFolders = new LocalFolderStore(path.join(app.getPath('userData'), 'local-folders.json'))
+  // Recentes valem para os canais local:* (Squad/IDE apontando para uma pasta já usada)
+  for (const r of localFolders.recent()) allowLocalRoot(r.path)
   rebuildMenu()
   createWindow()
   setupIpcHandlers(ipcMain, mainWindow ?? undefined, notifMonitor)

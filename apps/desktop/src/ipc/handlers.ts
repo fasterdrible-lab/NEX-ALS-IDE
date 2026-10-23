@@ -2,12 +2,13 @@ import { getPrismaClient } from '@cwm/db'
 import {
   HermesAutonomyLevelSchema, HermesDevRulesSchema, HermesReviewTextSchema, HermesProjectIdSchema, HermesRunnerTextSchema, HermesGithubLinkSchema,
   HermesLocalPathSchema, HermesLocalPublishSchema, HermesLocalSyncApplySchema, LocalGitRequestSchema, LocalGitPublishSchema,
-  LocalProjectCreateSchema,
+  LocalProjectCreateSchema, ProjectEnvironmentSchema, DeployRunSchema,
 } from '@cwm/config'
 import type { IpcMain } from 'electron'
 import { app, BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
 import { HermesRemote } from '../hermes-remote.js'
 import { AiUsageMonitor, claudeAuthStatus } from '../ai-usage.js'
+import { allowLocalRoot, checkLocalPath, setProjectRootsProvider } from '../local-roots.js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -45,6 +46,8 @@ import {
   ScheduledJobsService,
   type ScheduledJobInput,
   HermesService,
+  EnvironmentsService,
+  DeployService,
   HermesRunLog,
   HermesAgentRunner,
   ensureHermesSchema,
@@ -134,6 +137,26 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const diagnostics = new DiagnosticsService()
   const terminal = new TerminalService()
   const terminalSessions = new Map<string, TerminalSession>()
+
+  // ── Project First, Fase 4b: ambientes, deploy pelo gate e produção protegida ──
+  const envsSvc = new EnvironmentsService()
+  const deploySvc = new DeployService(terminal, envsSvc)
+  /** IDE/git da IDE: pasta de produção é só leitura (mudar produção = deploy). */
+  const assertNotProductionPath = async (vpsId: string | undefined, p: unknown) => {
+    if (!vpsId) return
+    const t = await envsSvc.productionAt(vpsId, typeof p === 'string' ? p : '')
+    if (t) throw new Error(`Pasta de produção de "${t.projectName}" — só leitura no Zeus. Para mudar a produção, use o deploy (página do projeto → Ambientes).`)
+  }
+  /** Hermes e Squad nunca trabalham numa VPS que hospeda produção. */
+  const assertAgentNotOnProduction = async (vpsId: string | null | undefined, who: string) => {
+    if (!vpsId) return
+    const on = await envsSvc.productionOnVps(vpsId)
+    if (on.length) throw new Error(`${who} não trabalha na VPS de produção (${[...new Set(on.map(t => t.projectName))].join(', ')}). Use staging ou a VPS do agente.`)
+  }
+  const assertProjectAgentAllowed = async (projectId: string) => {
+    const p = await getPrismaClient().project.findUnique({ where: { id: projectId }, select: { vpsServerId: true } })
+    await assertAgentNotOnProduction(p?.vpsServerId, 'O Hermes')
+  }
   const tunnelSvc = new TunnelService()
   const aiSvc = new AiService()
   const squadSvc = new SquadService(aiSvc)
@@ -176,12 +199,18 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('zeusMobile:pairing', () =>
     wrapHandler(async () => { requireAdmin(); return hermesRemote.pairingLink() })
   )
-  const jobExecutor = new JobExecutor(hermesSvc)
+  const jobExecutor = new JobExecutor(hermesSvc, assertProjectAgentAllowed)
   // Claude Code subprocess streams (account-based, sem API key)
   const claudeProcs = new Map<string, { kill: () => void }>()
 
   // ── Estado em memória das notificações ───────────────────────────────────────
   const db = getPrismaClient()
+
+  // Pastas dos projetos cadastrados valem para os canais local:* (local-roots.ts)
+  setProjectRootsProvider(async () => {
+    const rows = await db.$queryRawUnsafe(`SELECT localPath FROM projects WHERE localPath IS NOT NULL AND localPath != ''`) as { localPath: string }[]
+    return rows.map(r => r.localPath)
+  })
 
   // Auto-adicionar coluna braveApiKey na tabela settings (silencioso se já existir)
   void db.$executeRawUnsafe(`ALTER TABLE settings ADD COLUMN braveApiKey TEXT NOT NULL DEFAULT ''`).catch(() => {})
@@ -287,8 +316,16 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('diagnostics:run', () => wrapHandler(() => diagnostics.runAll()))
 
   // Terminal — sessão SSH interativa bidirecional
-  ipcMain.handle('terminal:open', async (event, vpsId: string) => {
+  // VPS que hospeda produção: só abre com `confirmProduction` (a tela pergunta antes) e avisa na resposta
+  ipcMain.handle('terminal:open', async (event, arg: string | { vpsId: string; confirmProduction?: boolean }) => {
     try {
+      const vpsId = typeof arg === 'string' ? arg : arg?.vpsId
+      if (typeof vpsId !== 'string' || !vpsId) throw new Error('VPS inválida')
+      const prod = [...new Set((await envsSvc.productionOnVps(vpsId)).map(t => t.projectName))]
+      if (prod.length && !(typeof arg === 'object' && arg.confirmProduction === true)) {
+        // sem `error`: o invoke da tela transformaria em exceção e o aviso se perderia
+        return { success: false, needsProductionConfirm: true, production: prod, sessionId: '' }
+      }
       const session = await terminal.openShell(vpsId)
       terminalSessions.set(session.sessionId, session)
 
@@ -304,7 +341,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         }
       })
 
-      return { success: true, sessionId: session.sessionId }
+      return { success: true, sessionId: session.sessionId, production: prod }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
@@ -313,11 +350,10 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   // Terminal da IDE local — PowerShell num pseudo-terminal na pasta do projeto. Usa os mesmos canais
   // terminal:data/exit/input/resize/close do remoto; só a abertura é própria.
   const localTerms = new Map<string, LocalTerminalSession>()
-  ipcMain.handle('terminal:local:open', (event, data: { cwd?: unknown }) => {
+  ipcMain.handle('terminal:local:open', async (event, data: { cwd?: unknown }) => {
     try {
       requireAdmin()
-      if (typeof data?.cwd !== 'string' || data.cwd.length > 1024) throw new Error('Pasta inválida')
-      const session = new LocalTerminalSession(data.cwd)
+      const session = new LocalTerminalSession(await checkLocalPath(data?.cwd))
       localTerms.set(session.sessionId, session)
       const sender = event.sender
       session.on('data', (d: string) => { if (!sender.isDestroyed()) sender.send('terminal:data', { sessionId: session.sessionId, data: d }) })
@@ -358,11 +394,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     }
   })
 
-  // SFTP — file explorer
+  // SFTP — file explorer. Gravar/criar/apagar/renomear em pasta de produção é recusado (assertNotProductionPath)
+  const sftpVps = new Map<string, string>()
   ipcMain.handle('sftp:open', async (_, vpsId: string) => {
     try {
       const session = await sftpService.openSession(vpsId)
       sftpSessions.set(session.sessionId, session)
+      sftpVps.set(session.sessionId, vpsId)
       return { success: true, sessionId: session.sessionId }
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : String(err) }
@@ -395,6 +433,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     const s = sftpSessions.get(sessionId)
     if (!s) return { success: false, error: 'Sessão SFTP não encontrada' }
     try {
+      await assertNotProductionPath(sftpVps.get(sessionId), path)
       await s.writeFile(path, content)
       return { success: true }
     } catch (err: unknown) {
@@ -406,6 +445,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     const s = sftpSessions.get(sessionId)
     if (!s) return { success: false, error: 'Sessão SFTP não encontrada' }
     try {
+      await assertNotProductionPath(sftpVps.get(sessionId), path)
       await s.mkdir(path)
       return { success: true }
     } catch (err: unknown) {
@@ -417,6 +457,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     const s = sftpSessions.get(sessionId)
     if (!s) return { success: false, error: 'Sessão SFTP não encontrada' }
     try {
+      await assertNotProductionPath(sftpVps.get(sessionId), path)
       await s.delete(path, isDirectory)
       return { success: true }
     } catch (err: unknown) {
@@ -428,6 +469,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     const s = sftpSessions.get(sessionId)
     if (!s) return { success: false, error: 'Sessão SFTP não encontrada' }
     try {
+      await assertNotProductionPath(sftpVps.get(sessionId), oldPath)
+      await assertNotProductionPath(sftpVps.get(sessionId), newPath)
       await s.rename(oldPath, newPath)
       return { success: true }
     } catch (err: unknown) {
@@ -438,6 +481,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('sftp:close', (_, sessionId: string) => {
     sftpSessions.get(sessionId)?.destroy()
     sftpSessions.delete(sessionId)
+    sftpVps.delete(sessionId)
     return { success: true }
   })
 
@@ -456,6 +500,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     const s = sftpSessions.get(sessionId)
     if (!s) return { success: false, error: 'Sessão SFTP não encontrada' }
     try {
+      await assertNotProductionPath(sftpVps.get(sessionId), path)
       await s.touch(path)
       return { success: true }
     } catch (err: unknown) {
@@ -466,32 +511,33 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   // Git
   // Git da IDE local (pasta do PC) — mesmo contrato dos canais git:* remotos
   const localGit = new LocalGitService()
-  const lg = (data: unknown) => {
+  // `cwd` só dentro das pastas abertas/projetos (local-roots)
+  const lg = async (data: unknown) => {
     const r = LocalGitRequestSchema.safeParse(data)
     if (!r.success) throw new Error(r.error.issues[0]?.message ?? 'Dados inválidos')
-    return r.data
+    return { ...r.data, cwd: await checkLocalPath(r.data.cwd) }
   }
-  ipcMain.handle('git:local:status', (_, data: unknown) => wrapHandler(async () => { requireAuth(); return localGit.status(lg(data).cwd) }))
+  ipcMain.handle('git:local:status', (_, data: unknown) => wrapHandler(async () => { requireAuth(); return localGit.status((await lg(data)).cwd) }))
   ipcMain.handle('git:local:diff', (_, data: unknown) => wrapHandler(async () => {
-    requireAuth(); const d = lg(data); return localGit.diff(d.cwd, d.filePath ?? '', !!d.staged)
+    requireAuth(); const d = await lg(data); return localGit.diff(d.cwd, d.filePath ?? '', !!d.staged)
   }))
-  ipcMain.handle('git:local:add', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); const d = lg(data); return localGit.add(d.cwd, d.files ?? []) }))
+  ipcMain.handle('git:local:add', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); const d = await lg(data); return localGit.add(d.cwd, d.files ?? []) }))
   ipcMain.handle('git:local:restore', (_, data: unknown) => wrapHandler(async () => {
-    requireAdmin(); const d = lg(data); return localGit.restore(d.cwd, d.files ?? [], !!d.staged)
+    requireAdmin(); const d = await lg(data); return localGit.restore(d.cwd, d.files ?? [], !!d.staged)
   }))
   ipcMain.handle('git:local:commit', (_, data: unknown) => wrapHandler(async () => {
-    requireAdmin(); const d = lg(data)
+    requireAdmin(); const d = await lg(data)
     if (!d.message?.trim()) throw new Error('Digite uma mensagem de commit')
     return localGit.commit(d.cwd, d.message.trim())
   }))
-  ipcMain.handle('git:local:push', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); return localGit.push(lg(data).cwd) }))
-  ipcMain.handle('git:local:pull', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); return localGit.pull(lg(data).cwd) }))
+  ipcMain.handle('git:local:push', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); return localGit.push((await lg(data)).cwd) }))
+  ipcMain.handle('git:local:pull', (_, data: unknown) => wrapHandler(async () => { requireAdmin(); return localGit.pull((await lg(data)).cwd) }))
   // Publicar no GitHub: cria o repositório (login do GitHub já guardado no PC) ou liga um existente, e faz o 1º push
   ipcMain.handle('git:local:publish', (_, data: unknown) => wrapHandler(async () => {
     requireAdmin()
     const r = LocalGitPublishSchema.safeParse(data)
     if (!r.success) throw new Error(r.error.issues[0]?.message ?? 'Dados inválidos')
-    return localGit.publishToGitHub(r.data.cwd, { name: r.data.name, isPrivate: r.data.isPrivate, url: r.data.url })
+    return localGit.publishToGitHub(await checkLocalPath(r.data.cwd), { name: r.data.name, isPrivate: r.data.isPrivate, url: r.data.url })
   }))
 
   ipcMain.handle('git:status', (_, { vpsId, cwd }: { vpsId: string; cwd: string }) =>
@@ -501,23 +547,64 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     wrapHandler(() => git.diff(vpsId, cwd, filePath, staged))
   )
   ipcMain.handle('git:add', (_, { vpsId, cwd, files }: { vpsId: string; cwd: string; files: string[] }) =>
-    wrapHandler(() => git.add(vpsId, cwd, files))
+    wrapHandler(async () => { await assertNotProductionPath(vpsId, cwd); return git.add(vpsId, cwd, files) })
   )
   ipcMain.handle('git:restore', (_, { vpsId, cwd, files, staged }: { vpsId: string; cwd: string; files: string[]; staged: boolean }) =>
-    wrapHandler(() => git.restore(vpsId, cwd, files, staged))
+    wrapHandler(async () => { await assertNotProductionPath(vpsId, cwd); return git.restore(vpsId, cwd, files, staged) })
   )
   ipcMain.handle('git:commit', (_, { vpsId, cwd, message }: { vpsId: string; cwd: string; message: string }) =>
-    wrapHandler(() => git.commit(vpsId, cwd, message))
+    wrapHandler(async () => { await assertNotProductionPath(vpsId, cwd); return git.commit(vpsId, cwd, message) })
   )
   ipcMain.handle('git:push', (_, { vpsId, cwd }: { vpsId: string; cwd: string }) =>
-    wrapHandler(() => git.push(vpsId, cwd))
+    wrapHandler(async () => { await assertNotProductionPath(vpsId, cwd); return git.push(vpsId, cwd) })
   )
   ipcMain.handle('git:pull', (_, { vpsId, cwd }: { vpsId: string; cwd: string }) =>
-    wrapHandler(() => git.pull(vpsId, cwd))
+    wrapHandler(async () => { await assertNotProductionPath(vpsId, cwd); return git.pull(vpsId, cwd) })
   )
   ipcMain.handle('git:log', (_, { vpsId, cwd, n }: { vpsId: string; cwd: string; n?: number }) =>
     wrapHandler(() => git.log(vpsId, cwd, n))
   )
+
+  // Ambientes do projeto + deploy pelo gate (o gate da produção é conferido no DeployService)
+  const parseOr = <T,>(r: { success: true; data: T } | { success: false; error: { issues: { message: string }[] } }): T => {
+    if (!r.success) throw new Error(r.error.issues[0]?.message ?? 'Dados inválidos')
+    return r.data
+  }
+  ipcMain.handle('env:list', (_, projectId: unknown) =>
+    wrapHandler(async () => { requireAuth(); return envsSvc.list(parseOr(HermesProjectIdSchema.safeParse(projectId))) }))
+  ipcMain.handle('env:save', (_, data: unknown) =>
+    wrapHandler(async () => { requireAdmin(); return envsSvc.save(parseOr(ProjectEnvironmentSchema.safeParse(data))) }))
+  ipcMain.handle('env:remove', (_, envId: unknown) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      const id = parseOr(HermesProjectIdSchema.safeParse(envId))
+      if (deploySvc.isRunning(id)) throw new Error('Tem um deploy rodando neste ambiente')
+      await envsSvc.remove(id)
+    }))
+  ipcMain.handle('env:history', (_, envId: unknown) =>
+    wrapHandler(async () => { requireAuth(); return envsSvc.history(parseOr(HermesProjectIdSchema.safeParse(envId))) }))
+  /** O que a tela precisa saber para proteger: pasta de produção (IDE só leitura) e produção na VPS (terminal). */
+  ipcMain.handle('env:protection', (_, data: { vpsId?: unknown; path?: unknown }) =>
+    wrapHandler(async () => {
+      if (typeof data?.vpsId !== 'string') return { productionHere: null, productionOnVps: [], productionPaths: [] }
+      const onVps = await envsSvc.productionOnVps(data.vpsId)
+      const here = typeof data.path === 'string' && data.path ? await envsSvc.productionAt(data.vpsId, data.path) : null
+      return {
+        productionHere: here,
+        productionOnVps: [...new Set(onVps.map(t => t.projectName))],
+        productionPaths: onVps.map(t => ({ projectName: t.projectName, remotePath: t.remotePath })),
+      }
+    }))
+  ipcMain.handle('deploy:run', (event, data: unknown) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      const d = parseOr(DeployRunSchema.safeParse(data))
+      const sender = event.sender
+      return deploySvc.deploy(d.envId, {
+        confirm: d.confirm,
+        onLog: line => { if (!sender.isDestroyed()) sender.send('deploy:log', { envId: d.envId, line }) },
+      })
+    }))
 
   // Hermes — gerenciador do runtime agentic externo (FASE 1: ciclo de vida na VPS)
   ipcMain.handle('hermes:status', (_, vpsId: string) =>
@@ -579,6 +666,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     wrapHandler(async () => {
       requireAdmin()
       const id = runnerProject(projectId)
+      // Parar/cancelar sempre vale; começar ou continuar trabalho, não na VPS de produção
+      if (remotePath !== 'stop' && remotePath !== 'cancel') await assertProjectAgentAllowed(id)
       if (hermesRemote.isRemote(id)) { await hermesRemote.call('POST', `${remoteP(id)}/${remotePath}`, body ?? {}); return undefined }
       return local(id)
     })
@@ -962,10 +1051,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       title: 'Abrir pasta local no Zeus IDE',
     })
     if (result.canceled || result.filePaths.length === 0) return null
+    allowLocalRoot(result.filePaths[0])
     return result.filePaths[0]
   })
 
-  ipcMain.handle('local:readdir', async (_, dirPath: string) => {
+  // Todo caminho abaixo passa por checkLocalPath: só dentro das pastas abertas/projetos, sem `..`
+  ipcMain.handle('local:readdir', async (_, p: unknown) => {
+    const dirPath = await checkLocalPath(p)
     const entries = await fs.readdir(dirPath, { withFileTypes: true })
     return entries.map(e => ({
       name: e.name,
@@ -977,37 +1069,42 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
   })
 
-  ipcMain.handle('local:readFile', async (_, filePath: string) => {
-    return fs.readFile(filePath, 'utf-8')
+  ipcMain.handle('local:readFile', async (_, p: unknown) => {
+    return fs.readFile(await checkLocalPath(p), 'utf-8')
   })
 
-  ipcMain.handle('local:readFileBase64', async (_, filePath: string) => {
-    const buf = await fs.readFile(filePath)
+  ipcMain.handle('local:readFileBase64', async (_, p: unknown) => {
+    const buf = await fs.readFile(await checkLocalPath(p))
     return buf.toString('base64')
   })
 
-  ipcMain.handle('local:writeFile', async (_, { filePath, content }: { filePath: string; content: string }) => {
+  ipcMain.handle('local:writeFile', async (_, data: { filePath?: unknown; content?: unknown }) => {
+    const filePath = await checkLocalPath(data?.filePath, { notRoot: true })
+    if (typeof data.content !== 'string') throw new Error('Conteúdo inválido')
     await fs.mkdir(path.dirname(filePath), { recursive: true })
-    await fs.writeFile(filePath, content, 'utf-8')
+    await fs.writeFile(filePath, data.content, 'utf-8')
     return { success: true }
   })
 
-  ipcMain.handle('local:mkdir', async (_, dirPath: string) => {
-    await fs.mkdir(dirPath, { recursive: true })
+  ipcMain.handle('local:mkdir', async (_, p: unknown) => {
+    await fs.mkdir(await checkLocalPath(p), { recursive: true })
     return { success: true }
   })
 
-  ipcMain.handle('local:delete', async (_, filePath: string) => {
-    await fs.rm(filePath, { recursive: true, force: true })
+  ipcMain.handle('local:delete', async (_, p: unknown) => {
+    await fs.rm(await checkLocalPath(p, { notRoot: true }), { recursive: true, force: true })
     return { success: true }
   })
 
-  ipcMain.handle('local:rename', async (_, { oldPath, newPath }: { oldPath: string; newPath: string }) => {
+  ipcMain.handle('local:rename', async (_, data: { oldPath?: unknown; newPath?: unknown }) => {
+    const oldPath = await checkLocalPath(data?.oldPath, { notRoot: true })
+    const newPath = await checkLocalPath(data?.newPath, { notRoot: true })
     await fs.rename(oldPath, newPath)
     return { success: true }
   })
 
-  ipcMain.handle('local:touch', async (_, filePath: string) => {
+  ipcMain.handle('local:touch', async (_, p: unknown) => {
+    const filePath = await checkLocalPath(p, { notRoot: true })
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     await fs.writeFile(filePath, '', { flag: 'wx' }).catch(() => {})
     return { success: true }
@@ -1018,10 +1115,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   const { watch: fsWatch } = require('node:fs') as typeof import('node:fs')
   const localWatchers = new Map<string, import('node:fs').FSWatcher>()
 
-  ipcMain.handle('local:watch', (event, { watchId, folderPath }: { watchId: string; folderPath: string }) => {
+  ipcMain.handle('local:watch', async (event, { watchId, folderPath: p }: { watchId: string; folderPath: unknown }) => {
     localWatchers.get(watchId)?.close()
     const target = event.sender
     try {
+      const folderPath = await checkLocalPath(p)
       const watcher = fsWatch(folderPath, { recursive: true }, (eventType: string, filename: string | null) => {
         if (!filename || target.isDestroyed()) return
         const fullPath = path.join(folderPath, filename)
@@ -1041,9 +1139,11 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     return { success: true }
   })
 
-  ipcMain.handle('local:exec', (_, { cmd, cwd }: { cmd: string; cwd?: string }) => {
+  ipcMain.handle('local:exec', async (_, { cmd, cwd: rawCwd }: { cmd: string; cwd?: unknown }) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { exec } = require('child_process') as typeof import('child_process')
+    // Roda numa pasta aberta: sem `cwd` cairia na pasta do próprio Zeus
+    const cwd = await checkLocalPath(rawCwd)
     return new Promise<{ success: boolean; output: string }>(resolve => {
       exec(cmd, { cwd, timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
         (err, stdout, stderr) => {
@@ -1965,6 +2065,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   }) =>
     wrapHandler(async () => {
       requireAuth()
+      // Agentes nunca mexem na VPS que hospeda produção (o "Aprovar → prod" do Squad também cai aqui)
+      if (data.vpsId !== '__local__') await assertAgentNotOnProduction(data.vpsId, 'O Squad')
 
       // ── Execução local (sem VPS) ─────────────────────────────────────────
       if (data.vpsId === '__local__') {
@@ -2660,7 +2762,7 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   ipcMain.handle('local:lsp:start', (_, workspacePath: string) =>
     wrapHandler(async () => {
       requireAuth()
-      const port = await localLsp.start(workspacePath ?? process.cwd())
+      const port = await localLsp.start(await checkLocalPath(workspacePath))
       return { port }
     })
   )

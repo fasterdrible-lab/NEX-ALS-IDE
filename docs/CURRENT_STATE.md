@@ -1,8 +1,16 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-23
-**Versão:** 3.86.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.87.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Ambientes e deploy pelo gate (v3.87.0)
+
+Cada projeto pode ter staging e produção (VPS + pasta + branch + URL + comandos), na página do projeto → Ambientes. Deploy por git com commit exato; produção só recebe o commit que passou em staging, com o nome do projeto digitado, e volta sozinha ao anterior se falhar. Produção protegida: IDE só leitura, terminal com confirmação, Hermes/Squad fora, Deploy Assistant bloqueado. Deploy real testado na VPS-1; não testado pela tela.
+
+## Canais `local:*` presos às pastas abertas (v3.86.1)
+
+A tela não lê/grava/apaga mais qualquer caminho do PC: todo caminho dos canais `local:*`, do terminal e do git local precisa estar dentro de uma pasta aberta, recente ou de projeto, sem `..` (`local-roots.ts`). Apagar/renomear a pasta raiz é recusado. Não testado pela tela.
 
 ## Project First — Fase 3 (v3.86.0)
 
