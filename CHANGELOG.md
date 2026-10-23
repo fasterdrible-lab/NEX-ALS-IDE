@@ -8,6 +8,13 @@ Na ZEUS o remoto da pasta do Hermes se chama `github`; a descoberta da 3.87.1 s�
 
 **Verificado:** typecheck; numa cópia do banco com o `gitRepo` do ACESSIBILIDADE apagado, o Zeus achou `git@github.com:fasterdrible-lab/AcessiCheck.git` pela pasta do agente na ZEUS (só leitura lá) e gravou; `pickRemote` com origin, sem origin e sem remoto.
 
+### Documentação — Manual de Uso
+
+- Seção nova **Projetos e Ambientes**: projeto atual, configurar staging/produção, Dar acesso ao GitHub, deploy por git (staging → promover), rollback, produção protegida e pastas do PC permitidas.
+- **Claude Code:** várias contas no saldo, conta em uso sempre visível, renovação automática do login e botão Renovar login.
+- **Deploy Assistant:** aviso de que não abre numa VPS com produção. Parágrafo de abertura cita os ambientes.
+- CURRENT_STATE com os próximos passos de hoje.
+
 ### Registro — ZEUS caiu e voltou (2026-10-23)
 
 Fora do ar ~15:40–15:56 (horário de Brasília). Voltou às 18:56 UTC; o boot anterior (21/10) não tem registro de desligamento — queda/religamento pelo lado da VPS, sem erro de kernel nem falta de memória depois. `zeus-hermes`, Tailscale e o gateway do Hermes subiram sozinhos; pasta do agente intacta (`b57d2ea`, sem alteração pendente).

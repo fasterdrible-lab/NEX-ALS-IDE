@@ -318,6 +318,65 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     ),
   },
 
+  // ── PROJETOS E AMBIENTES (Project First) ─────────────────────────────
+  {
+    id: 'projects-envs',
+    icon: GitBranch,
+    title: 'Projetos e Ambientes — projeto atual, staging, produção',
+    color: 'bg-red-600/20 text-red-300',
+    content: (
+      <div className="space-y-4">
+        <p>O projeto é o centro do Zeus: ele pode viver só no PC, só numa VPS ou nos dois. O agente (Hermes) trabalha na VPS do projeto; staging e produção são ambientes à parte, que só recebem código por deploy.</p>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Projeto atual</p>
+          <KV items={[
+            ['Seletor', 'Topo da barra lateral (com botão IDE) e topo do AI Hub, Squad, Planejar e Workspace'],
+            ['Segue o projeto', 'Tarefas e Planejar filtram e criam nele; AI Hub (Agent e conversas), Squad (pasta) e Workspace (VPS e pasta)'],
+            ['Todos os projetos', 'Mostra tudo, inclusive os dados antigos sem projeto (no AI Hub, no grupo "Sem projeto")'],
+            ['Janelas', 'Vale para todas as janelas do Zeus; abrir a página de um projeto o torna o atual'],
+          ]}/>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Configurar os ambientes</p>
+          <Step n={1}>Projetos → abrir o projeto → seção <strong className="text-slate-100">Ambientes</strong> → <strong className="text-slate-100">Configurar staging</strong> (e depois produção).</Step>
+          <Step n={2}><span>Preencha VPS, pasta (vazia ou um clone do projeto), branch, URL do smoke test (opcional) e os comandos do deploy, um por linha:</span><Block>{`npm ci\nnpm run build\npm2 restart meu-app`}</Block></Step>
+          <Step n={3}>Repositório privado: <strong className="text-slate-100">Dar acesso ao GitHub</strong> no cartão do ambiente — o Zeus cria uma chave na VPS e a cadastra no repositório como chave de deploy só de leitura (login do GitHub do PC). A chave privada não sai da VPS.</Step>
+          <Info>Sem o endereço do repositório no cadastro, o Zeus lê o remoto da pasta do PC ou da pasta do agente e grava no projeto. A pasta do agente não pode ser um ambiente, e staging e produção ficam em pastas separadas.</Info>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Deploy (git, commit exato)</p>
+          <KV items={[
+            ['Deploy em staging', 'Último commit do branch: clona se a pasta estiver vazia, git fetch, checkout do commit, comandos, smoke test'],
+            ['Promover para produção', 'Só o MESMO commit que terminou bem em staging (e passou no smoke test, se tem URL); digite o nome do projeto'],
+            ['Sem staging', 'Produção recebe o último commit do branch, também com o nome digitado'],
+            ['Falhou em produção', 'Volta sozinha para o commit anterior ("falhou e voltou ao anterior")'],
+            ['Alteração direto na VPS', 'O deploy para sem passar por cima — mostre o que mudou antes'],
+          ]}/>
+          <Tip>O motivo de uma falha aparece no próprio cartão; clique no status para ver o log inteiro.</Tip>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Produção protegida</p>
+          <KV items={[
+            ['IDE', 'Pasta de produção abre só leitura (selo "Produção · só leitura"); gravar, apagar e git commit/push são recusados'],
+            ['Terminal', 'VPS que hospeda produção pede confirmação e mostra faixa vermelha'],
+            ['Hermes e Squad', 'Não trabalham numa VPS que hospeda produção (nem por automação); parar/cancelar continuam valendo'],
+            ['Deploy Assistant', 'Não abre numa VPS com produção'],
+          ]}/>
+          <Warn>A proteção vale para o que estiver cadastrado em Ambientes. Uma VPS de produção que não está cadastrada não é protegida — cadastre a produção de cada projeto.</Warn>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Pastas do PC</p>
+          <p className="text-xs">A IDE local, o terminal PowerShell, o git local e o explorador do Squad só mexem em pastas abertas no Zeus: as abertas em janela, as recentes, as escolhidas em "Abrir pasta" e as pastas de projetos. Caminho com <Code>..</Code> ou fora delas é recusado, e a pasta do projeto não pode ser apagada ou renomeada pela árvore.</p>
+        </div>
+      </div>
+    ),
+  },
+
   // ── DEPLOY ASSISTANT ──────────────────────────────────────────────────
   {
     id: 'deploy',
@@ -327,6 +386,7 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
     content: (
       <div className="space-y-4">
         <p>Assistente de deploy que usa IA para gerar um plano de passos, executa com aprovação e faz rollback automático se algo der errado.</p>
+        <Warn>Numa VPS que hospeda a produção de algum projeto (cadastrada em Ambientes), o Deploy Assistant não abre: produção só recebe deploy pelo gate da página do projeto (veja "Projetos e Ambientes").</Warn>
 
         <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Como abrir</p>
@@ -974,10 +1034,21 @@ Mais antigas         │  Cancelar ■    │  ☑ Logs  ☑ Docker
         </div>
 
         <div className="space-y-2">
+          <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Várias contas e saldo (barra lateral)</p>
+          <KV items={[
+            ['Saldo', 'Limite de 5 h e semanal de cada conta; "Usar esta" troca a conta usada pelo Squad e pelo AI Hub'],
+            ['Conta em uso', 'Sempre aparece no saldo — em âmbar, com o motivo, se o login dela tiver problema'],
+            ['Login vencido', 'O Zeus renova sozinho (roda claude auth status na pasta da conta, sem gastar mensagem), no máximo 1 vez a cada 10 min'],
+            ['Renovar login', 'Botão na conta com problema, para renovar na hora'],
+          ]}/>
+          <Info>Se nem a renovação funcionar (conta parada por muito tempo), entre de novo nela: <Code>claude</Code> com a pasta da conta → <Code>/login</Code>. Isso precisa de você no navegador.</Info>
+        </div>
+
+        <div className="space-y-2">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide">Solução de problemas</p>
           <KV items={[
             ['"Não encontrado"', 'Claude Code não está no PATH. Instale com npm install -g @anthropic-ai/claude-code e clique ↺'],
-            ['"Não autenticado"', 'Execute claude no terminal e faça login novamente'],
+            ['"Não autenticado"', 'Configurações confere com claude auth status (renova se venceu); se continuar, execute claude e faça login de novo'],
             ['Resposta lenta', 'Normal na primeira mensagem — o CLI inicializa. As seguintes são rápidas'],
           ]}/>
         </div>
@@ -1210,7 +1281,7 @@ export default function Help() {
           <BookOpen size={22} className="text-brand-400"/>
           <h1 className="text-2xl font-bold text-slate-100">Manual de Uso</h1>
         </div>
-        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.87.2</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
+        <p className="text-slate-400">Guia completo do Zeus IDE <strong className="text-slate-300">v3.87.2</strong> — gerencie VPS, projetos e contas de IA numa interface integrada com editor, terminal SSH, AI HUB, Agente Autônomo, Squad de <strong className="text-slate-300">22 agentes especializados</strong> com <strong className="text-slate-300">Pipeline autônomo</strong> (Jarvis → Friday → Reviewer → Tester → DevOps), <strong className="text-slate-300">Hermes Agent</strong> (desenvolvimento autônomo direto na VPS: 3 níveis de autonomia, fechamento da entrega com revisão e DoD, quadro e logs, painel na IDE e diagnóstico de incidentes), <strong className="text-slate-300">projetos com staging e produção</strong> (deploy por git pelo gate, produção protegida), Claude Code (conta Pro sem API Key), Skills, Workspace Intelligence, Planning Mode, Incident Mode e Deploy Assistant.</p>
       </div>
 
       {/* Cards de acesso rápido */}

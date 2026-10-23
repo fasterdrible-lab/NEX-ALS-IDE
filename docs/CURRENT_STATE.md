@@ -472,4 +472,7 @@ Primeira fase da integração com o runtime agentic externo **Hermes Agent** (No
 
 ## Próximos passos
 
-- Validar o Hermes pela UI na VPS-1 — roteiro em `docs/TASKS.md` ("Roteiro de validação do Hermes pela UI")
+- Testar pela tela o que entrou em 2026-10-23 (roteiros em `docs/TASKS.md`): Fase 3 (projeto atual), 3.86.1 (pastas do PC na IDE local e no Squad), Fase 4b (Ambientes: deploy em staging, Promover para produção, IDE só leitura, terminal com confirmação, agentes fora)
+- ACESSIBILIDADE: comandos do deploy e URL do smoke test no staging; decidir onde fica a produção de verdade (hoje cadastrada na VPS-1, que fica protegida enquanto isso)
+- Atualizar o serviço `zeus-hermes` da ZEUS (está na 3.83.0)
+- Validar o Hermes pela UI — roteiro em `docs/TASKS.md` ("Roteiro de validação do Hermes pela UI")
