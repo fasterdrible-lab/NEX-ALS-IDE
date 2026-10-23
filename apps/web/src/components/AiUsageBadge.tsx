@@ -56,7 +56,7 @@ function Bar({ label, w }: { label: string; w: ClaudeUsageWindow | null }) {
   )
 }
 
-function Account({ a, busy, onUse }: { a: ClaudeAccountUsage; busy: string | null; onUse: (id: string) => void }) {
+function Account({ a, busy, onUse, onRenew }: { a: ClaudeAccountUsage; busy: string | null; onUse: (id: string) => void; onRenew: (id: string) => void }) {
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-1.5">
@@ -76,7 +76,14 @@ function Account({ a, busy, onUse }: { a: ClaudeAccountUsage; busy: string | nul
         )}
       </div>
       {a.problem
-        ? <p className="text-[10px]" style={{ color: AMBER }}>{a.problem}</p>
+        ? <div className="flex items-start gap-1.5">
+            <p className="text-[10px] flex-1" style={{ color: AMBER }}>{a.problem}</p>
+            <button onClick={() => onRenew(a.id)} disabled={busy !== null}
+              className="shrink-0 text-[9px] px-1.5 py-0.5 rounded disabled:opacity-40" style={{ background: 'rgba(251,191,36,0.15)', color: AMBER }}
+              title="Roda o Claude Code nesta conta para renovar o login (não gasta mensagem)">
+              {busy === `renew:${a.id}` ? <Loader2 size={9} className="animate-spin" /> : 'Renovar login'}
+            </button>
+          </div>
         : <><Bar label="5 h" w={a.fiveHour} /><Bar label="Semana" w={a.sevenDay} /></>}
       {a.notes?.map(n => <p key={n} className="text-[9px] leading-snug" style={{ color: 'rgba(251,191,36,0.75)' }}>{n}</p>)}
     </div>
@@ -101,6 +108,11 @@ export default function AiUsageBadge() {
   const use = async (id: string) => {
     setBusy(id)
     try { await ipc.claude.accounts.setActive(id); setUsage(await ipc.aiUsage.all(true)) } catch { /* segue */ }
+    setBusy(null)
+  }
+  const renew = async (id: string) => {
+    setBusy(`renew:${id}`)
+    try { setUsage(await ipc.aiUsage.renew(id)) } catch { /* segue */ }
     setBusy(null)
   }
   const refresh = async () => {
@@ -143,7 +155,7 @@ export default function AiUsageBadge() {
                 <p className="text-[10px]" style={{ color: 'rgba(247,249,252,0.45)' }}>Ativo — este provedor não informa saldo pela API.</p>
               )}
               {p.kind === 'accounts' && (p.accounts?.length
-                ? p.accounts.map(a => <Account key={a.id} a={a} busy={busy} onUse={id => void use(id)} />)
+                ? p.accounts.map(a => <Account key={a.id} a={a} busy={busy} onUse={id => void use(id)} onRenew={id => void renew(id)} />)
                 : <p className="text-[10px]" style={{ color: 'rgba(247,249,252,0.45)' }}>Nenhuma conta cadastrada (Configurações → Claude Code).</p>)}
             </div>
           ))}

@@ -1,5 +1,7 @@
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
+import { spawn } from 'node:child_process'
 
 /**
  * Saldo dos provedores de IA ATIVOS no Zeus (Configurações → Provedores com "ativo" ligado). Cada um
@@ -11,6 +13,8 @@ import path from 'node:path'
  * - os demais (OpenAI, Anthropic por chave, Gemini, Groq…) não têm consulta de saldo por chave de API:
  *   aparecem como ativos, com o link da página de cobrança.
  * A chave de API é lida e usada só aqui, no main — nunca vai para a tela.
+ * Login vencido: o Zeus não mexe no token; roda `claude auth status` na pasta da conta e o próprio
+ * Claude Code renova (sem gastar mensagem) — conferido em 2026-10-23.
  * Troca de conta Claude é sempre do usuário (botão ou clique na notificação): trocar sozinho para
  * escapar do limite pode ir contra os termos da Anthropic.
  */
@@ -45,6 +49,7 @@ export interface ProviderUsage {
 
 export const NEAR_LIMIT = 90
 const POLL_MS = 5 * 60_000
+const RENEW_EVERY_MS = 10 * 60_000
 /** Saldo abaixo disto (na moeda do provedor) = acabando. */
 const LOW_BALANCE = 2
 
@@ -78,6 +83,31 @@ async function getJson(url: string, key: string): Promise<{ status: number; data
   return { status: res.status, data: await res.json().catch(() => null) }
 }
 
+export interface ClaudeAuthStatus { loggedIn: boolean; email: string; subscriptionType: string }
+
+/**
+ * `claude auth status --json` na pasta da conta. Com token vencido o Claude Code o renova antes de
+ * responder (com o refresh token dele, gravando no mesmo `.credentials.json`) — o Zeus nunca lê nem
+ * grava token aqui. null = CLI não instalado / não respondeu.
+ */
+export function claudeAuthStatus(configDir: string, timeoutMs = 30_000): Promise<ClaudeAuthStatus | null> {
+  const npmBin = process.platform === 'win32' ? path.join(os.homedir(), 'AppData', 'Roaming', 'npm') : `${os.homedir()}/.npm-global/bin:/usr/local/bin`
+  const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${npmBin}${path.delimiter}${process.env.PATH ?? ''}`, CLAUDE_CONFIG_DIR: configDir }
+  return new Promise(resolve => {
+    // shell: o `claude` do npm no Windows é .cmd; a pasta vai só no env, nunca na linha de comando
+    const p = spawn('claude', ['auth', 'status', '--json'], { shell: true, env, timeout: timeoutMs, windowsHide: true })
+    let out = ''
+    p.stdout?.on('data', (d: Buffer) => { out += d.toString() })
+    p.on('error', () => resolve(null))
+    p.on('close', () => {
+      try {
+        const j = JSON.parse(out.slice(out.indexOf('{'))) as { loggedIn?: boolean; email?: string; subscriptionType?: string }
+        resolve({ loggedIn: j.loggedIn === true, email: j.email ?? '', subscriptionType: j.subscriptionType ?? '' })
+      } catch { resolve(null) }
+    })
+  })
+}
+
 /** Pasta padrão do Claude Code (a mesma do Claude Code do VS Code/terminal) — o login dela muda quando o usuário troca de conta lá. */
 function isDefaultClaudeDir(dir: string): boolean {
   return /[\\/]\.claude[\\/]?$/i.test(dir.trim())
@@ -89,6 +119,8 @@ export class AiUsageMonitor {
   private lastGood = new Map<string, AccountUsage>()
   /** Avisos já dados (não repetem no mesmo ciclo do limite / no mesmo dia para saldo). */
   private warned = new Set<string>()
+  /** Última renovação de login tentada por conta (no máximo 1 a cada RENEW_EVERY_MS sozinha). */
+  private renewedAt = new Map<string, number>()
   private timer: ReturnType<typeof setInterval> | null = null
 
   constructor(private readonly d: UsageDeps) {}
@@ -107,8 +139,10 @@ export class AiUsageMonitor {
     const read = await Promise.all(providers.map(p => this.readProvider(p)))
     // Só o que dá para usar agora: conta sem login / login recusado e provedor sem chave ou com chave
     // recusada ficam de fora (continuam em Configurações para consertar). Pedido do usuário, 2026-10-22.
+    // Exceção: a conta ATIVA fica sempre, com o motivo — é ela que o Squad / AI Hub usam, e escondê-la
+    // fazia o topo mostrar outra conta como se fosse a em uso (2026-10-23).
     this.last = read
-      .map(p => (p.kind === 'accounts' && p.accounts ? { ...p, accounts: p.accounts.filter(a => !a.problem) } : p))
+      .map(p => (p.kind === 'accounts' && p.accounts ? { ...p, accounts: p.accounts.filter(a => !a.problem || a.active) } : p))
       .filter(p => !p.problem && !(p.kind === 'accounts' && !p.accounts?.length))
     // Padrão primeiro: é o que o Squad / AI Hub usam.
     this.last.sort((a, b) => Number(b.isDefault) - Number(a.isDefault))
@@ -161,17 +195,36 @@ export class AiUsageMonitor {
     return { ...base, kind: 'balance', balance: { amount, currency: 'USD', low: amount < LOW_BALANCE } }
   }
 
-  private async readClaudeAccount(r: AccountRow): Promise<AccountUsage> {
+  /** Botão "Renovar login": renova pela CLI na hora (sem esperar o intervalo) e relê tudo. */
+  async renewAccount(id: string): Promise<ProviderUsage[]> {
+    const r = (await this.d.listClaudeAccounts()).find(a => a.id === id)
+    if (r) await this.renew(r, true)
+    return this.refresh()
+  }
+
+  /** `claude auth status` na pasta da conta (renova token vencido). true = a CLI diz que está logada. */
+  private async renew(r: AccountRow, force = false): Promise<boolean> {
+    if (!force && Date.now() - (this.renewedAt.get(r.id) ?? 0) < RENEW_EVERY_MS) return false
+    this.renewedAt.set(r.id, Date.now())
+    return (await claudeAuthStatus(r.configDir))?.loggedIn === true
+  }
+
+  /** `renewed`: já renovou nesta leitura — não tenta de novo (evita laço). */
+  private async readClaudeAccount(r: AccountRow, renewed = false): Promise<AccountUsage> {
     const base: AccountUsage = { id: r.id, name: r.name, active: r.isActive === 1, email: '', plan: '', fiveHour: null, sevenDay: null, problem: '', notes: [] }
     if (isDefaultClaudeDir(r.configDir)) {
       base.notes.push('Pasta compartilhada com o Claude Code do VS Code/terminal — muda de conta quando você troca lá')
     }
-    let oauth: { accessToken?: string; expiresAt?: number; subscriptionType?: string } | undefined
+    let oauth: { accessToken?: string; refreshToken?: string; expiresAt?: number; subscriptionType?: string } | undefined
     try {
       oauth = (JSON.parse(await fs.readFile(path.join(r.configDir, '.credentials.json'), 'utf8')) as { claudeAiOauth?: typeof oauth }).claudeAiOauth
     } catch { return { ...base, problem: 'Sem login nesta conta' } }
     base.plan = oauth?.subscriptionType ?? ''
     if (!oauth?.accessToken) return { ...base, problem: 'Sem login nesta conta' }
+    // Token vencido (ou vencendo em 2 min): o Claude Code renova e lemos de novo
+    if (!renewed && oauth.refreshToken && oauth.expiresAt && oauth.expiresAt < Date.now() + 2 * 60_000 && await this.renew(r)) {
+      return this.readClaudeAccount(r, true)
+    }
 
     const headers = { Authorization: `Bearer ${oauth.accessToken}`, Accept: 'application/json', 'anthropic-beta': 'oauth-2025-04-20', 'User-Agent': 'Zeus-IDE/1.0' }
     // Conta de verdade do login (o apelido do cadastro pode estar errado — a pasta muda de conta por fora).
@@ -188,8 +241,11 @@ export class AiUsageMonitor {
       res = await fetch('https://api.anthropic.com/api/oauth/usage', { headers, signal: AbortSignal.timeout(8000) })
     } catch { return { ...base, problem: 'Sem conexão' } }
     if (res.status === 401) {
+      if (!renewed && oauth.refreshToken && await this.renew(r)) return this.readClaudeAccount(r, true)
       const expired = oauth.expiresAt && oauth.expiresAt < Date.now()
-      return { ...base, problem: expired ? 'Login expirado — faça login de novo nesta conta' : 'Login recusado — faça login de novo nesta conta' }
+      return { ...base, problem: expired
+        ? 'Login vencido e não deu para renovar — faça login de novo nesta conta (claude → /login)'
+        : 'Login recusado — faça login de novo nesta conta' }
     }
     if (res.status === 429) {
       // Consultas demais em pouco tempo: mostra a última leitura boa em vez do erro.
@@ -197,7 +253,10 @@ export class AiUsageMonitor {
       if (prev) return { ...prev, active: base.active, notes: [...base.notes, 'Leitura de alguns minutos atrás (a Anthropic pediu para esperar)'] }
       // Login válido (o perfil respondeu): continua na lista, só sem números por ora. Sem perfil = login ruim → fica de fora.
       if (base.email) return { ...base, notes: [...base.notes, 'Sem leitura agora (a Anthropic pediu para esperar) — tenta de novo em 5 min'] }
-      return { ...base, problem: 'Login recusado — faça login de novo nesta conta' }
+      const expired = oauth.expiresAt && oauth.expiresAt < Date.now()
+      return { ...base, problem: expired
+        ? 'Login vencido e não deu para renovar — faça login de novo nesta conta (claude → /login)'
+        : 'Login recusado — faça login de novo nesta conta' }
     }
     if (!res.ok) return { ...base, problem: `Resposta ${res.status}` }
     const j = await res.json().catch(() => null) as Record<string, { utilization?: number; resets_at?: string } | null> | null
@@ -205,6 +264,7 @@ export class AiUsageMonitor {
       const w = j?.[k]
       return w && typeof w.utilization === 'number' ? { pct: Math.round(w.utilization), resetsAt: w.resets_at ?? null } : null
     }
+    if (renewed) base.notes.push('Login renovado agora pelo Zeus')
     const good = { ...base, fiveHour: win('five_hour'), sevenDay: win('seven_day') }
     this.lastGood.set(r.id, { ...good, notes: [] })
     return good

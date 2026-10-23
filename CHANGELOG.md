@@ -13,6 +13,19 @@
 
 **Verificado:** `pnpm typecheck` (6 pacotes). **Não testado pela tela.**
 
+### Corrigido — conta Claude ativa sumia do saldo na barra lateral
+
+Conta com login vencido (ex.: `phpos40`, token vencido em 22/10) era tirada da lista do saldo — mesmo sendo a **ativa**, e o topo passava a mostrar outra conta como se fosse a em uso. Agora a conta ativa fica sempre, em âmbar, com o motivo. Contas não ativas com problema continuam escondidas (só em Configurações).
+
+### Adicionado — login das contas Claude renovado sozinho
+
+- O Claude Code só renova o token quando é aberto; conta parada (reserva) vencia e precisava de `claude` à mão. Agora o Zeus roda **`claude auth status`** na pasta da conta quando o token está vencido (ou vence em 2 min) ou a Anthropic recusa o login — o próprio Claude Code renova, **sem gastar mensagem** e sem o Zeus ler ou gravar token. No máximo 1 vez a cada 10 min por conta, a cada leitura do saldo (5 min).
+- Botão **Renovar login** na conta com problema, no saldo da barra lateral.
+- Configurações → Claude Code: "autenticada" agora vem do `claude auth status` (antes bastava o arquivo existir, mesmo com login vencido).
+- Se o refresh token também não vale mais: "faça login de novo nesta conta (claude → /login)".
+
+**Verificado:** com o vencimento forçado no `.credentials.json` da phpos40 (backup antes), `claude auth status` trocou o token e deu novo vencimento; a chamada como o main faz (spawn com a pasta só no env) responde `loggedIn: true` com o e-mail. `pnpm typecheck` (desktop + web). Testado pelo usuário no app em 2026-10-23.
+
 ## [3.85.0] — 2026-10-22
 
 ### Adicionado — Project First, Fase 2: Novo projeto em 3 caminhos

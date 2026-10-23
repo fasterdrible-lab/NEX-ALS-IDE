@@ -7,7 +7,7 @@ import {
 import type { IpcMain } from 'electron'
 import { app, BrowserWindow, dialog, clipboard, nativeImage, Notification, shell } from 'electron'
 import { HermesRemote } from '../hermes-remote.js'
-import { AiUsageMonitor } from '../ai-usage.js'
+import { AiUsageMonitor, claudeAuthStatus } from '../ai-usage.js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -1505,6 +1505,13 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     },
   })
   aiUsage.start()
+  ipcMain.handle('ai:usage:renew', (_, id: unknown) =>
+    wrapHandler(async () => {
+      requireAuth()
+      if (typeof id !== 'string' || !id || id.length > 64) throw new Error('Conta inválida')
+      return aiUsage.renewAccount(id)
+    })
+  )
   ipcMain.handle('ai:usage:all', (_, opts?: { refresh?: boolean }) =>
     wrapHandler(async () => { requireAuth(); return opts?.refresh ? aiUsage.refresh() : aiUsage.current })
   )
@@ -1546,14 +1553,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
     })
     if (!version) return { installed: false, version: '', authenticated: false }
 
-    // Verifica autenticação: ~/.claude (ou configDir) deve ter .credentials.json
-    const credFiles = [
-      path.join(configDir, '.credentials.json'),
-      path.join(configDir, 'credentials.json'),
-    ]
-    let authenticated = false
-    for (const f of credFiles) {
-      try { await fs.access(f); authenticated = true; break } catch { /* não existe */ }
+    // Autenticação de verdade: `claude auth status` (renova o token se venceu). Só o arquivo existir
+    // dizia "autenticada" com o login vencido (phpos40, 2026-10-23).
+    const status = typeof configDir === 'string' && configDir ? await claudeAuthStatus(configDir) : null
+    let authenticated = status?.loggedIn === true
+    if (!status) {
+      // CLI não respondeu: cai na checagem antiga pelo arquivo
+      for (const f of [path.join(configDir, '.credentials.json'), path.join(configDir, 'credentials.json')]) {
+        try { await fs.access(f); authenticated = true; break } catch { /* não existe */ }
+      }
     }
 
     return { installed: true, version, authenticated }

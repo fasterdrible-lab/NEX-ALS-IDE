@@ -478,6 +478,8 @@ export const ipc = {
   /** Saldo dos provedores de IA ativos (Claude Code por conta, DeepSeek, OpenRouter…) — o main lê a cada 5 min. */
   aiUsage: {
     all: (refresh = false) => invoke<AiProviderUsage[]>('ai:usage:all', { refresh }),
+    /** Renova o login da conta Claude pela CLI (`claude auth status`) e relê o saldo. */
+    renew: (accountId: string) => invoke<AiProviderUsage[]>('ai:usage:renew', accountId),
     onUpdate: (cb: (u: AiProviderUsage[]) => void) => {
       if (!window.electron) return () => {}
       return window.electron.on('ai:usage:update', cb as (...args: unknown[]) => void)
