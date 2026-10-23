@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import AiUsageBadge from './AiUsageBadge'
+import ProjectSwitcher from './ProjectSwitcher'
 import logoUrl from '/logo-zeus.png'
 
 const navItems = [
@@ -89,6 +90,11 @@ export default function Layout() {
               Intelligent Development Environment
             </div>
           </div>
+        </div>
+
+        {/* ── Projeto atual (Project First) ───────────────────────── */}
+        <div className="px-3 pt-3">
+          <ProjectSwitcher withIde />
         </div>
 
         {/* ── AI HUB + SQUAD destacados ────────────────────────────── */}
@@ -294,7 +300,7 @@ export default function Layout() {
 
           <div>
             <p className="text-[10px] font-medium" style={{ color: 'rgba(26,140,255,0.6)' }}>
-              v3.85.0
+              v3.86.0
             </p>
             <p
               className="text-[9px] tracking-widest uppercase font-light"

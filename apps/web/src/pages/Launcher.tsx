@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import LocalProjects from '../components/LocalProjects'
+import { openProjectIde } from '../lib/current-project'
 import type { Project, VpsServer, ClaudeCheckResult } from '@cwm/config'
 
 interface LaunchState {
@@ -241,9 +242,7 @@ export default function Launcher() {
                     {/* Janela própria na pasta do projeto: vários projetos abertos ao mesmo tempo */}
                     <button
                       onClick={() => {
-                        (p.vpsServerId
-                          ? ipc.window.openIde(p.vpsServerId, p.vpsServer?.name ?? p.vpsServerId, p.remotePath)
-                          : ipc.window.openIdeLocal(p.localPath))
+                        openProjectIde(p)
                           .catch(e => setLaunchStates(s => ({ ...s, [p.id]: { loading: false, success: false, message: String(e instanceof Error ? e.message : e) } })))
                       }}
                       className="btn-primary text-xs py-1.5 px-3"

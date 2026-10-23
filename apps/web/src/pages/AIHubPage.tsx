@@ -9,9 +9,12 @@ import {
 } from 'lucide-react'
 import { ipc } from '../lib/ipc'
 import HermesAgentPanel from '../components/HermesAgentPanel'
+import ProjectSwitcher from '../components/ProjectSwitcher'
+import { useCurrentProject } from '../lib/current-project'
 
 interface Conversation {
   id: string; title: string; provider: string; model: string
+  projectId?: string | null
   isPinned: boolean; totalTokens: number; createdAt: string; updatedAt: string
 }
 
@@ -41,7 +44,9 @@ export default function AIHubPage() {
   const { leave } = useWindowExit()
   // `?mode=agent&project=<id>`: aberto a partir da página de um projeto.
   const [searchParams] = useSearchParams()
-  const initialProjectId = searchParams.get('project') ?? undefined
+  // Sem `?project=`, o Agent abre no projeto atual (seletor do topo).
+  const { current } = useCurrentProject()
+  const initialProjectId = searchParams.get('project') ?? current?.id
   const [mode, setMode] = useState<'chat' | 'agent'>(searchParams.get('mode') === 'agent' ? 'agent' : 'chat')
   const [convList, setConvList] = useState<Conversation[]>([])
   const [activeConv, setActiveConv] = useState<Conversation | null>(null)
@@ -80,8 +85,8 @@ export default function AIHubPage() {
 
   // Carrega lista de conversas
   const loadConvList = useCallback(async () => {
-    try { setConvList(await ipc.ai.conv.list()) } catch { /* silencioso */ }
-  }, [])
+    try { setConvList(await ipc.ai.conv.list(current?.id)) } catch { /* silencioso */ }
+  }, [current?.id])
 
   useEffect(() => { loadConvList() }, [loadConvList])
 
@@ -145,7 +150,7 @@ export default function AIHubPage() {
 
   const newConv = async () => {
     try {
-      const conv = await ipc.ai.conv.create({ provider, model: model || 'default', title: 'Nova conversa' })
+      const conv = await ipc.ai.conv.create({ provider, model: model || 'default', title: 'Nova conversa', projectId: current?.id })
       await loadConvList()
       await openConv({ ...conv as Conversation, isPinned: false, totalTokens: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
     } catch (e) { alert(String(e)) }
@@ -240,8 +245,11 @@ export default function AIHubPage() {
     if (activeStreamId) { ipc.ai.stream.cancel(activeStreamId); setActiveStreamId(null); setLoading(false); setStreamContent('') }
   }
 
-  const pinned = convList.filter(c => c.isPinned)
-  const unpinned = convList.filter(c => !c.isPinned)
+  // Com projeto atual: conversas antigas (sem projeto) ficam num grupo próprio, embaixo
+  const orphan = current ? convList.filter(c => !c.projectId) : []
+  const own = current ? convList.filter(c => c.projectId) : convList
+  const pinned = own.filter(c => c.isPinned)
+  const unpinned = own.filter(c => !c.isPinned)
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-100 overflow-hidden">
@@ -264,11 +272,15 @@ export default function AIHubPage() {
             Agent
           </button>
         </div>
-        <span className="text-[11px] font-semibold text-slate-300 tracking-wide w-14 text-right">AI HUB</span>
+        <div className="flex items-center gap-3">
+          <ProjectSwitcher className="w-56" />
+          <span className="text-[11px] font-semibold text-slate-300 tracking-wide text-right">AI HUB</span>
+        </div>
       </div>
 
       {mode === 'agent' ? (
-        <HermesAgentPanel initialProjectId={initialProjectId} />
+        // key: trocar o projeto atual reabre o painel nele (o loop vive no main, nada se perde)
+        <HermesAgentPanel key={initialProjectId ?? ''} initialProjectId={initialProjectId} />
       ) : (
       <div className="flex flex-1 overflow-hidden">
       {/* Sidebar esquerda */}
@@ -291,6 +303,12 @@ export default function AIHubPage() {
             <>
               {pinned.length > 0 && <p className="text-[9px] text-slate-600 uppercase tracking-widest px-1 mt-2 mb-1">Conversas</p>}
               {unpinned.map(c => <ConvItem key={c.id} c={c} active={activeConv?.id === c.id} onOpen={openConv} onDelete={deleteConv} onPin={pinConv}/>)}
+            </>
+          )}
+          {orphan.length > 0 && (
+            <>
+              <p className="text-[9px] text-slate-600 uppercase tracking-widest px-1 mt-2 mb-1" title="Conversas de antes do projeto atual existir no Zeus">Sem projeto</p>
+              {orphan.map(c => <ConvItem key={c.id} c={c} active={activeConv?.id === c.id} onOpen={openConv} onDelete={deleteConv} onPin={pinConv}/>)}
             </>
           )}
           {convList.length === 0 && (

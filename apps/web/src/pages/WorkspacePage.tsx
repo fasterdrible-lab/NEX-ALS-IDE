@@ -6,6 +6,8 @@ import {
   Layers, Package, GitMerge, ShieldAlert, ChevronDown, ChevronRight, Globe,
 } from 'lucide-react'
 import { ipc, type WorkspaceReport, type WsRisk } from '../lib/ipc'
+import { useCurrentProject } from '../lib/current-project'
+import ProjectSwitcher from '../components/ProjectSwitcher'
 
 type Tab = 'summary' | 'architecture' | 'modules' | 'flows' | 'risks'
 
@@ -308,6 +310,15 @@ export default function WorkspacePage() {
     if (initVpsId && initPath) void analyze()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Projeto atual com VPS: já deixa VPS e pasta escolhidas (sem analisar sozinho — é uma leitura por SSH)
+  const { current: currentProject } = useCurrentProject()
+  useEffect(() => {
+    if (initVpsId || !currentProject?.vpsServerId || !currentProject.remotePath) return
+    setSelectedVpsId(currentProject.vpsServerId)
+    setProjectPath(currentProject.remotePath)
+    setReport(null)
+  }, [currentProject?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const analyze = async () => {
     if (!selectedVpsId || !projectPath.trim()) return
     setLoading(true)
@@ -347,6 +358,12 @@ export default function WorkspacePage() {
         <div className="w-px h-4 bg-slate-800" />
         <Network size={14} style={{ color: '#60a5fa' }} />
         <span className="text-sm font-semibold" style={{ color: '#93c5fd' }}>Workspace Intelligence</span>
+        <ProjectSwitcher className="w-56" />
+        {currentProject && !currentProject.vpsServerId && (
+          <span className="text-[11px] text-amber-400/80" title="A análise lê o projeto pela VPS (SSH)">
+            este projeto só está no PC — a análise roda numa VPS
+          </span>
+        )}
 
         {currentVps && (
           <>

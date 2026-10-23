@@ -52,10 +52,15 @@ export class ConversationManager {
     return toConv(rows[0])
   }
 
-  async list(limit = 50): Promise<Conversation[]> {
-    const rows = await this.db.$queryRawUnsafe(
-      `SELECT * FROM ai_conversations ORDER BY isPinned DESC, updatedAt DESC LIMIT ?`, limit
-    ) as ConvRow[]
+  /** Com `projectId`: as conversas do projeto e as antigas sem projeto (a tela as mostra em "Sem projeto"). */
+  async list(limit = 50, projectId?: string): Promise<Conversation[]> {
+    const rows = (projectId
+      ? await this.db.$queryRawUnsafe(
+          `SELECT * FROM ai_conversations WHERE projectId = ? OR projectId IS NULL ORDER BY isPinned DESC, updatedAt DESC LIMIT ?`, projectId, limit
+        )
+      : await this.db.$queryRawUnsafe(
+          `SELECT * FROM ai_conversations ORDER BY isPinned DESC, updatedAt DESC LIMIT ?`, limit
+        )) as ConvRow[]
     return rows.map(toConv)
   }
 

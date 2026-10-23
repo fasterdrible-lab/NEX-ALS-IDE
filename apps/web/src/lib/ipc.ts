@@ -583,9 +583,9 @@ export const ipc = {
         window.electron.on('ai:stream:chunk', cb as (...args: unknown[]) => void),
     },
     conv: {
-      list: () => invoke<Array<{id:string;title:string;provider:string;model:string;isPinned:boolean;totalTokens:number;createdAt:string;updatedAt:string}>>('ai:conv:list'),
+      list: (projectId?: string) => invoke<Array<{id:string;title:string;provider:string;model:string;projectId:string|null;isPinned:boolean;totalTokens:number;createdAt:string;updatedAt:string}>>('ai:conv:list', projectId),
       get: (id: string) => invoke<{id:string;title:string;provider:string;model:string} | null>('ai:conv:get', id),
-      create: (data: {provider:string;model:string;title?:string;vpsId?:string}) => invoke<{id:string;title:string}>('ai:conv:create', data),
+      create: (data: {provider:string;model:string;title?:string;vpsId?:string;projectId?:string}) => invoke<{id:string;title:string}>('ai:conv:create', data),
       updateTitle: (id: string, title: string) => invoke<void>('ai:conv:updateTitle', { id, title }),
       pin: (id: string) => invoke<void>('ai:conv:pin', id),
       delete: (id: string) => invoke<void>('ai:conv:delete', id),
@@ -878,6 +878,8 @@ export interface AgentTask {
   parallelizable: boolean
   risk: TaskRisk
   createdAt: string; updatedAt: string
+  /** Tarefa do Hermes que vive no serviço da VPS (projeto migrado): só leitura em Planejar/Tarefas. */
+  remote?: boolean
 }
 export interface AgentTaskInput {
   title: string; description?: string; status?: TaskStatus

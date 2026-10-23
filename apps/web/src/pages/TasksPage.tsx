@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Trash2, ChevronRight, Loader2, X, ClipboardList } from 'lucide-react'
 import { ipc, type AgentTask, type AgentTaskInput, type TaskStatus, type TaskPriority } from '../lib/ipc'
+import { useCurrentProject } from '../lib/current-project'
 
 const AGENT_NAMES = ['jarvis', 'friday', 'fury', 'shuri', 'pepper', 'vision', 'requis', 'tester', 'reviewer', 'devops'] as const
 const AGENT_EMOJI: Record<string, string> = {
@@ -31,6 +32,8 @@ const EMPTY_FORM: AgentTaskInput = {
 }
 
 export default function TasksPage() {
+  const { current } = useCurrentProject()
+  const projectId = current?.id
   const [tasks, setTasks] = useState<AgentTask[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<ModalState | null>(null)
@@ -41,19 +44,20 @@ export default function TasksPage() {
 
   const load = useCallback(async () => {
     try {
-      const list = await ipc.tasks.list()
+      const list = await ipc.tasks.list(projectId ? { projectId } : undefined)
       setTasks(list)
     } catch (e) { console.error(e) } finally { setLoading(false) }
-  }, [])
+  }, [projectId])
 
   useEffect(() => { void load() }, [load])
 
   function openCreate() {
-    setForm(EMPTY_FORM)
+    setForm({ ...EMPTY_FORM, projectId })
     setModal({ mode: 'create' })
   }
 
   function openEdit(task: AgentTask) {
+    if (task.remote) return // vive no serviço da VPS: mexer pelo painel Agent
     setForm({
       title: task.title, description: task.description,
       status: task.status, ownerAgent: task.ownerAgent, priority: task.priority,
@@ -116,7 +120,7 @@ export default function TasksPage() {
             <ClipboardList size={15} style={{ color: '#1A8CFF' }} />
           </div>
           <div>
-            <h1 className="text-sm font-semibold" style={{ color: '#7CC0FF' }}>Tarefas do Squad</h1>
+            <h1 className="text-sm font-semibold" style={{ color: '#7CC0FF' }}>Tarefas{current ? ` — ${current.name}` : ' (todos os projetos)'}</h1>
             <p className="text-[10px]" style={{ color: 'rgba(247,249,252,0.3)' }}>
               {total} tarefas · {done} concluídas
             </p>
@@ -124,7 +128,9 @@ export default function TasksPage() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+          disabled={!projectId}
+          title={projectId ? `Nova tarefa em ${current?.name}` : 'Escolha um projeto no topo da barra lateral para criar tarefas'}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: 'rgba(26,140,255,0.1)', border: '1px solid rgba(26,140,255,0.25)', color: '#7CC0FF' }}
           onMouseEnter={e => { (e.currentTarget).style.background = 'rgba(26,140,255,0.18)' }}
           onMouseLeave={e => { (e.currentTarget).style.background = 'rgba(26,140,255,0.1)' }}
@@ -181,11 +187,12 @@ export default function TasksPage() {
                       return (
                         <div
                           key={task.id}
-                          className="group rounded-xl p-3 cursor-pointer transition-all"
+                          className={`group rounded-xl p-3 transition-all ${task.remote ? '' : 'cursor-pointer'}`}
                           style={{
                             background: 'rgba(8,17,31,0.7)',
                             border: '1px solid rgba(255,255,255,0.07)',
                           }}
+                          title={task.remote ? 'Tarefa do Hermes na VPS — acompanhe e altere pelo painel Agent do projeto' : undefined}
                           onClick={() => openEdit(task)}
                           onMouseEnter={e => { (e.currentTarget).style.borderColor = col.border }}
                           onMouseLeave={e => { (e.currentTarget).style.borderColor = 'rgba(255,255,255,0.07)' }}
@@ -215,8 +222,10 @@ export default function TasksPage() {
                             </p>
                           )}
 
+                          {task.remote && <p className="text-[9px] mt-1" style={{ color: 'rgba(183,141,255,0.7)' }}>Hermes · na VPS</p>}
+
                           {/* Actions */}
-                          <div className="flex items-center justify-between mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {!task.remote && <div className="flex items-center justify-between mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             {canAdvance ? (
                               <button
                                 onClick={e => { e.stopPropagation(); void advanceStatus(task) }}
@@ -239,7 +248,7 @@ export default function TasksPage() {
                             >
                               {isDeleting ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
                             </button>
-                          </div>
+                          </div>}
                         </div>
                       )
                     })}

@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
-**Data:** 2026-10-22
-**Versão:** 3.85.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Data:** 2026-10-23
+**Versão:** 3.86.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## Project First — Fase 3 (v3.86.0)
+
+Projeto atual escolhido no topo da barra lateral (com botão IDE) e nas telas cheias; Tarefas, Planejar, AI Hub, Squad e Workspace seguem ele. Não testado pela tela.
 
 ## Project First — Fases 1 e 2 (v3.84.0 / v3.85.0)
 

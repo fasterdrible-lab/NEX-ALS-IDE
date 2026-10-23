@@ -10,7 +10,8 @@
   - [x] Fase 2 — Novo projeto com 3 caminhos (v3.85.0): criar no PC / clonar do Git / pasta existente, todos cadastram o projeto sem VPS; "Tornar projeto" nas pastas recentes (`local-folders.json` intacto)
   - [ ] Fase 2 pela tela: criar um projeto de cada jeito → aparece em Projetos com "PC" e abre a janela; Tornar projeto numa pasta recente; clonar repositório privado (login do Git do Windows)
   - [ ] VPS SALEIA: chave padrão do PC autorizada em 2026-10-22 — clicar Testar no Zeus (fica verde e grava o fingerprint)
-  - [ ] Fase 3 — projeto atual em todo o app (seletor no topo; AI Hub, Squad, Planning, Tasks, Workspace, IDE, Launcher leem dele; dados antigos em "Sem projeto")
+  - [x] Fase 3 — projeto atual em todo o app (v3.86.0): seletor + botão IDE na barra lateral e nas telas cheias; Tarefas/Planejar filtram e criam no projeto (tarefas do Hermes da ZEUS só leitura); AI Hub Agent e conversas, Squad e Workspace seguem o projeto; "Todos os projetos" mostra os dados antigos
+  - [ ] Fase 3 pela tela: escolher o ACESSIBILIDADE → Tarefas mostra as 36 do Hermes "na VPS"; botão IDE abre a pasta; Squad vai para a pasta do OneDrive; AI Hub → Agent abre nele; trocar o projeto numa janela muda nas outras
   - [ ] Fase 4 — ambientes do projeto (agente = ZEUS, staging, produção protegida) e deploy só pelos gates; proteção contra `..` em todo `local:*`
 
 - [x] **Phase D — Infraestrutura + Aprendizado** — já entregue em partes, faltava só marcar (conferido no CHANGELOG em 2026-10-19): operador de telemetria VPS = Ponto 9 / `OperatorPage` (v3.43.0) + alertas virando incidentes com diagnóstico do Hermes (FASE 7, v3.69.0); feedback loop do Squad = ContextBuilder no stream (v3.37.0) + banner "Salvar Memória" com busca FTS5 (v3.38.0) + Memória Persistente `squad_memories` (v3.48.0); workspace intelligence = Ponto 11 / `WorkspacePage` (v3.45.0) + Aprendizado Contínuo (v3.44.0)

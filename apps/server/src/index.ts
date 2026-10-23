@@ -25,7 +25,7 @@ const DATA_DIR = process.env['ZEUS_DATA_DIR'] ?? '/opt/zeus-hermes/data'
 const PORT = Number(process.env['ZEUS_PORT'] ?? 8790)
 const HOST = '127.0.0.1'
 const MAX_BODY = 64 * 1024
-const VERSION = '3.85.0'
+const VERSION = '3.86.0'
 
 fs.mkdirSync(DATA_DIR, { recursive: true })
 process.env['DATABASE_URL'] = `file:${path.join(DATA_DIR, 'zeus.db')}`

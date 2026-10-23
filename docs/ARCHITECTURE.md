@@ -1547,6 +1547,19 @@ e terminam em `ProjectsService.create({ localPath, vpsServerId: null })` + abrir
 (`setLocalFolderOpener`, registrado pelo main.ts). As pastas recentes (`local-folders.json`) continuam
 sendo só "recentes"; "Tornar projeto" abre o modal em `existing` com a pasta.
 
+## Project First — Fase 3: projeto atual (v3.86.0)
+
+`apps/web/src/lib/current-project.tsx` — `CurrentProjectProvider` (em volta das rotas, no App.tsx) com a
+lista de projetos e o id escolhido em `localStorage['zeus.currentProjectId']` (mesma origem em todas as
+janelas; o evento `storage` sincroniza as abertas; sem storage = vale só na janela). `useCurrentProject()`
+→ `{ projects, current, setCurrentId, reload }`; `current = null` = "Todos os projetos". Preferência de
+tela, não dado: nada vai para o banco. `openProjectIde(p)` é o único caminho para abrir a IDE de um
+projeto (VPS → `window:openIde` com a pasta remota; só PC → IDE local). `ProjectSwitcher` (barra lateral com
+botão IDE; topo de AI Hub, Squad, Planejar, Workspace).
+
+`tasks:list` com `projectId` e sem `ownerAgent`, para projeto migrado ao zeus-hermes: tarefas do Hermes vêm
+do serviço (`remote: true`, só leitura em Tarefas/Planejar) + as dos outros agentes do banco do PC.
+
 ## Cópia de segurança do banco (v3.77.1)
 
 `apps/desktop/src/db-backup.ts` — `startDatabaseBackups(userData)` roda no `main.ts` logo depois de

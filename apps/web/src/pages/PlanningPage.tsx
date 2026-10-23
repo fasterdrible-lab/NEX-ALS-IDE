@@ -6,6 +6,8 @@ import {
   Play, ChevronRight, Loader2, RefreshCw, Check, Clock,
 } from 'lucide-react'
 import { ipc, type AgentTask, type TaskStatus, type TaskPriority, type ScheduledJob } from '../lib/ipc'
+import { useCurrentProject } from '../lib/current-project'
+import ProjectSwitcher from '../components/ProjectSwitcher'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -66,7 +68,7 @@ function scheduleLabel(job: ScheduledJob): string {
 
 // ── task form modal ───────────────────────────────────────────────────────────
 
-function TaskModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function TaskModal({ projectId, onClose, onCreated }: { projectId: string; onClose: () => void; onCreated: () => void }) {
   const [title,  setTitle]  = useState('')
   const [desc,   setDesc]   = useState('')
   const [agent,  setAgent]  = useState<AgentName>('friday')
@@ -77,7 +79,7 @@ function TaskModal({ onClose, onCreated }: { onClose: () => void; onCreated: () 
     if (!title.trim()) return
     setSaving(true)
     try {
-      await ipc.tasks.create({ title: title.trim(), description: desc.trim(), ownerAgent: agent, priority: prio, status: 'TODO' })
+      await ipc.tasks.create({ title: title.trim(), description: desc.trim(), ownerAgent: agent, priority: prio, status: 'TODO', projectId })
       onCreated()
       onClose()
     } catch (e) { console.error(e) } finally { setSaving(false) }
@@ -133,6 +135,8 @@ function TaskModal({ onClose, onCreated }: { onClose: () => void; onCreated: () 
 export default function PlanningPage() {
   const navigate = useNavigate()
   const { leave } = useWindowExit()
+  const { current } = useCurrentProject()
+  const projectId = current?.id
 
   const [tasks,       setTasks]       = useState<AgentTask[]>([])
   const [jobs,        setJobs]        = useState<ScheduledJob[]>([])
@@ -148,11 +152,11 @@ export default function PlanningPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [t, j] = await Promise.all([ipc.tasks.list(), ipc.jobs.list()])
+      const [t, j] = await Promise.all([ipc.tasks.list(projectId ? { projectId } : undefined), ipc.jobs.list()])
       setTasks(t as AgentTask[])
       setJobs(j as ScheduledJob[])
     } catch (e) { console.error(e) } finally { setLoading(false) }
-  }, [])
+  }, [projectId])
 
   useEffect(() => { void load() }, [load])
 
@@ -215,6 +219,7 @@ export default function PlanningPage() {
         <div className="w-px h-4 bg-slate-800" />
         <ClipboardList size={14} style={{ color: '#1A8CFF' }} />
         <span className="text-sm font-semibold" style={{ color: '#7CC0FF' }}>Planejamento</span>
+        <ProjectSwitcher className="w-60 ml-2" />
         <div className="flex-1" />
         {!loading && (
           <span className="text-xs text-slate-600">
@@ -225,8 +230,9 @@ export default function PlanningPage() {
           className="flex items-center gap-1 text-slate-600 hover:text-slate-400 transition-colors">
           {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
         </button>
-        <button onClick={() => setTaskModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
+        <button onClick={() => setTaskModal(true)} disabled={!projectId}
+          title={projectId ? `Nova tarefa em ${current?.name}` : 'Escolha um projeto para criar tarefas'}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: 'rgba(26,140,255,0.1)', border: '1px solid rgba(26,140,255,0.25)', color: '#7CC0FF' }}>
           <Plus size={11} /> Nova Tarefa
         </button>
@@ -282,7 +288,7 @@ export default function PlanningPage() {
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <span className="text-sm font-medium text-slate-200 truncate">{task.title}</span>
                           <span className="text-[10px]" style={{ color: ps.color }}>{ps.label}</span>
-                          <button onClick={() => cycleStatus(task)}
+                          <button onClick={() => { if (!task.remote) void cycleStatus(task) }}
                             className="px-1.5 py-0.5 rounded text-[10px] cursor-pointer transition-opacity hover:opacity-70"
                             style={{ background: ss.bg, color: ss.text }}>
                             {ss.label}
@@ -293,9 +299,10 @@ export default function PlanningPage() {
                         )}
                         <span className="text-[10px] text-slate-600">
                           {AGENT_EMOJI[task.ownerAgent as AgentName] ?? '🤖'} @{task.ownerAgent}
+                          {task.remote && <span className="ml-2" style={{ color: 'rgba(183,141,255,0.7)' }}>· na VPS (painel Agent)</span>}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      {!task.remote && <div className="flex items-center gap-1.5 shrink-0">
                         {task.status !== 'DONE' && (
                           <button onClick={() => runTask(task)}
                             title="Executar com agente no Squad"
@@ -307,7 +314,7 @@ export default function PlanningPage() {
                           className="p-1.5 rounded-lg transition-colors hover:bg-red-900/20 text-slate-700 hover:text-red-400">
                           <Trash2 size={12} />
                         </button>
-                      </div>
+                      </div>}
                     </div>
                   )
                 })
@@ -402,7 +409,7 @@ export default function PlanningPage() {
       </div>
 
       {taskModal && (
-        <TaskModal onClose={() => setTaskModal(false)} onCreated={() => void load()} />
+        projectId && <TaskModal projectId={projectId} onClose={() => setTaskModal(false)} onCreated={() => void load()} />
       )}
     </div>
   )

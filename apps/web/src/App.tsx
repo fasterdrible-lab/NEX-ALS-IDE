@@ -27,6 +27,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 import Layout from './components/Layout'
+import { CurrentProjectProvider } from './lib/current-project'
 import Dashboard from './pages/Dashboard'
 import VpsList from './pages/VpsList'
 import ProjectsList from './pages/ProjectsList'
@@ -114,7 +115,9 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <AppRoutes />
+        <CurrentProjectProvider>
+          <AppRoutes />
+        </CurrentProjectProvider>
       </AuthProvider>
     </ErrorBoundary>
   )

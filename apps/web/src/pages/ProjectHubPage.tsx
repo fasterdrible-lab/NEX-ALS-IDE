@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import type { Project, GitCommit, GitStatus } from '@cwm/config'
 import { ipc, type HermesProjectAgentInfo, type AgentTask } from '../lib/ipc'
+import { useCurrentProject, openProjectIde } from '../lib/current-project'
 
 /**
  * Página de um projeto: ponto único para abrir o que é dele já na pasta certa — Agent (Hermes),
@@ -13,6 +14,7 @@ import { ipc, type HermesProjectAgentInfo, type AgentTask } from '../lib/ipc'
  */
 export default function ProjectHubPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const { setCurrentId } = useCurrentProject()
   const navigate = useNavigate()
   const [project, setProject] = useState<Project | null | undefined>(undefined)
   const [agent, setAgent] = useState<HermesProjectAgentInfo | null>(null)
@@ -27,6 +29,8 @@ export default function ProjectHubPage() {
       const p = list.find(x => x.id === projectId) ?? null
       setProject(p)
       if (!p) return
+      // Abrir a página de um projeto o torna o projeto atual (AI Hub, Squad, Planejar… seguem ele)
+      setCurrentId(p.id)
       // Resumo é best-effort: cada parte falha sozinha sem derrubar a página.
       ipc.hermes.agent.status(p.id).then(setAgent).catch(() => setAgent(null))
       ipc.tasks.list({ projectId: p.id, ownerAgent: 'hermes' }).then(setTasks).catch(() => setTasks([]))
@@ -38,7 +42,7 @@ export default function ProjectHubPage() {
         ipc.git.local.status(p.localPath).then(setGit).catch(() => setGit(null))
       }
     }).catch(() => setProject(null))
-  }, [projectId])
+  }, [projectId, setCurrentId])
 
   if (project === undefined) {
     return <div className="p-8 text-slate-500 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Carregando…</div>
@@ -56,10 +60,7 @@ export default function ProjectHubPage() {
   const vpsName = encodeURIComponent(project.vpsServer?.name ?? vpsId)
   const path = encodeURIComponent(project.remotePath)
   const openIde = () => {
-    const opened = vpsId
-      ? ipc.window.openIde(vpsId, project.vpsServer?.name ?? vpsId, project.remotePath)
-      : ipc.window.openIdeLocal(project.localPath)
-    void opened.catch(e => setLaunchMsg(String(e instanceof Error ? e.message : e)))
+    void openProjectIde(project).catch(e => setLaunchMsg(String(e instanceof Error ? e.message : e)))
   }
   const done = tasks.filter(t => t.status === 'DONE').length
   const running = tasks.find(t => t.status === 'IN_PROGRESS')

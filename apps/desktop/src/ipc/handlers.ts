@@ -40,6 +40,7 @@ import {
   type AgentName,
   type AgentSkillInput,
   type AgentTaskInput,
+  type AgentTask,
   type TaskStatus,
   ScheduledJobsService,
   type ScheduledJobInput,
@@ -1559,7 +1560,8 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
   })
 
   // Conversas persistidas
-  ipcMain.handle('ai:conv:list',        ()             => wrapHandler(() => aiSvc.conversations.list()))
+  ipcMain.handle('ai:conv:list',        (_, projectId?: unknown) => wrapHandler(() =>
+    aiSvc.conversations.list(50, typeof projectId === 'string' && projectId.length <= 64 ? projectId : undefined)))
   ipcMain.handle('ai:conv:get',         (_, id)        => wrapHandler(() => aiSvc.conversations.get(id)))
   ipcMain.handle('ai:conv:create',      (_, data)      => wrapHandler(() => aiSvc.conversations.create(data)))
   ipcMain.handle('ai:conv:updateTitle', (_, data: {id:string;title:string}) => wrapHandler(() => aiSvc.conversations.updateTitle(data.id, data.title)))
@@ -2426,6 +2428,19 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
       // Tarefas do Hermes de projeto migrado vivem no serviço da VPS.
       if (filters?.projectId && filters.ownerAgent === 'hermes' && hermesRemote.isRemote(filters.projectId)) {
         return hermesRemote.call('GET', `${remoteP(filters.projectId)}/tasks`)
+      }
+      // Planejar/Tarefas de um projeto migrado: as do Hermes vêm do serviço (as do PC são cópia antiga),
+      // marcadas `remote` (só leitura aqui — mexer nelas é pelo painel Agent); as dos outros agentes, do PC.
+      if (filters?.projectId && !filters.ownerAgent && hermesRemote.isRemote(filters.projectId)) {
+        return (async () => {
+          const [local, remote] = await Promise.all([
+            tasksSvc.list(filters),
+            hermesRemote.call('GET', `${remoteP(filters.projectId!)}/tasks`) as Promise<AgentTask[]>,
+          ])
+          const own = local.filter((t: AgentTask) => t.ownerAgent !== 'hermes')
+          const fromVps = remote.filter(t => !filters.status || t.status === filters.status).map(t => ({ ...t, remote: true }))
+          return [...fromVps, ...own]
+        })()
       }
       return tasksSvc.list(filters)
     })

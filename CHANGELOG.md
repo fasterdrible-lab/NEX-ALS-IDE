@@ -1,5 +1,18 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.86.0] — 2026-10-23
+
+### Adicionado — Project First, Fase 3: projeto atual em todo o app
+
+- **Seletor de projeto** no topo da barra lateral, com botão **IDE** ao lado (abre a IDE do projeto numa janela própria: a pasta da VPS, ou a IDE local na pasta do PC). O mesmo seletor aparece nas telas cheias: AI Hub, Squad, Planejar e Workspace. Vale para todas as janelas do Zeus e é lembrado ao reabrir. Abrir a página de um projeto o torna o projeto atual.
+- **Tarefas e Planejar** mostram só as tarefas do projeto escolhido ("Todos os projetos" mostra tudo, inclusive as antigas sem projeto); tarefa nova entra no projeto e **pede um projeto escolhido**. Num projeto que roda na ZEUS, as tarefas do Hermes vêm do serviço da VPS (as do PC eram cópia antiga), marcadas "na VPS" e só leitura aqui — mexer nelas é pelo painel Agent.
+- **AI Hub:** o modo Agent abre no projeto atual; conversa nova fica ligada ao projeto; a lista de conversas mostra as do projeto e, num grupo **Sem projeto** embaixo, as antigas (conversas de outros projetos somem; "Todos os projetos" mostra tudo). Filtro feito no main (`ai:conv:list` com `projectId`), para o limite de 50 não cortar as do projeto.
+- **Squad:** escolher o projeto já põe o Squad na pasta do PC dele (ou na VPS, se ele só existe lá).
+- **Workspace:** projeto com VPS já vem com VPS e pasta escolhidas; projeto só no PC avisa que a análise roda numa VPS.
+- IDE aberta de um jeito só (`openProjectIde`) na barra lateral, Lançador e página do projeto.
+
+**Verificado:** `pnpm typecheck` (6 pacotes). **Não testado pela tela.**
+
 ## [3.85.0] — 2026-10-22
 
 ### Adicionado — Project First, Fase 2: Novo projeto em 3 caminhos

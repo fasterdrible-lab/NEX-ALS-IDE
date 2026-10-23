@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, Send, X, Loader2, Users, Bot, Zap, Play, CheckCircle, AlertCircle, Server, FolderOpen, ChevronDown, ChevronRight, ChevronUp, FileText, Monitor, Trash2, Eraser, ArrowDown, User2, ExternalLink, RefreshCw, BookOpen, Sparkles, RotateCw, BarChart2, Activity, FilePen, Cpu, Clock, FileCheck2, Brain } from 'lucide-react'
 import { ipc, type AgentSkill, type SquadMemory } from '../lib/ipc'
+import { useCurrentProject } from '../lib/current-project'
+import ProjectSwitcher from '../components/ProjectSwitcher'
 
 // ── Agent metadata (UI only) ─────────────────────────────────────────────────
 const AGENT_NAMES = [
@@ -589,7 +591,8 @@ export default function SquadPage() {
     ipc.squad.session.list().then(setSessions).catch(console.error)
     ipc.vps.list().then(list => {
       setVpsList(list as VpsItem[])
-      if (list.length > 0) setSelectedVpsId((list[0] as VpsItem).id)
+      // `prev ||`: não passa por cima da VPS do projeto atual se ela já foi escolhida
+      if (list.length > 0) setSelectedVpsId(prev => prev || (list[0] as VpsItem).id)
       if (list.length > 1) setProdVpsId((list[1] as VpsItem).id)
     }).catch(console.error)
   }, [])
@@ -637,6 +640,18 @@ export default function SquadPage() {
   }, [autoExecute])
   // Reload KB when project (localPath) changes
   useEffect(() => { setKb(loadKB(localPath || '__global__')) }, [localPath])
+
+  // Projeto atual (Project First): ao escolher um projeto, o Squad trabalha na pasta do PC dele
+  // (ou na VPS, se ele só existe lá). Trocar à mão depois continua valendo até trocar o projeto.
+  const { current: currentProject } = useCurrentProject()
+  useEffect(() => {
+    if (!currentProject) return
+    if (currentProject.localPath) {
+      setExecutionMode('local'); setLocalPath(currentProject.localPath)
+    } else if (currentProject.vpsServerId) {
+      setExecutionMode('vps'); setSelectedVpsId(currentProject.vpsServerId)
+    }
+  }, [currentProject?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const key = localPath || '__global__'
@@ -1627,6 +1642,7 @@ export default function SquadPage() {
           <Users size={15} className="text-brand-400 shrink-0" />
           <span className="font-semibold text-sm text-slate-100">Squad</span>
         </div>
+        <div className="px-2 pt-2"><ProjectSwitcher /></div>
 
         <div className="flex-1 overflow-y-auto py-2 px-2 space-y-1">
           {AGENT_NAMES.map(name => {
