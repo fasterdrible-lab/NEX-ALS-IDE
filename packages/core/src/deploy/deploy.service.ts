@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import { getPrismaClient } from '@cwm/db'
 import { GitCloneUrlSchema } from '@cwm/config'
 import type { TerminalService } from '../terminal/terminal.service.js'
@@ -22,10 +25,30 @@ const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 const SHA = /^[0-9a-f]{40}$/
 const LOG_MAX = 200_000
 const CMD_TIMEOUT = 15 * 60_000
+/** Saída do git quando a VPS não tem acesso ao repositório (privado sem chave, login pedido). */
+const NO_ACCESS = /Permission denied \(publickey\)|Repository not found|could not read Username|Authentication failed|terminal prompts disabled/i
+export const NO_ACCESS_HINT = 'A VPS não tem acesso ao repositório — use "Dar acesso ao GitHub" no ambiente'
+
+const GH = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/
+/** Repositório do GitHub em qualquer formato → `dono/nome` e o endereço SSH (usado com a chave de deploy). */
+export function githubRepoOf(url: string): { fullName: string; sshUrl: string } | null {
+  const m = GH.exec(url.trim())
+  return m ? { fullName: `${m[1]}/${m[2]}`, sshUrl: `git@github.com:${m[1]}/${m[2]}.git` } : null
+}
+
+/** Chave de deploy do ambiente na VPS (só letras/números no nome — vai sem aspas no comando). */
+const keyFile = (envId: string) => `~/.ssh/zeus_deploy_${envId.replace(/[^A-Za-z0-9]/g, '').slice(0, 32)}`
+const gitSsh = (envId: string) => `GIT_SSH_COMMAND="ssh -i ${keyFile(envId)} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"`
 
 export interface DeployOptions {
   confirm?: string
   onLog?: (line: string) => void
+}
+
+/** O que dar acesso precisa do GitHub (login do PC): conferir o repositório e cadastrar a chave só de leitura. */
+export interface GithubAccess {
+  ensureRepo: (url: string) => Promise<{ fullName: string }>
+  addKey: (fullName: string, title: string, publicKey: string) => Promise<void>
 }
 
 export class DeployService {
@@ -75,7 +98,7 @@ export class DeployService {
     }
     let commit = '', previous = '', status: DeployStatus = 'failed', smoke = ''
     try {
-      const r = await this.run(env, project.gitRepo, pinned, say)
+      const r = await this.run(env, await this.resolveGitRepo(project, say), pinned, say)
       commit = r.commit; previous = r.previous; smoke = r.smoke; status = r.status
     } catch (e) {
       say(`✗ ${e instanceof Error ? e.message : String(e)}`)
@@ -96,15 +119,25 @@ export class DeployService {
     const where = env.kind === 'production' ? 'PRODUÇÃO' : 'staging'
     say(`▶ Deploy em ${where} — ${env.vpsName}:${env.remotePath} (branch ${env.branch})`)
 
+    // Com chave de deploy ("Dar acesso ao GitHub"): clone/fetch pelo SSH com ela
+    const gh = githubRepoOf(gitRepo)
+    const hasKey = !!gh && (await this.sh(vps, `test -f ${keyFile(env.id)} && echo HAS_KEY || true`, 30_000)).out.trim().endsWith('HAS_KEY')
+    const gitEnv = hasKey ? `${gitSsh(env.id)} ` : 'GIT_TERMINAL_PROMPT=0 '
+    const noAccess = (what: string, out: string) =>
+      new Error(NO_ACCESS.test(out) ? `${NO_ACCESS_HINT}.\n(${what}: ${out.trim().split('\n').pop()})` : `${what} falhou: ${out.slice(-600)}`)
+
     // 1. Pasta: repositório, vazia (clona) ou com outra coisa (para)
     const probe = (await this.sh(vps, `if [ -d ${P}/.git ]; then echo HAS_GIT; elif [ -e ${P} ] && [ -n "$(ls -A ${P} 2>/dev/null)" ]; then echo NOT_EMPTY; else echo EMPTY; fi`, 30_000)).out.trim()
     if (probe.endsWith('NOT_EMPTY')) throw new Error(`A pasta ${env.remotePath} já tem arquivos e não é um repositório git — o Zeus não mistura. Use uma pasta vazia ou um clone do projeto.`)
     if (probe.endsWith('EMPTY')) {
-      const url = GitCloneUrlSchema.safeParse(gitRepo)
-      if (!url.success) throw new Error('A pasta está vazia e o projeto não tem o endereço do repositório (GitHub) — cadastre em Projetos para o Zeus clonar')
+      const url = GitCloneUrlSchema.safeParse(hasKey ? gh!.sshUrl : gitRepo)
+      if (!url.success) throw new Error('A pasta está vazia e o Zeus não achou o endereço do repositório (nem no cadastro, nem no origin da pasta do PC ou do agente) — informe em Projetos → editar')
       say(`• Clonando ${url.data}…`)
-      const c = await this.sh(vps, `mkdir -p "$(dirname ${P})" && git clone --quiet -- ${q(url.data)} ${P}`, 10 * 60_000)
-      if (c.code !== 0) throw new Error(`git clone falhou na VPS${c.out ? `: ${c.out.slice(-600)}` : ''} (repositório privado: a VPS precisa de acesso — chave de deploy no GitHub)`)
+      const c = await this.sh(vps, `mkdir -p "$(dirname ${P})" && ${gitEnv}git clone --quiet -- ${q(url.data)} ${P}`, 10 * 60_000)
+      if (c.code !== 0) throw noAccess('git clone', c.out)
+    } else if (hasKey) {
+      // Clone antigo por https: passa a buscar pelo SSH da chave
+      await this.sh(vps, `cd ${P} && git remote set-url origin ${q(gh!.sshUrl)}`, 30_000)
     }
 
     // 2. Commit de agora (para voltar) e alteração feita direto na VPS
@@ -115,8 +148,8 @@ export class DeployService {
 
     // 3. Busca e escolhe o commit
     say('• git fetch…')
-    const f = await this.sh(vps, `cd ${P} && git fetch --quiet origin`, 5 * 60_000)
-    if (f.code !== 0) throw new Error(`git fetch falhou: ${f.out.slice(-600)}`)
+    const f = await this.sh(vps, `cd ${P} && ${gitEnv}git fetch --quiet origin`, 5 * 60_000)
+    if (f.code !== 0) throw noAccess('git fetch', f.out)
     let commit: string
     if (pinned) {
       const has = await this.sh(vps, `cd ${P} && git cat-file -e ${pinned}^{commit}`, 30_000)
@@ -152,6 +185,57 @@ export class DeployService {
     if (smoke !== 'ok') return failed(`Smoke test: ${smoke}`)
     say('✓ Deploy concluído')
     return { commit, previous, status: 'ok', smoke: 'ok' }
+  }
+
+  /**
+   * Endereço do repositório: o do cadastro; sem ele, o `origin` da pasta do PC (com .git próprio) ou da
+   * pasta do agente na VPS — e grava no projeto. '' = não achou.
+   */
+  async resolveGitRepo(project: { id: string; gitRepo: string; localPath: string; remotePath: string; vpsServerId: string | null }, say?: (l: string) => void): Promise<string> {
+    if (GitCloneUrlSchema.safeParse(project.gitRepo).success) return project.gitRepo.trim()
+    const candidates: string[] = []
+    if (project.localPath && existsSync(path.join(project.localPath, '.git'))) {
+      candidates.push(await new Promise<string>(res => {
+        execFile('git', ['-C', project.localPath, 'remote', 'get-url', 'origin'], { timeout: 10_000, windowsHide: true }, (err, out) => res(err ? '' : String(out).trim()))
+      }))
+    }
+    if (project.vpsServerId && project.remotePath) {
+      const r = await this.sh(project.vpsServerId, `cd ${q(project.remotePath)} && git remote get-url origin`, 30_000).catch(() => ({ code: 1, out: '' }))
+      if (r.code === 0) candidates.push(r.out.trim().split('\n').pop() ?? '')
+    }
+    const found = candidates.find(u => GitCloneUrlSchema.safeParse(u).success)
+    if (!found) return ''
+    await this.db.project.update({ where: { id: project.id }, data: { gitRepo: found } })
+    say?.(`• Repositório do projeto: ${found} (lido do origin e gravado no cadastro)`)
+    return found
+  }
+
+  /**
+   * "Dar acesso ao GitHub": cria (uma vez) a chave do ambiente na VPS dele e cadastra a pública no
+   * repositório como deploy key SÓ DE LEITURA, pelo login do GitHub do PC. A chave privada não sai da VPS.
+   */
+  async grantGithubAccess(envId: string, gh: GithubAccess): Promise<{ fullName: string; message: string }> {
+    const env = await this.envs.get(envId)
+    if (!env?.vpsServerId) throw new Error('Ambiente sem VPS')
+    const project = await this.db.project.findUnique({ where: { id: env.projectId } })
+    if (!project) throw new Error('Projeto não encontrado')
+    const repo = githubRepoOf(await this.resolveGitRepo(project))
+    if (!repo) throw new Error('O projeto precisa do endereço de um repositório do GitHub (Projetos → editar)')
+    const { fullName } = await gh.ensureRepo(`https://github.com/${repo.fullName}`)
+    const K = keyFile(env.id)
+    const k = await this.sh(env.vpsServerId,
+      `mkdir -p ~/.ssh && chmod 700 ~/.ssh && { [ -f ${K} ] || ssh-keygen -q -t ed25519 -N '' -C ${q(`zeus-deploy-${env.kind}`)} -f ${K}; } && cat ${K}.pub`, 60_000)
+    const pub = k.out.trim().split('\n').pop() ?? ''
+    if (k.code !== 0 || !pub.startsWith('ssh-ed25519 ')) throw new Error(`Não consegui criar a chave na VPS: ${k.out.slice(-300)}`)
+    const label = env.kind === 'production' ? 'produção' : 'staging'
+    await gh.addKey(fullName, `Zeus deploy — ${label} (${env.vpsName}:${env.remotePath})`.slice(0, 100), pub)
+    // O GitHub pode levar alguns segundos para aceitar a chave nova
+    for (let i = 0; i < 4; i++) {
+      const t = await this.sh(env.vpsServerId, `${gitSsh(env.id)} git ls-remote ${q(`git@github.com:${fullName}.git`)} HEAD`, 60_000)
+      if (t.code === 0) return { fullName, message: `${env.vpsName} já lê ${fullName} (chave só de leitura).` }
+      await new Promise(r => setTimeout(r, 3000))
+    }
+    throw new Error('A chave foi cadastrada no GitHub, mas a VPS ainda não conseguiu ler o repositório — tente o deploy em alguns segundos')
   }
 
   /** Comandos do ambiente, um por linha (# = comentário), na pasta dele. false no primeiro que falhar. */

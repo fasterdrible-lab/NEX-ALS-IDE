@@ -495,6 +495,8 @@ export const ipc = {
     save: (data: ProjectEnvironmentInput) => invoke<ProjectEnvironment>('env:save', data),
     remove: (envId: string) => invoke<void>('env:remove', envId),
     history: (envId: string) => invoke<DeployRecord[]>('env:history', envId),
+    /** Repositório privado: chave do ambiente na VPS + deploy key só de leitura no GitHub (login do PC). */
+    grantGithub: (envId: string) => invoke<{ fullName: string; message: string }>('env:grantGithub', envId),
     protection: (vpsId: string, path?: string) =>
       invoke<{
         productionHere: { projectName: string; remotePath: string } | null

@@ -40,4 +40,4 @@ export {
 export {
   EnvironmentsService, type ProjectEnvironment, type DeployRecord, type DeployStatus, type ProductionTarget,
 } from './deploy/environments.service.js'
-export { DeployService, type DeployOptions } from './deploy/deploy.service.js'
+export { DeployService, githubRepoOf, NO_ACCESS_HINT, type DeployOptions, type GithubAccess } from './deploy/deploy.service.js'

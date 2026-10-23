@@ -207,11 +207,11 @@ export class LocalGitService {
     return { fullName: r.data.full_name, created: true }
   }
 
-  /** Cadastra a chave pública da VPS como deploy key com escrita — vale só para este repositório. */
-  async githubAddDeployKey(fullName: string, title: string, publicKey: string): Promise<void> {
+  /** Cadastra a chave pública da VPS como deploy key — vale só para este repositório. `readOnly`: ambientes de deploy só leem. */
+  async githubAddDeployKey(fullName: string, title: string, publicKey: string, readOnly = false): Promise<void> {
     if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(fullName)) throw new Error('Repositório inválido.')
     if (!/^ssh-ed25519 [A-Za-z0-9+/=]+( \S+)?$/.test(publicKey.trim())) throw new Error('Chave pública inválida.')
-    const r = await this.githubApi<{ message?: string; errors?: { message?: string }[] }>('POST', `/repos/${fullName}/keys`, { title, key: publicKey.trim(), read_only: false })
+    const r = await this.githubApi<{ message?: string; errors?: { message?: string }[] }>('POST', `/repos/${fullName}/keys`, { title, key: publicKey.trim(), read_only: readOnly })
     // 422 "key is already in use" = já cadastrada neste repositório (ligar de novo) — segue.
     if (r.status === 422 && /already in use/i.test(JSON.stringify(r.data))) return
     if (r.status >= 300) throw new Error(`GitHub recusou a chave (${r.status}): ${r.data.message ?? 'sem detalhe'}`)

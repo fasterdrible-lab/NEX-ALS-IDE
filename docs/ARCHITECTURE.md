@@ -1609,6 +1609,12 @@ checkout --detach → comandos (1 por linha, # comentário, 15 min cada) → smo
 falhou depois do checkout e é produção com previous ≠ commit → checkout previous + comandos → rolled_back
 ```
 
+Repositório (v3.87.1): `resolveGitRepo()` — `gitRepo` do cadastro, senão `origin` da pasta do PC (com `.git`
+próprio, `execFile`) ou da pasta do agente na VPS; grava no projeto. Privado: `grantGithubAccess(envId)` →
+`ssh-keygen` na VPS do ambiente (`~/.ssh/zeus_deploy_<envId>`, uma vez) → `LocalGitService.githubAddDeployKey(…, readOnly)`
+pelo login do GitHub do PC → `git ls-remote` com a chave. Com a chave, clone/fetch usam
+`GIT_SSH_COMMAND="ssh -i <chave> -o IdentitiesOnly=yes"` e o endereço SSH; sem ela, `GIT_TERMINAL_PROMPT=0`.
+
 Gate da produção dentro de `deploy()`: `confirm === project.name`; com staging, último deploy dele `ok`
 (+ smoke `ok` se tem URL) e o commit dele; sem staging, o branch. Um deploy por ambiente de cada vez.
 

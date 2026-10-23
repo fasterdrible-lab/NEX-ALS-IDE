@@ -1,5 +1,18 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.87.1] — 2026-10-23
+
+### Corrigido — deploy do ACESSIBILIDADE falhava em staging ("falhou" sem motivo na tela)
+
+O projeto não tinha o endereço do repositório no cadastro, a pasta estava vazia e o Zeus não tinha de onde clonar — a mensagem só aparecia abrindo o log. E o repositório (AcessiCheck) é privado: a VPS-1 não tem acesso ao GitHub.
+
+- **Motivo da falha no próprio cartão** do ambiente (a última linha "✗" do log).
+- **Endereço do repositório descoberto sozinho:** sem `gitRepo` no cadastro, o Zeus lê o `origin` da pasta do PC (se ela tem `.git` próprio) ou da pasta do agente na VPS, e grava no projeto.
+- **Dar acesso ao GitHub** (no cartão, antes do 1º deploy ou quando falta acesso): o Zeus cria uma chave na VPS do ambiente (`~/.ssh/zeus_deploy_<ambiente>`, uma vez) e a cadastra no repositório como **chave de deploy só de leitura**, pelo login do GitHub do PC; confere com `git ls-remote`. A chave privada não sai da VPS. Depois, clone e fetch usam essa chave (clone antigo por https passa a buscar pelo SSH).
+- Sem chave, o git roda com `GIT_TERMINAL_PROMPT=0` (não fica esperando senha) e "sem acesso" vira a mensagem que indica o botão.
+
+**Verificado:** `pnpm typecheck` (6 pacotes); na VPS-1 com cópia do banco — repositório descoberto pelo origin do PC e gravado, repositório inacessível → mensagem de acesso, chave criada na VPS e reutilizada na 2ª vez (GitHub simulado: **nenhuma chave cadastrada no GitHub de verdade**), VPS limpa no fim; o teste de deploy da 3.87.0 de novo 15/15. **Não testado pela tela.**
+
 ## [3.87.0] — 2026-10-23
 
 ### Adicionado — ambientes do projeto e deploy pelo gate (Project First, Fase 4b)

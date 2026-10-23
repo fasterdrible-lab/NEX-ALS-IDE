@@ -21,6 +21,13 @@ const STATUS: Record<DeployRecord['status'], { label: string; cls: string; icon:
   rolled_back: { label: 'falhou e voltou ao anterior', cls: 'text-amber-400', icon: Undo2 },
 }
 
+/** Motivo da falha = última linha "✗ …" do log (o log inteiro abre clicando no status). */
+const failReason = (d: DeployRecord | null | undefined) =>
+  d && (d.status === 'failed' || d.status === 'rolled_back')
+    ? d.log.split('\n').reverse().find(l => l.startsWith('✗'))?.replace(/^✗\s*/, '') ?? ''
+    : ''
+const NEEDS_ACCESS = /não tem acesso ao repositório/
+
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '')
 
 interface FormState { vpsServerId: string; remotePath: string; branch: string; url: string; deployCommands: string }
@@ -35,7 +42,16 @@ export default function ProjectEnvironments({ project }: { project: Project }) {
   const [log, setLog] = useState<{ envId: string; lines: string[] } | null>(null)
   const [promote, setPromote] = useState<ProjectEnvironment | null>(null)
   const [confirmText, setConfirmText] = useState('')
+  const [notice, setNotice] = useState('')
   const logRef = useRef<HTMLPreElement>(null)
+
+  const grantGithub = async (e: ProjectEnvironment) => {
+    if (!window.confirm(`Dar a ${e.vpsName} acesso de LEITURA ao repositório do projeto?\n\nO Zeus cria uma chave nessa VPS e a cadastra no GitHub como chave de deploy só de leitura (login do GitHub deste PC). A chave privada não sai da VPS.`)) return
+    setBusy(`gh:${e.id}`); setError(''); setNotice('')
+    try { setNotice((await ipc.env.grantGithub(e.id)).message) }
+    catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+    setBusy(null)
+  }
 
   const load = useCallback(() => {
     ipc.env.list(project.id).then(setEnvs).catch(e => setError(e instanceof Error ? e.message : String(e)))
@@ -112,6 +128,7 @@ export default function ProjectEnvironments({ project }: { project: Project }) {
       </p>
 
       {error && <p className="text-xs text-red-400 mb-3 whitespace-pre-wrap">{error}</p>}
+      {notice && <p className="text-xs text-emerald-400 mb-3">{notice}</p>}
 
       <div className="grid grid-cols-2 gap-3">
         {(['staging', 'production'] as const).map(k => {
@@ -144,6 +161,16 @@ export default function ProjectEnvironments({ project }: { project: Project }) {
                       {last.smoke === 'ok' ? ' · smoke ok' : ''}
                     </button>
                   ) : <p className="text-xs text-slate-600">Nenhum deploy ainda.</p>}
+                  {failReason(last) && (
+                    <p className={`text-[11px] whitespace-pre-wrap line-clamp-4 ${last?.status === 'rolled_back' ? 'text-amber-300/90' : 'text-red-300/90'}`}>{failReason(last)}</p>
+                  )}
+                  {(NEEDS_ACCESS.test(failReason(last)) || !last) && (
+                    <button onClick={() => void grantGithub(e)} disabled={busy !== null || !e.vpsServerId}
+                      title="Para repositório privado: chave só de leitura desta VPS no GitHub"
+                      className="text-[11px] text-sky-300 hover:underline disabled:opacity-40 text-left">
+                      {busy === `gh:${e.id}` ? 'Dando acesso…' : 'Dar acesso ao GitHub (repositório privado)'}
+                    </button>
+                  )}
                   {k === 'staging' ? (
                     <button onClick={() => void run(e)} disabled={busy !== null || !e.vpsServerId} className="btn-primary text-xs disabled:opacity-40">
                       {busy === e.id ? <Loader2 size={12} className="animate-spin" /> : <Rocket size={12} />} Deploy em staging

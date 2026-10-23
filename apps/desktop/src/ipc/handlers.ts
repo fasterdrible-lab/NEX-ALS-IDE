@@ -595,6 +595,15 @@ export function setupIpcHandlers(ipcMain: IpcMain, win?: BrowserWindow, notifMon
         productionPaths: onVps.map(t => ({ projectName: t.projectName, remotePath: t.remotePath })),
       }
     }))
+  // Repositório privado: chave do ambiente criada na VPS dele, cadastrada no GitHub (só leitura) pelo login do PC
+  ipcMain.handle('env:grantGithub', (_, envId: unknown) =>
+    wrapHandler(async () => {
+      requireAdmin()
+      return deploySvc.grantGithubAccess(parseOr(HermesProjectIdSchema.safeParse(envId)), {
+        ensureRepo: url => localGit.githubEnsureRepo({ url }),
+        addKey: (fullName, title, key) => localGit.githubAddDeployKey(fullName, title, key, true),
+      })
+    }))
   ipcMain.handle('deploy:run', (event, data: unknown) =>
     wrapHandler(async () => {
       requireAdmin()

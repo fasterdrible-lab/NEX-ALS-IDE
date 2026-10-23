@@ -1,7 +1,7 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
 **Data:** 2026-10-23
-**Versão:** 3.87.0 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
+**Versão:** 3.87.1 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
 
 ## Ambientes e deploy pelo gate (v3.87.0)
