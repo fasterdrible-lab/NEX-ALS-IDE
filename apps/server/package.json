@@ -1,6 +1,6 @@
 {
   "name": "@cwm/server",
-  "version": "3.87.1",
+  "version": "3.87.2",
   "private": true,
   "description": "zeus-hermes — loop do Hermes como serviço na VPS (Passo 1 do Zeus Mobile)",
   "scripts": {

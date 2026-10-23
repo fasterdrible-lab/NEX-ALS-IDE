@@ -36,6 +36,14 @@ export function githubRepoOf(url: string): { fullName: string; sshUrl: string } 
   return m ? { fullName: `${m[1]}/${m[2]}`, sshUrl: `git@github.com:${m[1]}/${m[2]}.git` } : null
 }
 
+/** Saída de `git remote -v` → endereço de busca do `origin`, ou do primeiro remoto. '' = nenhum. */
+export function pickRemote(remoteV: string): string {
+  const fetches = remoteV.split('\n')
+    .map(l => /^(\S+)\s+(\S+)\s+\(fetch\)\s*$/.exec(l.trim()))
+    .filter((m): m is RegExpExecArray => !!m)
+  return (fetches.find(m => m[1] === 'origin') ?? fetches[0])?.[2] ?? ''
+}
+
 /** Chave de deploy do ambiente na VPS (só letras/números no nome — vai sem aspas no comando). */
 const keyFile = (envId: string) => `~/.ssh/zeus_deploy_${envId.replace(/[^A-Za-z0-9]/g, '').slice(0, 32)}`
 const gitSsh = (envId: string) => `GIT_SSH_COMMAND="ssh -i ${keyFile(envId)} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"`
@@ -188,20 +196,21 @@ export class DeployService {
   }
 
   /**
-   * Endereço do repositório: o do cadastro; sem ele, o `origin` da pasta do PC (com .git próprio) ou da
-   * pasta do agente na VPS — e grava no projeto. '' = não achou.
+   * Endereço do repositório: o do cadastro; sem ele, o remoto da pasta do PC (com .git próprio) ou da
+   * pasta do agente na VPS — `origin` se houver, senão o primeiro (na ZEUS o do Hermes se chama `github`) —
+   * e grava no projeto. '' = não achou.
    */
   async resolveGitRepo(project: { id: string; gitRepo: string; localPath: string; remotePath: string; vpsServerId: string | null }, say?: (l: string) => void): Promise<string> {
     if (GitCloneUrlSchema.safeParse(project.gitRepo).success) return project.gitRepo.trim()
     const candidates: string[] = []
     if (project.localPath && existsSync(path.join(project.localPath, '.git'))) {
-      candidates.push(await new Promise<string>(res => {
-        execFile('git', ['-C', project.localPath, 'remote', 'get-url', 'origin'], { timeout: 10_000, windowsHide: true }, (err, out) => res(err ? '' : String(out).trim()))
-      }))
+      candidates.push(pickRemote(await new Promise<string>(res => {
+        execFile('git', ['-C', project.localPath, 'remote', '-v'], { timeout: 10_000, windowsHide: true }, (err, out) => res(err ? '' : String(out)))
+      })))
     }
     if (project.vpsServerId && project.remotePath) {
-      const r = await this.sh(project.vpsServerId, `cd ${q(project.remotePath)} && git remote get-url origin`, 30_000).catch(() => ({ code: 1, out: '' }))
-      if (r.code === 0) candidates.push(r.out.trim().split('\n').pop() ?? '')
+      const r = await this.sh(project.vpsServerId, `cd ${q(project.remotePath)} && git remote -v`, 30_000).catch(() => ({ code: 1, out: '' }))
+      if (r.code === 0) candidates.push(pickRemote(r.out))
     }
     const found = candidates.find(u => GitCloneUrlSchema.safeParse(u).success)
     if (!found) return ''

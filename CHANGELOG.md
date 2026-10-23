@@ -1,5 +1,17 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.87.2] — 2026-10-23
+
+### Corrigido — repositório não era achado quando o remoto não se chama `origin`
+
+Na ZEUS o remoto da pasta do Hermes se chama `github`; a descoberta da 3.87.1 só olhava `origin`. Agora lê `git remote -v` (PC e VPS do agente) e usa o `origin` se houver, senão o primeiro remoto (`pickRemote`).
+
+**Verificado:** typecheck; numa cópia do banco com o `gitRepo` do ACESSIBILIDADE apagado, o Zeus achou `git@github.com:fasterdrible-lab/AcessiCheck.git` pela pasta do agente na ZEUS (só leitura lá) e gravou; `pickRemote` com origin, sem origin e sem remoto.
+
+### Registro — ZEUS caiu e voltou (2026-10-23)
+
+Fora do ar ~15:40–15:56 (horário de Brasília). Voltou às 18:56 UTC; o boot anterior (21/10) não tem registro de desligamento — queda/religamento pelo lado da VPS, sem erro de kernel nem falta de memória depois. `zeus-hermes`, Tailscale e o gateway do Hermes subiram sozinhos; pasta do agente intacta (`b57d2ea`, sem alteração pendente).
+
 ## [3.87.1] — 2026-10-23
 
 ### Corrigido — deploy do ACESSIBILIDADE falhava em staging ("falhou" sem motivo na tela)
