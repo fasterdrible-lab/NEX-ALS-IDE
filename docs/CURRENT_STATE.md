@@ -1,8 +1,12 @@
 # CURRENT_STATE.md — NEX-ALS IDE
 
-**Data:** 2026-10-23
+**Data:** 2026-10-24
 **Versão:** 3.87.2 — app renomeado para **Zeus IDE** (antes NEX-ALS IDE), paleta azul Zeus
 **Repositório:** https://github.com/fasterdrible-lab/NEX-ALS-IDE.git
+
+## ACESSIBILIDADE — código só na ZEUS e no GitHub (2026-10-24)
+
+A pasta do OneDrive do projeto não tem o código: o **Trazer alterações** nunca foi usado depois do envio inicial à ZEUS. O código está em `ZEUS:/root/acessibilidade` e no GitHub (`AcessiCheck`, branch `hermes`, `e0e593f`), sem nada pendente. A ZEUS perdeu o acesso ao GitHub (`Permission denied (publickey)`), então o próximo push do Hermes vai falhar até a chave ser cadastrada de novo. Detalhes no CHANGELOG.
 
 ## Ambientes e deploy pelo gate (v3.87.0)
 

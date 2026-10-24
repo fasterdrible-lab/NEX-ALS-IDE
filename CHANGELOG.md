@@ -1,5 +1,16 @@
 # CHANGELOG — Zeus IDE (antes NEX-ALS IDE)
 
+## [3.87.2] — registro de 2026-10-24 (sem mudança de código)
+
+### Registro — projeto ACESSIBILIDADE não aparecia na pasta do PC, só no Zeus
+
+O Zeus mostrava o projeto, mas a pasta `C:\Users\phpos\OneDrive\ACESSIBILIDADE` não tinha código nem `.git`. Ela tinha só `ACESSIBILIDADE.txt`, `Logo AcessiCheck.png`, `NBR9050_20.pdf`, `BRAINBOARD/` e `.claude/`.
+
+- **Causa:** a ligação PC↔VPS (`hermes_local_links`) foi sincronizada uma vez só, quando a pasta foi enviada à ZEUS. O manifesto dela tem só esses 4 arquivos. Depois disso o **Trazer alterações** não foi usado, e o código escrito pelo Hermes ficou só em `ZEUS:/root/acessibilidade` e no GitHub. Não é bug de exibição.
+- **Onde está o código:** `fasterdrible-lab/AcessiCheck`, branch **`hermes`** em `e0e593f` (`fix(monorepo): align zod versions…`), 7 commits do Hermes. A pasta da ZEUS está no mesmo commit e não tem nada pendente, então nada se perdeu com o `read ECONNRESET` da última sessão do agente. O `main` do AcessiCheck continua só com `4aef43d Create README.md`.
+- **Achado:** a ZEUS não consegue mais acessar o GitHub. `git fetch github` em `/root/acessibilidade` responde `Permission denied (publickey)`. O código já foi enviado, mas o próximo push do Hermes a partir da ZEUS vai falhar.
+- **Como resolver:** abrir o projeto na IDE local → **Agent** → **Trazer alterações**, ou clonar a branch `hermes` na pasta.
+
 ## [3.87.2] — 2026-10-23
 
 ### Corrigido — repositório não era achado quando o remoto não se chama `origin`
